@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PeerBridge - Student Mentorship"
+version = "1.0.0"
+id = "artifacts/peerbridge"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21288
+
+[services.development]
+run = "pnpm --filter @workspace/peerbridge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/peerbridge", "run", "build" ]
+publicDir = "artifacts/peerbridge/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21288"
+BASE_PATH = "/"

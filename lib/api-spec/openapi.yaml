@@ -1,0 +1,731 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: PeerBridge - Student Mentorship Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User profile operations
+  - name: districts
+    description: School district channel operations
+  - name: requests
+    description: Mentorship request operations
+  - name: tags
+    description: Tag category operations
+  - name: reports
+    description: Report and block operations
+  - name: stats
+    description: Statistics and dashboard operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register with school email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: Registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with school email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /districts:
+    get:
+      operationId: listDistricts
+      tags: [districts]
+      summary: List all school districts
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [high_school, all]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of districts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/District"
+
+  /districts/{id}:
+    get:
+      operationId: getDistrict
+      tags: [districts]
+      summary: Get a district channel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: District details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/District"
+
+  /requests:
+    get:
+      operationId: listRequests
+      tags: [requests]
+      summary: List mentorship requests
+      parameters:
+        - name: districtId
+          in: query
+          schema:
+            type: integer
+        - name: tagId
+          in: query
+          schema:
+            type: integer
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [mentor, mentee]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, matched, closed]
+      responses:
+        "200":
+          description: List of requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MentorshipRequest"
+
+    post:
+      operationId: createRequest
+      tags: [requests]
+      summary: Post a mentorship request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestBody"
+      responses:
+        "201":
+          description: Created request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorshipRequest"
+
+  /requests/{id}:
+    get:
+      operationId: getRequest
+      tags: [requests]
+      summary: Get a mentorship request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Request details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorshipRequest"
+
+    patch:
+      operationId: updateRequest
+      tags: [requests]
+      summary: Update a mentorship request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRequestBody"
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorshipRequest"
+
+    delete:
+      operationId: deleteRequest
+      tags: [requests]
+      summary: Delete a mentorship request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /requests/{id}/match:
+    post:
+      operationId: matchRequest
+      tags: [requests]
+      summary: Match/respond to a mentorship request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Matched successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorshipRequest"
+
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List all tags
+      responses:
+        "200":
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+
+  /reports:
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Report a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportBody"
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /blocks:
+    get:
+      operationId: listBlocks
+      tags: [reports]
+      summary: List blocked users
+      responses:
+        "200":
+          description: Blocked users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BlockedUser"
+
+    post:
+      operationId: blockUser
+      tags: [reports]
+      summary: Block a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlockUserBody"
+      responses:
+        "201":
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /blocks/{blockedUserId}:
+    delete:
+      operationId: unblockUser
+      tags: [reports]
+      summary: Unblock a user
+      parameters:
+        - name: blockedUserId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Unblocked
+
+  /stats/overview:
+    get:
+      operationId: getStatsOverview
+      tags: [stats]
+      summary: Platform statistics overview
+      responses:
+        "200":
+          description: Stats overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsOverview"
+
+  /stats/district/{id}:
+    get:
+      operationId: getDistrictStats
+      tags: [stats]
+      summary: Stats for a specific district
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: District stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DistrictStats"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    RegisterBody:
+      type: object
+      properties:
+        email:
+          type: string
+          description: Must be a .edu email address
+        name:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [mentor, mentee, both]
+        districtId:
+          type: integer
+      required: [email, name, password, role, districtId]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        message:
+          type: string
+      required: [user, message]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [mentor, mentee, both]
+        districtId:
+          type: integer
+        districtName:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        subjects:
+          type: array
+          items:
+            type: string
+        isVerified:
+          type: boolean
+        createdAt:
+          type: string
+      required: [id, email, name, role, districtId, isVerified, createdAt, subjects]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        bio:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [mentor, mentee, both]
+        subjects:
+          type: array
+          items:
+            type: string
+
+    District:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        county:
+          type: string
+        type:
+          type: string
+          enum: [high_school, unified, elementary, other]
+        memberCount:
+          type: integer
+        openRequestCount:
+          type: integer
+      required: [id, name, county, type, memberCount, openRequestCount]
+
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+        requestCount:
+          type: integer
+      required: [id, name, color, requestCount]
+
+    MentorshipRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        authorId:
+          type: integer
+        authorName:
+          type: string
+        authorRole:
+          type: string
+          enum: [mentor, mentee]
+        districtId:
+          type: integer
+        districtName:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        status:
+          type: string
+          enum: [open, matched, closed]
+        matchedUserId:
+          type: ["integer", "null"]
+        matchedUserName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, authorId, authorName, authorRole, districtId, districtName, title, description, tags, status, createdAt]
+
+    CreateRequestBody:
+      type: object
+      properties:
+        districtId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+        role:
+          type: string
+          enum: [mentor, mentee]
+      required: [districtId, title, description, tagIds, role]
+
+    UpdateRequestBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+        status:
+          type: string
+          enum: [open, matched, closed]
+
+    CreateReportBody:
+      type: object
+      properties:
+        reportedUserId:
+          type: integer
+        reason:
+          type: string
+          enum: [spam, harassment, inappropriate, fake_account, other]
+        description:
+          type: ["string", "null"]
+      required: [reportedUserId, reason]
+
+    BlockUserBody:
+      type: object
+      properties:
+        blockedUserId:
+          type: integer
+      required: [blockedUserId]
+
+    BlockedUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        blockedUserId:
+          type: integer
+        blockedUserName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, blockedUserId, blockedUserName, createdAt]
+
+    StatsOverview:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalMentors:
+          type: integer
+        totalMentees:
+          type: integer
+        totalDistricts:
+          type: integer
+        openRequests:
+          type: integer
+        successfulMatches:
+          type: integer
+        topTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+      required: [totalUsers, totalMentors, totalMentees, totalDistricts, openRequests, successfulMatches, topTags]
+
+    DistrictStats:
+      type: object
+      properties:
+        districtId:
+          type: integer
+        districtName:
+          type: string
+        memberCount:
+          type: integer
+        mentorCount:
+          type: integer
+        menteeCount:
+          type: integer
+        openRequests:
+          type: integer
+        matchedRequests:
+          type: integer
+        topTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+      required: [districtId, districtName, memberCount, mentorCount, menteeCount, openRequests, matchedRequests, topTags]
