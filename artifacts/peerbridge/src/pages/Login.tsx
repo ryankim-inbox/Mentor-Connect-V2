@@ -76,6 +76,30 @@ export default function Login() {
             >
               {loginMutation.isPending ? "Signing in..." : "Sign in"}
             </button>
+
+            <button
+              type="button"
+              disabled={loginMutation.isPending}
+              onClick={() => {
+                setError("");
+                loginMutation.mutate(
+                  { data: { email: "demo@berkeley.edu", password: "password123" } },
+                  {
+                    onSuccess: () => {
+                      refetch();
+                      navigate("/dashboard");
+                    },
+                    onError: (err: unknown) => {
+                      const e = err as { data?: { error?: string } };
+                      setError(e?.data?.error ?? "Login failed. Please try again.");
+                    },
+                  }
+                );
+              }}
+              className="w-full py-2.5 border border-primary text-primary rounded-lg font-semibold hover:bg-primary/10 transition-colors disabled:opacity-50"
+            >
+              테스트 계정으로 로그인
+            </button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
