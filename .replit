@@ -37,4 +37,4 @@ externalPort = 80
 
 [nix]
 channel = "stable-25_05"
-packages = ["cargo", "libiconv", "rustc"]
+packages = ["cargo", "libiconv", "libxcrypt", "rustc"]
