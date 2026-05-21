@@ -67,6 +67,19 @@ def none_null_list(value):
 
 def calculate_match_score(student: dict, mentor: dict, question: dict):
     mentor_subjects = none_null_list(mentor.get("subjects"))
-    mentor_times = none_null_list(mentor.get("available_times"))
+    mentor_district = none_null_list(mentor.get("district"))
     mentor_languages = none_null_list(mentor.get("languages"))
+    q_sub = question.get("Subject")
+    q_district = question.get("district")
+    q_languages = question.get("languages")
+    score = 0
+    if q_sub in mentor_subjects:
+        score += 50
+    if q_district == mentor_district:
+        score += 100
+    if q_languages in mentor_languages:
+        score += 50
+    return score
+
+
 
