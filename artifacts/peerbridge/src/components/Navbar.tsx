@@ -47,6 +47,9 @@ export function Navbar() {
                 <Link href="/recommendations">
                   <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Matches</span>
                 </Link>
+                <Link href="/practice-lab">
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Python Practice Lab</span>
+                </Link>
                 <Link href="/analytics">
                   <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Analytics</span>
                 </Link>

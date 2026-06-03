@@ -78,7 +78,7 @@ Or paste the SQL into your DB console.
 ### 5. Test in terminal
 
 ```bash
-python main.py
+python main2.py
 ```
 
 ### 6. Run API server

@@ -16,6 +16,7 @@ import RequestDetail from "@/pages/RequestDetail";
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import Recommendations from "@/pages/Recommendations";
+import PracticeLab from "@/pages/PracticeLab";
 import Analytics from "@/pages/Analytics";
 import AdminReports from "@/pages/AdminReports";
 import NotFound from "@/pages/not-found";
@@ -65,6 +66,9 @@ function Router() {
           </Route>
           <Route path="/recommendations">
             <RequireAuth><Recommendations /></RequireAuth>
+          </Route>
+          <Route path="/practice-lab">
+            <RequireAuth><PracticeLab /></RequireAuth>
           </Route>
           <Route path="/analytics">
             <RequireAuth><Analytics /></RequireAuth>

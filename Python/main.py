@@ -1,32 +1,54 @@
-"""
-Tester class without starting FastAPI
+import os
+import sys
 
+from dotenv import load_dotenv
+load_dotenv()
 
-How to : In Console
-cd Python
-python main.py    or     python3 main.py
-"""
+if not os.environ.get("SESSION_SECRET"):
+    print("ERROR: SESSION_SECRET environment variable is required", file=sys.stderr)
+    sys.exit(1)
 
-from pprint import pprint
+if not os.environ.get("DATABASE_URL"):
+    print("ERROR: DATABASE_URL environment variable is required", file=sys.stderr)
+    sys.exit(1)
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
-app = FastAPI()
+from routers import auth, users, districts, tags, requests, reports, stats, matches
 
-@app.get("/")
-def home():
-    return {"message": "Python Backend is running"}
+app = FastAPI(title="PeerBridge Python API")
 
-@app.get("/health")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ["SESSION_SECRET"],
+    session_cookie="peerbridge_session",
+    max_age=7 * 24 * 60 * 60,
+    https_only=os.environ.get("NODE_ENV") == "production",
+    same_site="lax",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(districts.router, prefix="/api")
+app.include_router(tags.router, prefix="/api")
+app.include_router(requests.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
+app.include_router(matches.router, prefix="/api")
+
+@app.get("/api/healthz")
 def health():
-    return {"status": "ok"}
-
-def main():
-    '''
-    question_id = 1
-    result = find_matches(question_id=question_id, limit=5)
-    pprint(result)
-    '''
-
-if __name__ == "__main__":
-    main()
+    return {"status": "ok", "backend": "python-fastapi"}
