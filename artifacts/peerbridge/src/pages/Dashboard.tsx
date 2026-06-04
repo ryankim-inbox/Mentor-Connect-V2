@@ -1,11 +1,31 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { useGetStatsOverview, useListRequests, useListDistricts } from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
+import PracticeLab from "@/pages/PracticeLab";
 
-export default function Dashboard() {
+type DashboardTab = "overview" | "practice-lab";
+
+interface DashboardProps {
+  initialTab?: DashboardTab;
+}
+
+function getDashboardTabFromUrl(): DashboardTab {
+  if (typeof window === "undefined") {
+    return "overview";
+  }
+
+  return window.location.pathname.endsWith("/practice-lab") ||
+    new URLSearchParams(window.location.search).get("tab") === "practice-lab"
+    ? "practice-lab"
+    : "overview";
+}
+
+export default function Dashboard({ initialTab }: DashboardProps = {}) {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() => initialTab ?? getDashboardTabFromUrl());
   const { data: stats } = useGetStatsOverview();
   const { data: recentRequests } = useListRequests({ status: "open" }, {
     query: { queryKey: ["listRequests", "open", "dashboard"] }
@@ -13,6 +33,29 @@ export default function Dashboard() {
   const { data: districts } = useListDistricts(undefined, {
     query: { queryKey: ["listDistricts", "dashboard"] }
   });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getDashboardTabFromUrl());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const selectTab = (tab: DashboardTab) => {
+    setActiveTab(tab);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (tab === "overview") {
+      window.history.pushState({}, "", "/dashboard");
+    } else {
+      window.history.pushState({}, "", "/dashboard/practice-lab");
+    }
+  };
 
   if (!user) {
     return (
@@ -36,91 +79,117 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
+      <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-card-border bg-card p-2">
         {[
-          { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
-          { label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" },
-          { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-card border border-card-border rounded-xl p-5">
-            <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground mt-1">{label}</p>
-          </div>
+          { id: "overview" as const, label: "Dashboard Overview" },
+          { id: "practice-lab" as const, label: "Python Practice Lab" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => selectTab(tab.id)}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === tab.id
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
         ))}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-lg">Recent open requests</h2>
-            <Link href="/requests">
-              <span className="text-sm text-primary hover:underline">View all</span>
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentRequests?.slice(0, 5).map((req) => (
-              <RequestCard key={req.id} {...req} />
+      {activeTab === "practice-lab" ? (
+        <PracticeLab />
+      ) : (
+        <>
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {[
+              { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
+              { label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" },
+              { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-card border border-card-border rounded-xl p-5">
+                <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground mt-1">{label}</p>
+              </div>
             ))}
-            {(!recentRequests || recentRequests.length === 0) && (
-              <div className="text-center py-12 text-muted-foreground">
-                <p>No open requests yet.</p>
-                <Link href="/requests/new">
-                  <button className="mt-3 text-sm text-primary hover:underline">Be the first to post one</button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-lg">Recent open requests</h2>
+                <Link href="/requests">
+                  <span className="text-sm text-primary hover:underline">View all</span>
                 </Link>
               </div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-4">
-            <h2 className="font-semibold text-lg mb-3">Active districts</h2>
-            <div className="space-y-2">
-              {topDistricts.map((d) => (
-                <Link key={d.id} href={`/districts/${d.id}`}>
-                  <div className="flex items-center justify-between p-3 bg-card border border-card-border rounded-lg hover:shadow-sm transition-shadow cursor-pointer">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
-                      <p className="text-xs text-muted-foreground">{d.county} County</p>
-                    </div>
-                    <span className="shrink-0 ml-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      {d.openRequestCount} open
-                    </span>
-                  </div>
-                </Link>
-              ))}
-              <Link href="/districts">
-                <div className="text-center py-2 text-sm text-primary hover:underline cursor-pointer">
-                  View all {stats?.totalDistricts} districts
-                </div>
-              </Link>
-            </div>
-          </div>
-
-          {stats?.topTags && stats.topTags.length > 0 && (
-            <div>
-              <h2 className="font-semibold text-lg mb-3">Trending subjects</h2>
-              <div className="flex flex-wrap gap-2">
-                {stats.topTags.map((tag) => (
-                  <Link key={tag.id} href={`/requests?tagId=${tag.id}`}>
-                    <span className="cursor-pointer hover:scale-105 transition-transform inline-block">
-                      <TagBadge name={tag.name} color={tag.color} />
-                    </span>
-                  </Link>
+              <div className="space-y-3">
+                {recentRequests?.slice(0, 5).map((req) => (
+                  <RequestCard key={req.id} {...req} />
                 ))}
+                {(!recentRequests || recentRequests.length === 0) && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>No open requests yet.</p>
+                    <Link href="/requests/new">
+                      <button className="mt-3 text-sm text-primary hover:underline">Be the first to post one</button>
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
-          )}
 
-          <div className="mt-6">
-            <Link href="/requests/new">
-              <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors">
-                Post a request
-              </button>
-            </Link>
+            <div>
+              <div className="mb-4">
+                <h2 className="font-semibold text-lg mb-3">Active districts</h2>
+                <div className="space-y-2">
+                  {topDistricts.map((d) => (
+                    <Link key={d.id} href={`/districts/${d.id}`}>
+                      <div className="flex items-center justify-between p-3 bg-card border border-card-border rounded-lg hover:shadow-sm transition-shadow cursor-pointer">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
+                          <p className="text-xs text-muted-foreground">{d.county} County</p>
+                        </div>
+                        <span className="shrink-0 ml-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          {d.openRequestCount} open
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                  <Link href="/districts">
+                    <div className="text-center py-2 text-sm text-primary hover:underline cursor-pointer">
+                      View all {stats?.totalDistricts} districts
+                    </div>
+                  </Link>
+                </div>
+              </div>
+
+              {stats?.topTags && stats.topTags.length > 0 && (
+                <div>
+                  <h2 className="font-semibold text-lg mb-3">Trending subjects</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.topTags.map((tag) => (
+                      <Link key={tag.id} href={`/requests?tagId=${tag.id}`}>
+                        <span className="cursor-pointer hover:scale-105 transition-transform inline-block">
+                          <TagBadge name={tag.name} color={tag.color} />
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6">
+                <Link href="/requests/new">
+                  <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors">
+                    Post a request
+                  </button>
+                </Link>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

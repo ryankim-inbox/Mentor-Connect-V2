@@ -40,6 +40,9 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
           <Route path="/register" component={Register} />
+          <Route path="/dashboard/practice-lab">
+            <RequireAuth><Dashboard initialTab="practice-lab" /></RequireAuth>
+          </Route>
           <Route path="/dashboard">
             <RequireAuth><Dashboard /></RequireAuth>
           </Route>
