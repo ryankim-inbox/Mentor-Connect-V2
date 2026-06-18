@@ -24,7 +24,7 @@ def receive_mentor_ranks():
     )
     cursor = connections.cursor()
     query="SELECT mentor FROM mentors;"
-    cursor.execute(query)
+    cursor.execute(query)find_matches.py
 
     mentor_data = cursor.fetchall()
     cursor.close()
