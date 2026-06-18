@@ -33,3 +33,16 @@ def receive_mentor_ranks():
         mentor_pick_rate = {
             mentor:pick
         }
+
+def response_time_analysis():
+    connections = psycopg2.connect(
+        database = 'requests_db'
+        host='get_blocks'
+    )
+    cursor = connections.cursor()
+    query = "SELECT request FROM requests;"
+    cursor.execute(query)
+    requests_data=cursor.fetchall()
+
+    accept_time-mentor_time=response_time
+    return response_time
