@@ -10,7 +10,7 @@ name = "API Server"
 paths = ["/api"]
 
 [services.development]
-run = "cd python && python main.py"
+run = "cd Python && uvicorn main:app --host 0.0.0.0 --port 8080 --reload"
 
 [services.production]
 
@@ -21,7 +21,7 @@ args = ["echo", "no-build"]
 NODE_ENV = "production"
 
 [services.production.run]
-args = ["python", "artifacts/api-server/python/main.py"]
+args = ["sh", "-c", "cd Python && uvicorn main:app --host 0.0.0.0 --port 8080"]
 
 [services.production.run.env]
 PORT = "8080"
