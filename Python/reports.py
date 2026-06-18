@@ -17,20 +17,23 @@ def new_ppl_data():
     return ppl_data
 
 def daily_count():
-    daily_count = 0
-    for times in ppl_data:
-        if current_time[0:10] == times[0:10]:
-            daily_count+=1
+    if current_time.hour=0 and current_time.minute=0 and current_time.second=0:
+        daily_count = 0
+        for times in ppl_data:
+            if current_time[0:10] == times[0:10]:
+                daily_count+=1
     return daily_count
 
 def monthly_count():
-    monthly_count = 0
-    for times in ppl_data:
-        if current_time[0:7]==times[0:7]:
-            monthly_count += 1
+    if current_day=1 and current_time.hour=0 and current_time.minute=0 and current_time.second=0:
+        monthly_count = 0
+        for times in ppl_data:
+            if current_time[0:7]==times[0:7]:
+                monthly_count += 1
     return monthly_count
 
 def yearly_count():
+    if current_hour=1 and current_day=1 and current_time.hour=0 and current_time.minute=0 and current_time.second=0:
     yearly_count=0
     for times in ppl_data:
         if current_time[0:4]==times[0:4]:
