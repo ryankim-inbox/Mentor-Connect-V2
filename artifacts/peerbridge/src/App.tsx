@@ -18,6 +18,7 @@ import Settings from "@/pages/Settings";
 import Recommendations from "@/pages/Recommendations";
 import PracticeLab from "@/pages/PracticeLab";
 import Analytics from "@/pages/Analytics";
+import Scheduling from "@/pages/Scheduling";
 import AdminReports from "@/pages/AdminReports";
 import NotFound from "@/pages/not-found";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -75,6 +76,9 @@ function Router() {
           </Route>
           <Route path="/analytics">
             <RequireAuth><Analytics /></RequireAuth>
+          </Route>
+          <Route path="/scheduling">
+            <RequireAuth><Scheduling /></RequireAuth>
           </Route>
           <Route path="/admin/reports">
             <RequireAuth><AdminReports /></RequireAuth>

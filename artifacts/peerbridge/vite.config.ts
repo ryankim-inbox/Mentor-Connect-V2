@@ -64,16 +64,12 @@ export default defineConfig({
     allowedHosts: true,
 
     proxy: {
+      // Single unified backend: Python/main.py (FastAPI) serves everything
+      // under /api, including the practice-lab and adapter endpoints.
       "/api": {
         target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
         secure: false,
-      },
-      "/python-api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/python-api/, ""),
       },
     },
 

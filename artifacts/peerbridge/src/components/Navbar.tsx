@@ -53,6 +53,9 @@ export function Navbar() {
                 <Link href="/analytics">
                   <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Analytics</span>
                 </Link>
+                <Link href="/scheduling">
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Scheduling</span>
+                </Link>
               </div>
             )}
           </div>
