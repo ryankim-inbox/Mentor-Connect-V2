@@ -41,11 +41,19 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create/adjust `Python/.env`:
+Create `Python/.env` from the template (the real `.env` is gitignored and never
+committed):
+
+```bash
+cp Python/.env.example Python/.env
+```
+
+Then edit `DATABASE_URL` to match your local PostgreSQL user/database:
 
 ```env
-DATABASE_URL=postgresql://<user>@localhost:5432/test_db
+DATABASE_URL=postgresql://USER@localhost:5432/test_db
 SESSION_SECRET=dev-secret-change-me
+PORT=8000
 ```
 
 One-time database migration (additive only — safe to re-run):
