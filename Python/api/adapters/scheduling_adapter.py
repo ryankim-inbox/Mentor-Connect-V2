@@ -1,47 +1,47 @@
 """
 Wraps the student scheduling file (Python/scheduling.py) without modifying it.
 
-scheduling.py imports cleanly but its functions currently fail at call time
-(receive_time_data connects to a non-existent host, time_dict references an
-undefined variable). Each endpoint attempts the student function first, then
-answers with overlap data computed from users.available_times, labeled
-source="adapter-fallback".
+scheduling.py is the ONLY source of scheduling results. When one of its
+functions fails (receive_time_data connects to a non-existent host, time_dict
+references an undefined variable) or returns an unusable shape, the endpoint
+answers success=False with the captured Python error and data=None. There is
+no adapter-computed fallback.
+
+The database is touched only to look up the two user records that are passed
+as arguments to scheduling.time_dict — inputs, never results.
 """
 
 from db import db
 
-from api.adapters.probe import make_envelope, probe_student_call
+from api.adapters.probe import probe_student_call, student_envelope, student_status_envelope
 
 
 def get_scheduling_status():
     probe = probe_student_call("scheduling")
-    return make_envelope("scheduling.status", probe, fallback_data=None)
+    return student_status_envelope("scheduling.status", probe)
+
+
+def _normalize_overview(result):
+    if not isinstance(result, list):
+        return None
+    slots = []
+    for item in result:
+        if isinstance(item, dict):
+            slot = item.get("slot") or item.get("time")
+            count = item.get("count") if "count" in item else item.get("total")
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            slot, count = item
+        else:
+            return None
+        if slot is None or not isinstance(count, (int, float)):
+            return None
+        slots.append({"slot": str(slot), "count": int(count)})
+    return {"topSlots": slots}
 
 
 def get_overview():
     probe = probe_student_call("scheduling", "receive_time_data")
-    with db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT slot, COUNT(*)::int AS count
-            FROM users, unnest(available_times) AS slot
-            GROUP BY slot
-            ORDER BY count DESC
-            LIMIT 8
-            """
-        )
-        slots = [{"slot": row["slot"], "count": row["count"]} for row in cur.fetchall()]
-        cur.execute(
-            """
-            SELECT COUNT(*)::int AS cnt
-            FROM users
-            WHERE available_times IS NOT NULL AND array_length(available_times, 1) > 0
-            """
-        )
-        users_with_availability = cur.fetchone()["cnt"]
-    data = {"topSlots": slots, "usersWithAvailability": users_with_availability}
-    return make_envelope("scheduling.overview", probe, data, normalize=lambda _: None)
+    return student_envelope("scheduling.overview", probe, normalize=_normalize_overview)
 
 
 def _user_row_to_dict(row):
@@ -55,8 +55,9 @@ def _user_row_to_dict(row):
 
 def suggest_times(user_a: int, user_b: int):
     """
-    Attempt scheduling.time_dict(student, teacher) with two real users, then
-    compute the availability overlap as the adapter fallback.
+    Look up both users (arguments only) and call scheduling.time_dict(student,
+    teacher). The overlap shown to the user is exactly what the student
+    function returns; if it fails, the error is reported instead.
 
     Raises LookupError when either user id does not exist.
     """
@@ -80,12 +81,17 @@ def suggest_times(user_a: int, user_b: int):
 
     probe = probe_student_call("scheduling", "time_dict", args=(student, teacher))
 
-    overlap = sorted(set(student["available_times"]) & set(teacher["available_times"]))
-    data = {"userA": student, "userB": teacher, "overlap": overlap}
-
     def normalize(result):
-        if isinstance(result, list):
+        if isinstance(result, list) and all(isinstance(entry, str) for entry in result):
             return {"userA": student, "userB": teacher, "overlap": result}
         return None
 
-    return make_envelope("scheduling.suggest", probe, data, normalize=normalize)
+    return student_envelope(
+        "scheduling.suggest",
+        probe,
+        normalize=normalize,
+        invalid_message=(
+            "scheduling.time_dict() ran, but did not return a list of overlapping "
+            "time strings."
+        ),
+    )

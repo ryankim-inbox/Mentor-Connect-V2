@@ -1,9 +1,7 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { useGetStatsOverview } from "@workspace/api-client-react";
-import { getPythonApi } from "@/lib/pythonApi";
-import { SourceBadge } from "@/components/SourceBadge";
+import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 
 interface WeeklyMatch {
   week: string;
@@ -29,8 +27,11 @@ interface MentorResponseRate {
   avgResponseHours: number;
 }
 
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
+function pythonData<T>(envelope: PyEnvelope<T[]> | undefined): T[] {
+  if (!envelope || !(envelope.success ?? envelope.ok)) {
+    return [];
+  }
+  return Array.isArray(envelope.data) ? envelope.data : [];
 }
 
 function MiniBarChart({ data }: { data: WeeklyMatch[] }) {
@@ -75,33 +76,55 @@ function HorizontalBar({ label, value, max, color }: { label: string; value: num
   );
 }
 
+function PythonErrorBox({ envelope }: { envelope: PyEnvelope<unknown> }) {
+  const student = envelope.student_module;
+  const moduleFile = student?.module ? `Python/${student.module}.py` : "the Python module";
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <p className="font-semibold">Python analysis failed.</p>
+      {student && (
+        <p className="mt-1">
+          {student.module}.py — {student.status ?? "error"}
+          {envelope.error ? `: ${envelope.error}` : ""}
+        </p>
+      )}
+      {!student && envelope.error && <p className="mt-1">{envelope.error}</p>}
+      <p className="mt-2 text-xs">Fix {moduleFile} and run again.</p>
+    </div>
+  );
+}
+
 function PanelBody({
-  isLoading,
-  error,
+  query,
   isEmpty,
   emptyText,
-  onRetry,
   children,
 }: {
-  isLoading: boolean;
-  error: unknown;
+  query: {
+    isLoading: boolean;
+    error: unknown;
+    data: PyEnvelope<unknown> | undefined;
+    refetch: () => Promise<unknown>;
+  };
   isEmpty: boolean;
   emptyText: string;
-  onRetry: () => void;
   children: React.ReactNode;
 }) {
-  if (isLoading) {
+  if (query.isLoading) {
     return <div className="h-40 rounded-xl bg-muted animate-pulse" />;
   }
-  if (error) {
+  if (query.error) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <p>{error instanceof Error ? error.message : String(error)}</p>
-        <button type="button" onClick={onRetry} className="mt-2 text-xs font-semibold underline">
+        <p>{query.error instanceof Error ? query.error.message : String(query.error)}</p>
+        <button type="button" onClick={() => void query.refetch()} className="mt-2 text-xs font-semibold underline">
           Retry
         </button>
       </div>
     );
+  }
+  if (query.data && !(query.data.success ?? query.data.ok)) {
+    return <PythonErrorBox envelope={query.data} />;
   }
   if (isEmpty) {
     return <div className="py-8 text-center text-sm text-muted-foreground">{emptyText}</div>;
@@ -111,7 +134,6 @@ function PanelBody({
 
 export default function Analytics() {
   const { user } = useAuth();
-  const { data: stats } = useGetStatsOverview();
 
   const statusQuery = useQuery({
     queryKey: ["analysis", "status"],
@@ -152,30 +174,21 @@ export default function Analytics() {
     );
   }
 
-  const weekly = asArray<WeeklyMatch>(weeklyQuery.data?.data).filter(
+  const weekly = pythonData<WeeklyMatch>(weeklyQuery.data).filter(
     (d) => typeof d?.week === "string" && typeof d?.matches === "number",
   );
-  const subjects = asArray<SubjectDemand>(subjectsQuery.data?.data).filter(
+  const subjects = pythonData<SubjectDemand>(subjectsQuery.data).filter(
     (s) => typeof s?.subject === "string" && typeof s?.requests === "number",
   );
-  const slots = asArray<TimeSlotDemand>(slotsQuery.data?.data).filter(
+  const slots = pythonData<TimeSlotDemand>(slotsQuery.data).filter(
     (t) => typeof t?.slot === "string" && typeof t?.count === "number",
   );
-  const mentors = asArray<MentorResponseRate>(mentorsQuery.data?.data).filter(
+  const mentors = pythonData<MentorResponseRate>(mentorsQuery.data).filter(
     (m) => typeof m?.mentorName === "string",
   );
 
   const maxSubject = Math.max(...subjects.map((s) => s.requests), 1);
   const maxSlot = Math.max(...slots.map((s) => s.count), 1);
-  const totalThisWeek = weekly.length > 0 ? weekly[weekly.length - 1].matches : 0;
-  const prevWeek = weekly.length > 1 ? weekly[weekly.length - 2].matches : 0;
-  const weekChange = prevWeek > 0 ? ((totalThisWeek - prevWeek) / prevWeek) * 100 : 0;
-  const avgResponseRate =
-    mentors.length > 0
-      ? (mentors.reduce((sum, m) => sum + (typeof m.responseRate === "number" ? m.responseRate : 0), 0) /
-          mentors.length) *
-        100
-      : null;
 
   const analysisModule = statusQuery.data?.student_module;
   const isRefreshing =
@@ -194,7 +207,9 @@ export default function Analytics() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Mentor Analytics</h1>
           <p className="text-muted-foreground mt-1">
-            Activity trends across PeerBridge — matches, subjects, time slots, and mentor performance.
+            Every number on this page comes from the student Python modules in{" "}
+            <span className="font-mono">Python/</span> — when a module fails, its error is shown
+            instead.
           </p>
         </div>
         <button
@@ -212,57 +227,31 @@ export default function Analytics() {
           className={`mb-6 rounded-xl border p-4 text-sm ${
             analysisModule.importable
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-red-200 bg-red-50 text-red-800"
           }`}
         >
           <span className="font-semibold">Python/analysis.py: </span>
           {analysisModule.importable
             ? `importable (functions: ${(analysisModule.available_functions ?? []).join(", ") || "none"})`
             : `${analysisModule.status ?? "unavailable"} — ${analysisModule.error ?? "unknown error"}`}
-          <span className="block mt-1 text-xs opacity-80">
-            Charts below use live database numbers from the adapter until the student module returns
-            usable results, then switch automatically.
-          </span>
+          {!analysisModule.importable && (
+            <span className="block mt-1 text-xs opacity-80">
+              Python analysis failed. Fix Python/analysis.py and run again.
+            </span>
+          )}
         </div>
       )}
-
-      <div className="grid md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-card border border-card-border rounded-xl p-5">
-          <p className="text-3xl font-bold text-blue-600">{totalThisWeek}</p>
-          <p className="text-sm text-muted-foreground mt-1">Matches this week</p>
-          <p className={`text-xs mt-1 font-medium ${weekChange >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-            {weekChange >= 0 ? "+" : ""}
-            {weekChange.toFixed(0)}% vs last week
-          </p>
-        </div>
-        <div className="bg-card border border-card-border rounded-xl p-5">
-          <p className="text-3xl font-bold text-emerald-600">{stats?.successfulMatches ?? 0}</p>
-          <p className="text-sm text-muted-foreground mt-1">Total successful matches</p>
-        </div>
-        <div className="bg-card border border-card-border rounded-xl p-5">
-          <p className="text-3xl font-bold text-violet-600">{stats?.openRequests ?? 0}</p>
-          <p className="text-sm text-muted-foreground mt-1">Currently open requests</p>
-        </div>
-        <div className="bg-card border border-card-border rounded-xl p-5">
-          <p className="text-3xl font-bold text-amber-600">
-            {avgResponseRate === null ? "—" : `${avgResponseRate.toFixed(0)}%`}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">Avg mentor response rate</p>
-        </div>
-      </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
         <div className="bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-lg">Weekly matches</h2>
-            <SourceBadge envelope={weeklyQuery.data} />
+            <span className="text-xs text-muted-foreground font-mono">analysis.py</span>
           </div>
           <PanelBody
-            isLoading={weeklyQuery.isLoading}
-            error={weeklyQuery.error}
+            query={weeklyQuery}
             isEmpty={weekly.length === 0}
-            emptyText="No matches recorded yet."
-            onRetry={() => void weeklyQuery.refetch()}
+            emptyText="Python returned no weekly match data."
           >
             <MiniBarChart data={weekly} />
           </PanelBody>
@@ -271,14 +260,12 @@ export default function Analytics() {
         <div className="bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-lg">Most requested subjects</h2>
-            <SourceBadge envelope={subjectsQuery.data} />
+            <span className="text-xs text-muted-foreground font-mono">analysis.py</span>
           </div>
           <PanelBody
-            isLoading={subjectsQuery.isLoading}
-            error={subjectsQuery.error}
+            query={subjectsQuery}
             isEmpty={subjects.length === 0}
-            emptyText="No subject demand data yet."
-            onRetry={() => void subjectsQuery.refetch()}
+            emptyText="Python returned no subject demand data."
           >
             <div className="space-y-3">
               {subjects.map((s) => (
@@ -293,14 +280,12 @@ export default function Analytics() {
         <div className="bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-lg">Popular time slots</h2>
-            <SourceBadge envelope={slotsQuery.data} />
+            <span className="text-xs text-muted-foreground font-mono">scheduling.py</span>
           </div>
           <PanelBody
-            isLoading={slotsQuery.isLoading}
-            error={slotsQuery.error}
+            query={slotsQuery}
             isEmpty={slots.length === 0}
-            emptyText="No availability data yet — mentors have not set available times."
-            onRetry={() => void slotsQuery.refetch()}
+            emptyText="Python returned no time slot data."
           >
             <div className="space-y-3">
               {slots.map((t) => (
@@ -313,14 +298,12 @@ export default function Analytics() {
         <div className="bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-lg">Mentor response rates</h2>
-            <SourceBadge envelope={mentorsQuery.data} />
+            <span className="text-xs text-muted-foreground font-mono">analysis.py</span>
           </div>
           <PanelBody
-            isLoading={mentorsQuery.isLoading}
-            error={mentorsQuery.error}
+            query={mentorsQuery}
             isEmpty={mentors.length === 0}
-            emptyText="No matched requests yet, so response rates cannot be computed."
-            onRetry={() => void mentorsQuery.refetch()}
+            emptyText="Python returned no mentor response data."
           >
             <div className="space-y-2">
               {mentors.map((m) => {
