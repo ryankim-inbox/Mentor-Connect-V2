@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 dist/
 *.tsbuildinfo
-/.env
+.env
 .claude/
