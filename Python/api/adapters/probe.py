@@ -3,11 +3,15 @@ Shared helpers for wrapping the student practice modules in Python/.
 
 The student files (analysis.py, reports.py, scheduling.py, get_blocks.py, ...)
 must never be edited, so every endpoint that depends on one re-imports the
-module at request time (same pattern as integration_api). When the student
-module cannot be imported or its function fails, the endpoint still answers
-with real data computed by the adapter, labeled source="adapter-fallback".
-As soon as the student file works, the same endpoint switches to
-source="student-module" without a server restart.
+module at request time (same pattern as integration_api).
+
+Analytics and scheduling endpoints use student_envelope/student_status_envelope:
+the student module is the only source of data (source="python"), and any
+import/call/output failure is reported as an error instead of being replaced
+by adapter-computed numbers.
+
+make_envelope keeps the older fallback behavior and remains only for the
+admin/reports endpoints, which are outside the python-only requirement.
 """
 
 from __future__ import annotations
@@ -81,6 +85,71 @@ def student_module_summary(probe: dict[str, Any]) -> dict[str, Any]:
         "error": probe["error"],
         "available_functions": probe["available_functions"],
     }
+
+
+def student_status_envelope(feature: str, probe: dict[str, Any]) -> dict[str, Any]:
+    """
+    Envelope for import-status endpoints. Succeeds only when the student
+    module imports; there is no data payload and no fallback.
+    """
+    return {
+        "ok": probe["importable"],
+        "success": probe["importable"],
+        "feature": feature,
+        "source": "python",
+        "student_module": student_module_summary(probe),
+        "student_result": None,
+        "error": probe["error"],
+        "data": None,
+    }
+
+
+def student_envelope(
+    feature: str,
+    probe: dict[str, Any],
+    normalize: Callable[[Any], Any] | None = None,
+    invalid_message: str | None = None,
+) -> dict[str, Any]:
+    """
+    Envelope whose data can only come from the student function's output.
+
+    normalize may reshape the raw result for the frontend (or return None to
+    mark it unusable); it must never introduce data the student code did not
+    produce. On import error, call error, or unusable output, the envelope is
+    success=False with data=None and the captured Python error.
+    """
+    envelope: dict[str, Any] = {
+        "ok": False,
+        "success": False,
+        "feature": feature,
+        "source": "python",
+        "student_module": student_module_summary(probe),
+        "student_result": None,
+        "error": None,
+        "data": None,
+    }
+
+    if not probe["called"]:
+        envelope["error"] = (
+            probe["error"] or f"{probe['module']}.py did not run ({probe['status']})."
+        )
+        return envelope
+
+    envelope["student_result"] = integration_api._json_safe(probe["result"])
+    normalized = normalize(probe["result"]) if normalize else probe["result"]
+    if normalized is None:
+        envelope["error"] = invalid_message or (
+            f"{probe['module']}.{probe['attempted_function']}() ran, but its return value "
+            "is not in a shape this page can display."
+        )
+        envelope["student_module"]["status"] = "invalid output"
+        envelope["student_module"]["error"] = envelope["error"]
+        return envelope
+
+    envelope["ok"] = True
+    envelope["success"] = True
+    envelope["data"] = integration_api._json_safe(normalized)
+    return envelope
 
 
 def make_envelope(
