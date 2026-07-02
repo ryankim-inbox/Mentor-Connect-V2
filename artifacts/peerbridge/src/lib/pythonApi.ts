@@ -2,8 +2,10 @@
 // /api/admin/*, /api/scheduling/*, /api/python-reports/*).
 //
 // Those endpoints wrap the student practice files in Python/ and answer with
-// a common envelope: real data (either from the student module or computed by
-// the adapter) plus the live import/call status of the student module.
+// a common envelope plus the live import/call status of the student module.
+// Analytics and scheduling endpoints use source "python": their data comes
+// only from the student module, and success=false carries the Python error
+// with data=null instead of substitute numbers.
 
 export interface StudentModuleStatus {
   module: string;
@@ -17,11 +19,13 @@ export interface StudentModuleStatus {
 
 export interface PyEnvelope<T> {
   ok: boolean;
+  success?: boolean;
   feature: string;
-  source: "student-module" | "adapter-fallback";
+  source: "python" | "student-module" | "adapter-fallback";
   student_module?: StudentModuleStatus | null;
   student_result?: unknown;
-  data: T;
+  error?: string | null;
+  data: T | null;
 }
 
 function isEnvelope(payload: unknown): payload is PyEnvelope<unknown> {
@@ -53,10 +57,12 @@ export async function getPythonApi<T>(path: string, init?: RequestInit): Promise
   // Defensive: accept bare arrays/objects from endpoints that skip the envelope.
   return {
     ok: true,
+    success: true,
     feature: path,
-    source: "adapter-fallback",
+    source: "python",
     student_module: null,
     student_result: null,
+    error: null,
     data: payload as T,
   };
 }

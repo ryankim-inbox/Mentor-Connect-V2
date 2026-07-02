@@ -7,7 +7,6 @@ import { SourceBadge } from "@/components/SourceBadge";
 
 interface SchedulingOverview {
   topSlots: { slot: string; count: number }[];
-  usersWithAvailability: number;
 }
 
 interface SuggestUser {
@@ -21,6 +20,31 @@ interface SuggestResult {
   userA: SuggestUser;
   userB: SuggestUser;
   overlap: string[];
+}
+
+function envelopeSucceeded(envelope: PyEnvelope<unknown> | undefined): boolean {
+  return !!envelope && (envelope.success ?? envelope.ok);
+}
+
+function PythonErrorBox({
+  envelope,
+  fallbackModule,
+}: {
+  envelope: PyEnvelope<unknown>;
+  fallbackModule: string;
+}) {
+  const student = envelope.student_module;
+  const moduleName = student?.module ?? fallbackModule;
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <p className="font-semibold">Python scheduling failed.</p>
+      <p className="mt-1">
+        {moduleName}.py — {student?.status ?? "error"}
+        {envelope.error ? `: ${envelope.error}` : ""}
+      </p>
+      <p className="mt-2 text-xs">Fix Python/{moduleName}.py and run again.</p>
+    </div>
+  );
 }
 
 function TimeChips({ times, highlight }: { times: string[]; highlight?: string[] }) {
@@ -48,8 +72,8 @@ function TimeChips({ times, highlight }: { times: string[]; highlight?: string[]
 
 export default function Scheduling() {
   const { user } = useAuth();
-  const [userA, setUserA] = useState("1");
-  const [userB, setUserB] = useState("136");
+  const [userA, setUserA] = useState("");
+  const [userB, setUserB] = useState("");
   const [suggestion, setSuggestion] = useState<PyEnvelope<SuggestResult> | null>(null);
   const [suggestError, setSuggestError] = useState("");
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -101,19 +125,22 @@ export default function Scheduling() {
   }
 
   const module = statusQuery.data?.student_module;
-  const overview = overviewQuery.data?.data;
-  const topSlots = Array.isArray(overview?.topSlots) ? overview.topSlots : [];
+  const overviewOk = envelopeSucceeded(overviewQuery.data);
+  const topSlots = overviewOk && Array.isArray(overviewQuery.data?.data?.topSlots)
+    ? overviewQuery.data.data.topSlots
+    : [];
   const maxSlot = Math.max(...topSlots.map((s) => s.count), 1);
-  const suggestData = suggestion?.data;
+  const suggestOk = envelopeSucceeded(suggestion ?? undefined);
+  const suggestData = suggestOk ? suggestion?.data : null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Scheduling</h1>
         <p className="text-muted-foreground mt-1">
-          Finds overlapping available times between two users. Wraps{" "}
-          <span className="font-mono">Python/scheduling.py</span> without modifying it — when the
-          student function fails, the adapter computes the overlap from the database instead.
+          Finds overlapping available times between two users by running{" "}
+          <span className="font-mono">Python/scheduling.py</span>. Results come only from the
+          student module — when it fails, its error is shown instead.
         </p>
       </div>
 
@@ -154,7 +181,8 @@ export default function Scheduling() {
           <div>
             <h2 className="font-semibold text-lg">Availability overview</h2>
             <p className="text-xs text-muted-foreground">
-              From <span className="font-mono">/api/scheduling/overview</span>
+              From <span className="font-mono">scheduling.receive_time_data()</span> via{" "}
+              <span className="font-mono">/api/scheduling/overview</span>
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -175,42 +203,38 @@ export default function Scheduling() {
           <p className="text-sm text-red-700">
             {overviewQuery.error instanceof Error ? overviewQuery.error.message : String(overviewQuery.error)}
           </p>
+        ) : overviewQuery.data && !overviewOk ? (
+          <PythonErrorBox envelope={overviewQuery.data} fallbackModule="scheduling" />
         ) : topSlots.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No availability data yet — no users have available times set.
+            Python returned no availability data.
           </p>
         ) : (
-          <>
-            <p className="text-sm text-muted-foreground mb-3">
-              <span className="font-semibold text-foreground">{overview?.usersWithAvailability ?? 0}</span>{" "}
-              users have availability set.
-            </p>
-            <div className="space-y-3">
-              {topSlots.map((s) => (
-                <div key={s.slot}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="font-medium text-foreground">{s.slot}</span>
-                    <span className="text-muted-foreground tabular-nums">{s.count}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-violet-500 transition-all"
-                      style={{ width: `${(s.count / maxSlot) * 100}%` }}
-                    />
-                  </div>
+          <div className="space-y-3">
+            {topSlots.map((s) => (
+              <div key={s.slot}>
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="font-medium text-foreground">{s.slot}</span>
+                  <span className="text-muted-foreground tabular-nums">{s.count}</span>
                 </div>
-              ))}
-            </div>
-          </>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-violet-500 transition-all"
+                    style={{ width: `${(s.count / maxSlot) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
       <section className="bg-card border border-card-border rounded-2xl p-5">
         <h2 className="font-semibold text-lg mb-1">Suggest meeting times</h2>
         <p className="text-xs text-muted-foreground mb-4">
-          Calls <span className="font-mono">/api/scheduling/suggest?user_a=&amp;user_b=</span> — tries{" "}
-          <span className="font-mono">scheduling.time_dict(student, teacher)</span> first, then the
-          adapter overlap.
+          Calls <span className="font-mono">scheduling.time_dict(student, teacher)</span> via{" "}
+          <span className="font-mono">/api/scheduling/suggest?user_a=&amp;user_b=</span> — the
+          overlap shown is exactly what the student function returns.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -220,6 +244,7 @@ export default function Scheduling() {
               type="number"
               min="1"
               value={userA}
+              placeholder="e.g. 1"
               onChange={(event) => setUserA(event.target.value)}
               className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -230,6 +255,7 @@ export default function Scheduling() {
               type="number"
               min="1"
               value={userB}
+              placeholder="e.g. 2"
               onChange={(event) => setUserB(event.target.value)}
               className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -247,6 +273,12 @@ export default function Scheduling() {
         {suggestError && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {suggestError}
+          </div>
+        )}
+
+        {suggestion && !suggestOk && (
+          <div className="mt-5">
+            <PythonErrorBox envelope={suggestion} fallbackModule="scheduling" />
           </div>
         )}
 
@@ -277,16 +309,6 @@ export default function Scheduling() {
                 <TimeChips times={suggestData.overlap} highlight={suggestData.overlap} />
               )}
             </div>
-            {suggestion?.student_module?.error && (
-              <details className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <summary className="cursor-pointer font-semibold">
-                  Student module output (scheduling.time_dict)
-                </summary>
-                <p className="mt-2">
-                  {suggestion.student_module.status}: {suggestion.student_module.error}
-                </p>
-              </details>
-            )}
           </div>
         )}
       </section>
