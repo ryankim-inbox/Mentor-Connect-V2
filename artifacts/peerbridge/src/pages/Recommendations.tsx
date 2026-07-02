@@ -26,7 +26,7 @@ interface RecommendationResult {
 }
 
 interface PythonMatchStatus {
-  endpointStatus: "connected" | "unavailable" | "TODO" | "import error" | "runtime error" | "no results yet";
+  endpointStatus: "connected" | "real result" | "unavailable" | "TODO" | "import error" | "runtime error" | "no results yet";
   matchCount: number;
   message: string;
   isReal: boolean;
@@ -190,7 +190,7 @@ function normalizeBlockStatus(raw: unknown): BlockStatus {
 }
 
 function statusClass(status: string) {
-  if (status === "connected") {
+  if (status === "connected" || status === "real result") {
     return "bg-emerald-50 text-emerald-700 border-emerald-200";
   }
   if (status === "TODO" || status === "no results yet") {
@@ -262,8 +262,8 @@ export default function Recommendations() {
 
     try {
       const [matchesResponse, blocksResponse] = await Promise.all([
-        fetch(`/python-api/practice/matching/${parsedQuestionId}?limit=5`),
-        fetch("/python-api/practice/blocks/status"),
+        fetch(`/api/practice/matching/${parsedQuestionId}?limit=5`),
+        fetch("/api/practice/blocks/status"),
       ]);
 
       if (!matchesResponse.ok) {
@@ -372,7 +372,7 @@ export default function Recommendations() {
           </button>
         </div>
         <p id="question-id-help" className="mt-2 text-xs text-muted-foreground">
-          Calls <span className="font-mono">/python-api/practice/matching/{parsedQuestionId ?? "{questionId}"}?limit=5</span>.
+          Calls <span className="font-mono">/api/practice/matching/{parsedQuestionId ?? "{questionId}"}?limit=5</span>.
         </p>
       </div>
 

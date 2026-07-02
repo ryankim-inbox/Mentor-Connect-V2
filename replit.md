@@ -10,7 +10,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: FastAPI (Python 3.12) — replaces original Express 5 backend
+- **API framework**: FastAPI (Python 3.12+) — replaces original Express 5 backend; main backend lives in the repo-root `Python/` folder (`artifacts/api-server/python/` is legacy)
 - **Python packages**: fastapi, uvicorn, psycopg2-binary, bcrypt, itsdangerous, starlette
 - **Database**: PostgreSQL (accessed via psycopg2 raw SQL in Python)
 - **Validation**: Pydantic v2 (Python backend), Zod (frontend type safety)
@@ -54,6 +54,11 @@ A full-stack app for California high school students to connect as mentors and m
 - Reports: `/reports` (POST)
 - Blocks: `/blocks` (GET, POST, DELETE)
 - Stats: `/stats/overview` (GET), `/stats/district/:id` (GET)
+- Matching (wraps `Python/find_matches.py`): `/matches/:questionId` (GET), `/matches` (POST), `/practice/*`
+- Analytics adapters (wrap `Python/analysis.py`): `/analysis/status`, `/analytics/weekly-matches`, `/analytics/popular-subjects`, `/analytics/popular-time-slots`, `/analytics/mentor-response-rates`
+- Python reports adapter (wraps `Python/reports.py`): `/python-reports/status`, `/python-reports/summary`
+- Scheduling adapter (wraps `Python/scheduling.py`): `/scheduling/status`, `/scheduling/overview`, `/scheduling/suggest`
+- Admin adapter (wraps `Python/get_blocks.py`): `/admin/flagged-users`
 
 ## Key Commands
 
@@ -61,6 +66,6 @@ A full-stack app for California high school students to connect as mentors and m
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `cd Python && python main.py` — run the FastAPI backend (repo-root `Python/`, port 8000; see `Python/README.md`)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
