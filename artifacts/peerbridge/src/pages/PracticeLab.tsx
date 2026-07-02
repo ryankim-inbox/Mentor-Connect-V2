@@ -134,7 +134,7 @@ function normalizeMatches(value: unknown): MentorMatch[] {
 
 function badgeClass(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "connected") {
+  if (normalized === "connected" || normalized === "real result") {
     return "bg-emerald-50 text-emerald-700 border-emerald-200";
   }
   if (normalized.includes("todo") || normalized === "missing function" || normalized === "no results yet") {
@@ -279,9 +279,9 @@ export default function PracticeLab() {
     setFrontendError("");
     try {
       const [overall, locations, blocks] = await Promise.all([
-        getJson("/python-api/practice/status"),
-        getJson("/python-api/practice/locations/status"),
-        getJson("/python-api/practice/blocks/status"),
+        getJson("/api/practice/status"),
+        getJson("/api/practice/locations/status"),
+        getJson("/api/practice/blocks/status"),
       ]);
       setOverallRaw(overall);
       setLocationsStatusRaw(locations);
@@ -308,7 +308,7 @@ export default function PracticeLab() {
     setIsRunningMatching(true);
     setFrontendError("");
     try {
-      const result = await getJson(`/python-api/practice/matching/${parsedQuestionId}?limit=${parsedLimit}`);
+      const result = await getJson(`/api/practice/matching/${parsedQuestionId}?limit=${parsedLimit}`);
       setMatchingRaw(result);
     } catch (error) {
       setMatchingRaw({
@@ -334,7 +334,7 @@ export default function PracticeLab() {
     setIsRunningLocation(true);
     setFrontendError("");
     try {
-      const result = await getJson("/python-api/practice/locations/test", {
+      const result = await getJson("/api/practice/locations/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsedInput),
@@ -406,7 +406,7 @@ export default function PracticeLab() {
           <div>
             <h2 className="text-xl font-bold text-foreground">Overall Python Practice Status</h2>
             <p className="text-sm text-muted-foreground">
-              Backend status endpoint: <span className="font-mono">/python-api/practice/status</span>
+              Backend status endpoint: <span className="font-mono">/api/practice/status</span>
             </p>
           </div>
           <button
@@ -431,7 +431,7 @@ export default function PracticeLab() {
           <div>
             <h2 className="text-xl font-bold text-foreground">Matching Engine Test</h2>
             <p className="text-sm text-muted-foreground">
-              Calls <span className="font-mono">/python-api/practice/matching/{questionId || "{id}"}?limit={limit || "5"}</span>
+              Calls <span className="font-mono">/api/practice/matching/{questionId || "{id}"}?limit={limit || "5"}</span>
             </p>
           </div>
           <StatusBadge status={matchingEngine.status} />
@@ -511,8 +511,8 @@ export default function PracticeLab() {
           <div>
             <h2 className="text-xl font-bold text-foreground">Location Engine Test</h2>
             <p className="text-sm text-muted-foreground">
-              Calls <span className="font-mono">/python-api/practice/locations/status</span> and{" "}
-              <span className="font-mono">/python-api/practice/locations/test</span>
+              Calls <span className="font-mono">/api/practice/locations/status</span> and{" "}
+              <span className="font-mono">/api/practice/locations/test</span>
             </p>
           </div>
           <StatusBadge status={locationEngine.status} />
@@ -556,7 +556,7 @@ export default function PracticeLab() {
           <div>
             <h2 className="text-xl font-bold text-foreground">Block / Report Engine Test</h2>
             <p className="text-sm text-muted-foreground">
-              Calls <span className="font-mono">/python-api/practice/blocks/status</span>
+              Calls <span className="font-mono">/api/practice/blocks/status</span>
             </p>
           </div>
           <StatusBadge status={blockEngine.status} />

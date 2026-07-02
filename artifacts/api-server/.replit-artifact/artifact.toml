@@ -9,8 +9,10 @@ localPort = 8080
 name = "API Server"
 paths = ["/api"]
 
+# The backend source of truth moved to the repo-root Python/ folder.
+# artifacts/api-server/python/ is kept only as legacy reference.
 [services.development]
-run = "cd python && python main.py"
+run = "cd ../../Python && python main.py"
 
 [services.production]
 
@@ -21,7 +23,7 @@ args = ["echo", "no-build"]
 NODE_ENV = "production"
 
 [services.production.run]
-args = ["python", "artifacts/api-server/python/main.py"]
+args = ["python", "Python/main.py"]
 
 [services.production.run.env]
 PORT = "8080"
