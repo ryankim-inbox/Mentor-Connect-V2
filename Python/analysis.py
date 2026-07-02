@@ -36,7 +36,7 @@ def receive_mentor_ranks():
 
 def response_time_analysis():
     connections = psycopg2.connect(
-        database = 'requests_db'
+        database = 'requests_db',
         host='get_blocks'
     )
     cursor = connections.cursor()
