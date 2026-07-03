@@ -234,6 +234,75 @@ export interface DistrictStats {
   topTags: Tag[];
 }
 
+export type ScaffoldTodoStatus =
+  (typeof ScaffoldTodoStatus)[keyof typeof ScaffoldTodoStatus];
+
+export const ScaffoldTodoStatus = {
+  todo: "todo",
+} as const;
+
+/**
+ * Placeholder answer from chat learning-scaffold endpoints the student
+has not implemented yet (Python/routers/chat.py).
+
+ */
+export interface ScaffoldTodo {
+  status: ScaffoldTodoStatus;
+  /** Mission number in docs/STUDENT_CHAT_BACKEND_GUIDE.md */
+  mission?: number;
+  message: string;
+  guide?: string;
+}
+
+export type ChatRoomType = (typeof ChatRoomType)[keyof typeof ChatRoomType];
+
+export const ChatRoomType = {
+  global: "global",
+  district: "district",
+} as const;
+
+export interface ChatRoom {
+  id: number;
+  type: ChatRoomType;
+  /** @nullable */
+  districtId: number | null;
+  name: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  roomId: number;
+  senderId: number;
+  senderName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface SendChatMessageBody {
+  body: string;
+}
+
+export interface DmConversation {
+  id: number;
+  otherUserId: number;
+  otherUserName: string;
+  createdAt: string;
+}
+
+export interface StartDmBody {
+  toUserId: number;
+}
+
+export interface DmMessage {
+  id: number;
+  conversationId: number;
+  senderId: number;
+  body: string;
+  createdAt: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
 export type ListDistrictsParams = {
   type?: ListDistrictsType;
   search?: string;

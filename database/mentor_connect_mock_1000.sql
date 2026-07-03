@@ -21,6 +21,11 @@
 -- requests.preferred_times / questions.preferred_times hold each author's
 -- multi-slot selection; Request 1 & Question 1 = {Mon 17:00, Wed 19:00},
 -- overlapping mentor 501's available_times on Mon 17:00.
+-- Chat learning scaffold: chat_rooms/chat_messages/dm_conversations/
+-- dm_messages are seeded (global room id 1, district rooms ids 2..33, demo
+-- DM threads user 1 <-> 501 and user 1 <-> 951) but the API over them is a
+-- student TODO — see Python/routers/chat.py and
+-- docs/STUDENT_CHAT_BACKEND_GUIDE.md.
 -- ============================================================================
 
 BEGIN;
@@ -33,6 +38,8 @@ SET client_min_messages = warning;
 -- Drop everything this seed owns (views first, then tables).
 -- ---------------------------------------------------------------------------
 DROP VIEW IF EXISTS v_popular_subjects, v_mentor_ranks, v_popular_time_slots, v_response_times, mentors, schedules_db CASCADE;
+-- Chat learning scaffold tables (see Python/migrations/003_chat_learning_schema.sql).
+DROP TABLE IF EXISTS dm_messages, dm_conversations, chat_messages, chat_rooms CASCADE;
 DROP TABLE IF EXISTS schedules, questions, request_tags, blocks, reports, requests, users, tags, districts CASCADE;
 -- Legacy table names from older student SQL, dropped so re-seeding stays clean.
 DROP TABLE IF EXISTS blocked_users CASCADE;
@@ -162,6 +169,63 @@ CREATE INDEX idx_questions_student ON questions(student_id);
 CREATE INDEX idx_schedules_slot ON schedules(slot);
 CREATE INDEX idx_requests_preferred_times ON requests USING GIN (preferred_times);
 CREATE INDEX idx_questions_preferred_times ON questions USING GIN (preferred_times);
+
+-- ---------------------------------------------------------------------------
+-- Chat learning scaffold (kept in sync with
+-- Python/migrations/003_chat_learning_schema.sql): chat rooms + room
+-- messages + private DM conversations/messages. The API over these tables
+-- is the student's TODO in Python/routers/chat.py — the seed data below
+-- gives that future implementation something real to return.
+-- ---------------------------------------------------------------------------
+CREATE TABLE chat_rooms (
+    id SERIAL PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('global', 'district')),
+    district_id INTEGER NULL REFERENCES districts(id),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (type, district_id)
+);
+
+-- UNIQUE treats NULLs as distinct, so this partial index is what actually
+-- guarantees there is only one global room.
+CREATE UNIQUE INDEX uq_chat_rooms_single_global
+    ON chat_rooms (type) WHERE district_id IS NULL;
+
+CREATE TABLE chat_messages (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ NULL
+);
+
+-- One row per pair of users. (1, 501) vs (501, 1) is the classic gotcha the
+-- student's POST /api/dms/start must handle; these seeds store the smaller
+-- id first.
+CREATE TABLE dm_conversations (
+    id SERIAL PRIMARY KEY,
+    user_a_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_b_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (user_a_id <> user_b_id),
+    UNIQUE (user_a_id, user_b_id)
+);
+
+CREATE TABLE dm_messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    read_at TIMESTAMPTZ NULL,
+    deleted_at TIMESTAMPTZ NULL
+);
+
+CREATE INDEX idx_chat_messages_room_created ON chat_messages (room_id, created_at);
+CREATE INDEX idx_dm_messages_conversation_created ON dm_messages (conversation_id, created_at);
+CREATE INDEX idx_dm_conversations_user_a ON dm_conversations (user_a_id);
+CREATE INDEX idx_dm_conversations_user_b ON dm_conversations (user_b_id);
 
 -- ---------------------------------------------------------------------------
 -- districts (32)
@@ -4487,6 +4551,52 @@ CROSS JOIN LATERAL unnest(u.available_times) WITH ORDINALITY AS t(slot, ord)
 ORDER BY u.id, t.ord;
 
 -- ---------------------------------------------------------------------------
+-- Chat learning scaffold seed data. Room ids are deterministic: 1 is the
+-- global room, then district_id + 1 for every district room (2..33). The
+-- demo DM threads pair the header's demo logins: user 1 <-> 501, 1 <-> 951.
+-- ---------------------------------------------------------------------------
+INSERT INTO chat_rooms (id, type, district_id, name, created_at) VALUES
+  (1, 'global', NULL, 'Global Chat', '2026-06-01 08:00:00+00');
+
+INSERT INTO chat_rooms (id, type, district_id, name, created_at)
+SELECT d.id + 1, 'district', d.id, d.name || ' Chat', '2026-06-01 08:00:00+00'
+FROM districts d
+ORDER BY d.id;
+
+-- Room messages: global room (1), Fremont Union room (2 — users 1 and 501
+-- are both district 1), East Side Union room (3 — user 951 is district 2).
+INSERT INTO chat_messages (id, room_id, sender_id, body, created_at) VALUES
+  (1, 1, 1,   'Hi everyone! First message in the global room.', '2026-07-01 16:00:00+00'),
+  (2, 1, 501, 'Welcome! Once the chat API works you should see this in the Global tab.', '2026-07-01 16:02:00+00'),
+  (3, 1, 951, 'Hello from East Side Union — this room is for every district.', '2026-07-01 16:05:00+00'),
+  (4, 1, 1,   'If you can read this in the app, Mission 2 of the chat guide works!', '2026-07-01 16:07:00+00'),
+  (5, 2, 1,   'Anyone up for an algebra study group this week?', '2026-07-01 17:00:00+00'),
+  (6, 2, 501, 'I mentor Monday 17:00 — bring your quadratics questions.', '2026-07-01 17:03:00+00'),
+  (7, 2, 1,   'Perfect, see you Monday!', '2026-07-01 17:04:00+00'),
+  (8, 3, 951, 'First message in the East Side Union room. Say hi when you land here!', '2026-07-01 18:00:00+00');
+
+-- One soft-deleted row on purpose: a correct history query filters it out
+-- with WHERE deleted_at IS NULL (Mission 2 in the student guide).
+INSERT INTO chat_messages (id, room_id, sender_id, body, created_at, deleted_at) VALUES
+  (9, 1, 951, 'If you can see this in the app, your query forgot WHERE deleted_at IS NULL.', '2026-07-01 16:08:00+00', '2026-07-01 16:09:00+00');
+
+INSERT INTO dm_conversations (id, user_a_id, user_b_id, created_at) VALUES
+  (1, 1, 501, '2026-07-01 19:00:00+00'),
+  (2, 1, 951, '2026-07-01 19:30:00+00');
+
+INSERT INTO dm_messages (id, conversation_id, sender_id, body, created_at, read_at) VALUES
+  (1, 1, 1,   'Hi Sophia! Could we go over quadratic equations before Monday?', '2026-07-01 19:00:30+00', '2026-07-01 19:01:00+00'),
+  (2, 1, 501, 'Of course — bring the two problems that stumped you.', '2026-07-01 19:02:00+00', '2026-07-01 19:02:30+00'),
+  (3, 1, 1,   'Will do. Thanks!', '2026-07-01 19:03:00+00', NULL),
+  (4, 2, 951, 'Hey Alex, saw your study-habits request — happy to share what worked for me.', '2026-07-01 19:31:00+00', '2026-07-01 19:32:00+00'),
+  (5, 2, 1,   'That would be great. Thursday evening okay?', '2026-07-01 19:33:00+00', NULL),
+  (6, 2, 951, 'Thursday 18:00 works — it is already in my availability.', '2026-07-01 19:34:00+00', NULL);
+
+-- Soft-deleted DM, same teaching purpose as chat_messages id 9 (Mission 7).
+INSERT INTO dm_messages (id, conversation_id, sender_id, body, created_at, read_at, deleted_at) VALUES
+  (7, 1, 501, 'If you can see this DM, your query forgot WHERE deleted_at IS NULL.', '2026-07-01 19:05:00+00', NULL, '2026-07-01 19:06:00+00');
+
+-- ---------------------------------------------------------------------------
 -- Convenience views for analytics practice (read-only; nothing in the app or
 -- the student code writes to these).
 -- ---------------------------------------------------------------------------
@@ -4566,6 +4676,10 @@ SELECT setval('reports_id_seq',      (SELECT MAX(id) FROM reports));
 SELECT setval('blocks_id_seq',       (SELECT MAX(id) FROM blocks));
 SELECT setval('questions_id_seq',    (SELECT MAX(id) FROM questions));
 SELECT setval('schedules_id_seq',    (SELECT MAX(id) FROM schedules));
+SELECT setval('chat_rooms_id_seq',       (SELECT MAX(id) FROM chat_rooms));
+SELECT setval('chat_messages_id_seq',    (SELECT MAX(id) FROM chat_messages));
+SELECT setval('dm_conversations_id_seq', (SELECT MAX(id) FROM dm_conversations));
+SELECT setval('dm_messages_id_seq',      (SELECT MAX(id) FROM dm_messages));
 
 COMMIT;
 
@@ -4580,6 +4694,10 @@ COMMIT;
 --   reports      108
 --   blocks       120
 --   schedules    (SELECT SUM(cardinality(available_times)) FROM users) — ~3000
+--   chat_rooms       33 (1 global + 32 district)
+--   chat_messages    9  (8 visible + 1 soft-deleted on purpose)
+--   dm_conversations 2  (user 1 <-> 501, user 1 <-> 951)
+--   dm_messages      7  (6 visible + 1 soft-deleted on purpose)
 -- Every request and question row carries a non-empty preferred_times array
 -- (>= 2 slots) that overlaps the author's users.available_times.
 -- ---------------------------------------------------------------------------
