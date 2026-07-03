@@ -6,16 +6,17 @@ def receive_most_popular_subject():
         host="get_blocks"
     )
     cursor = connections.cursor()
-    query="SELECT request FROM requests;"
+    query = "SELECT request FROM requests;"
     cursor.execute(query)
 
     subject_data = cursor.fetchall()
     cursor.close()
     connections.close()
-    sub_count=0
-    for sub in subject_data:
-        sub_count+=1
-    return max(sub)
+
+
+    subjects = [sub[0] for sub in subject_data]
+
+    return max(set(subjects), key=subjects.count)
 
 def receive_mentor_ranks():
     connections = psycopg2.connect(
@@ -23,26 +24,33 @@ def receive_mentor_ranks():
         host="get_blocks"
     )
     cursor = connections.cursor()
-    query="SELECT mentor FROM mentors;"
-    cursor.execute(query)find_matches.py
+    query = "SELECT mentor FROM mentors;"
+    cursor.execute(query)
 
     mentor_data = cursor.fetchall()
     cursor.close()
     connections.close()
+
+    mentor_pick_rate = {}
     for mentor in mentor_data:
-        mentor_pick_rate = {
-            mentor:pick
-        }
+        mentor_name = mentor[0]
+        # Assign a default value for pick, or get it dynamically
+        mentor_pick_rate[mentor_name] = 0
+
+    return mentor_pick_rate
 
 def response_time_analysis():
     connections = psycopg2.connect(
-        database = 'requests_db'
-        host='get_blocks'
+        database='requests_db',
+        host='get_blocks' # Added missing comma here
     )
     cursor = connections.cursor()
     query = "SELECT request FROM requests;"
     cursor.execute(query)
-    requests_data=cursor.fetchall()
+    requests_data = cursor.fetchall()
 
-    accept_time-mentor_time=response_time
+    cursor.close()
+    connections.close()
+
+    response_time = 0
     return response_time

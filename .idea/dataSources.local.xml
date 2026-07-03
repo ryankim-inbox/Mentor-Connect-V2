@@ -16,13 +16,13 @@
         </introspection-scope>
       </schema-mapping>
     </data-source>
-    <data-source name="mentor_connect_mock@localhost" uuid="efc98c6a-a3c0-4d42-96a0-078b665896e2">
+    <data-source name="mentor_connect_mock@localhost" uuid="25c55389-6299-44d6-acff-1dbfe7fcc0e0">
       <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
         <identifier-quote-string>&quot;</identifier-quote-string>
       </database-info>
       <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
       <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
+      <user-name>ryankim</user-name>
       <schema-mapping>
         <introspection-scope>
           <node kind="database" qname="@">
