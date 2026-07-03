@@ -12,6 +12,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
+import { sortTimeSlots } from "@/lib/timeSlots";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
@@ -179,6 +180,22 @@ export default function RequestDetail({ id }: Props) {
             <TagBadge key={tag.id} name={tag.name} color={tag.color} />
           ))}
         </div>
+
+        {request.preferredTimes && request.preferredTimes.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Preferred times</p>
+            <div className="flex flex-wrap gap-1.5">
+              {sortTimeSlots(request.preferredTimes).map((slot) => (
+                <span
+                  key={slot}
+                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 tabular-nums"
+                >
+                  {slot}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-border pt-4 flex items-center justify-between">
           <div>
