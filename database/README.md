@@ -96,13 +96,13 @@ email can log in.
 | `districts` | 32 | Bay Area school districts (`type='high_school'`) |
 | `tags` | 22 | subjects; tag names == the subject vocabulary used everywhere |
 | `users` | 1000 | ids 1–500 mentee, 501–950 mentor, 951–1000 both; every row filled (bio, subjects, location, available_times, languages, grade_level, teaching_style) |
-| `requests` | 750 | product help/offer posts; ~72% open, 20% matched, 8% closed |
+| `requests` | 750 | product help/offer posts; ~72% open, 20% matched, 8% closed; includes the `request` compatibility column (primary subject) |
 | `request_tags` | 1455 | ≥1 tag per request (subject tag + extras) |
 | `questions` | 720 | practice table for `get_questions.py` / `find_matches.py`; question id N == student id N for N ≤ 500 |
 | `reports` | 108 | engineered threshold tiers (1 / 2 / 3 / 4 / 5 / 6 reports) |
 | `blocks` | 120 | unique pairs; includes demo block 1→502 |
 | `schedules` | 3023 | one row per user per weekly slot, derived 1:1 from `users.available_times` |
-| views | 4 | `v_popular_subjects`, `v_mentor_ranks`, `v_popular_time_slots`, `v_response_times` — read-only helpers for analytics practice |
+| views | 6 | 4 analytics helpers (`v_popular_subjects`, `v_mentor_ranks`, `v_popular_time_slots`, `v_response_times`) + 2 compatibility views (`mentors`, `schedules_db`) |
 
 Schema notes:
 
@@ -115,6 +115,21 @@ Schema notes:
   product `users` table.
 - All foreign keys, checks (`role`, `status`), unique constraints, and indexes
   are created by the seed; sequences are reset after the explicit-id inserts.
+
+### Compatibility objects for the current student queries
+
+The student practice files run a few queries whose table/column names don't
+match the product schema. Since `.py` files must never be modified, the seed
+provides objects shaped after those queries so they work as written once the
+student code connects to this database:
+
+| Student query (file) | Provided by |
+|---|---|
+| `SELECT request FROM requests;` (`Python/analysis.py`) | `requests.request` column — mirrors each request's primary subject (Request 1 → `'Math'`) |
+| `SELECT mentor FROM mentors;` (`Python/analysis.py`) | `mentors` view — mentor/both users with `name AS mentor` plus subjects, location, available_times, languages, grade_level, teaching_style, district_id |
+| `SELECT schedules FROM schedules_db;` (`Python/scheduling.py`) | `schedules_db` view — `slot AS schedules` plus user_id, created_at |
+
+These are read-only conveniences; the app itself never touches them.
 
 ## 7. Validation queries
 
@@ -132,6 +147,10 @@ psql mentor_connect_mock -c "SELECT * FROM questions WHERE id = 1;"
 psql mentor_connect_mock -c "SELECT * FROM requests WHERE id = 1;"
 psql mentor_connect_mock -c "SELECT * FROM blocks LIMIT 10;"
 psql mentor_connect_mock -c "SELECT * FROM reports LIMIT 10;"
+# compatibility objects (student query shapes)
+psql mentor_connect_mock -c "SELECT request FROM requests LIMIT 5;"      -- subject names
+psql mentor_connect_mock -c "SELECT mentor FROM mentors LIMIT 5;"        -- mentor names
+psql mentor_connect_mock -c "SELECT schedules FROM schedules_db LIMIT 5;" -- time slots
 ```
 
 ## 8. Manual test pages (after logging in as `student001@test.edu`)
