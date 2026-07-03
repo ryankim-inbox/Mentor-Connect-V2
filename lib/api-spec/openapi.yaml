@@ -619,6 +619,11 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        preferredTimes:
+          description: Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').
+          type: array
+          items:
+            type: string
       required: [id, authorId, authorName, authorRole, districtId, districtName, title, description, tags, status, createdAt]
 
     CreateRequestBody:
@@ -637,6 +642,13 @@ components:
         role:
           type: string
           enum: [mentor, mentee]
+        preferredTimes:
+          description: Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            pattern: "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$"
       required: [districtId, title, description, tagIds, role]
 
     UpdateRequestBody:

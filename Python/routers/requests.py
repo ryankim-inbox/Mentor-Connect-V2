@@ -1,9 +1,30 @@
+import re
+
 from fastapi import APIRouter, Request, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from db import db
 
 router = APIRouter()
+
+# Weekly slot format shared with the frontend selector and the DB seed:
+# 'Ddd HH:00' on a 24-hour clock, e.g. 'Mon 17:00' .. 'Sun 23:00'.
+TIME_SLOT_RE = re.compile(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$")
+MAX_PREFERRED_TIMES = 30
+
+def validate_preferred_times(value):
+    if value is None:
+        return []
+    if len(value) > MAX_PREFERRED_TIMES:
+        raise ValueError(f"preferredTimes cannot have more than {MAX_PREFERRED_TIMES} slots")
+    if len(set(value)) != len(value):
+        raise ValueError("preferredTimes cannot contain duplicates")
+    for slot in value:
+        if not TIME_SLOT_RE.match(slot):
+            raise ValueError(
+                f"invalid time slot '{slot}': expected 'Ddd HH:00' (e.g. 'Mon 17:00', 24-hour clock)"
+            )
+    return value
 
 class CreateRequestBody(BaseModel):
     districtId: int
@@ -11,6 +32,12 @@ class CreateRequestBody(BaseModel):
     description: str
     role: str
     tagIds: Optional[List[int]] = []
+    preferredTimes: Optional[List[str]] = []
+
+    @field_validator("preferredTimes")
+    @classmethod
+    def check_preferred_times(cls, value):
+        return validate_preferred_times(value)
 
 class UpdateRequestBody(BaseModel):
     title: Optional[str] = None
@@ -48,6 +75,8 @@ def build_request_response(cur, req):
         "matchedUserId": req["matched_user_id"],
         "matchedUserName": matched_user_name,
         "createdAt": req["created_at"].isoformat(),
+        # tolerate databases that predate the preferred_times migration
+        "preferredTimes": req.get("preferred_times") or [],
     }
 
 @router.get("/requests")
@@ -93,9 +122,9 @@ def create_request(body: CreateRequestBody, request: Request):
     with db() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO requests (author_id, district_id, title, description, role, status)
-               VALUES (%s, %s, %s, %s, %s, 'open') RETURNING *""",
-            (user_id, body.districtId, body.title, body.description, body.role),
+            """INSERT INTO requests (author_id, district_id, title, description, role, status, preferred_times)
+               VALUES (%s, %s, %s, %s, %s, 'open', %s) RETURNING *""",
+            (user_id, body.districtId, body.title, body.description, body.role, body.preferredTimes or []),
         )
         req = cur.fetchone()
 
