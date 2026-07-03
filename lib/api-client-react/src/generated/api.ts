@@ -20,10 +20,14 @@ import type {
   AuthResponse,
   BlockUserBody,
   BlockedUser,
+  ChatMessage,
+  ChatRoom,
   CreateReportBody,
   CreateRequestBody,
   District,
   DistrictStats,
+  DmConversation,
+  DmMessage,
   ErrorResponse,
   HealthStatus,
   ListDistrictsParams,
@@ -32,6 +36,9 @@ import type {
   MentorshipRequest,
   MessageResponse,
   RegisterBody,
+  ScaffoldTodo,
+  SendChatMessageBody,
+  StartDmBody,
   StatsOverview,
   Tag,
   UpdateRequestBody,
@@ -1863,3 +1870,635 @@ export function useGetDistrictStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Student TODO — intended contract: the global room plus the current
+user's district room. Returns ScaffoldTodo until implemented.
+
+ * @summary (scaffold) List the current user's chat rooms
+ */
+export const getListChatRoomsUrl = () => {
+  return `/api/chat/rooms`;
+};
+
+export const listChatRooms = async (
+  options?: RequestInit,
+): Promise<ChatRoom[] | ScaffoldTodo> => {
+  return customFetch<ChatRoom[] | ScaffoldTodo>(getListChatRoomsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListChatRoomsQueryKey = () => {
+  return [`/api/chat/rooms`] as const;
+};
+
+export const getListChatRoomsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listChatRooms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listChatRooms>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListChatRoomsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listChatRooms>>> = ({
+    signal,
+  }) => listChatRooms({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listChatRooms>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListChatRoomsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listChatRooms>>
+>;
+export type ListChatRoomsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) List the current user's chat rooms
+ */
+
+export function useListChatRooms<
+  TData = Awaited<ReturnType<typeof listChatRooms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listChatRooms>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListChatRoomsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Student TODO — intended contract: recent messages (oldest first,
+soft-deleted rows excluded) with sender names. Returns ScaffoldTodo
+until implemented.
+
+ * @summary (scaffold) Message history for a chat room
+ */
+export const getListChatRoomMessagesUrl = (roomId: number) => {
+  return `/api/chat/rooms/${roomId}/messages`;
+};
+
+export const listChatRoomMessages = async (
+  roomId: number,
+  options?: RequestInit,
+): Promise<ChatMessage[] | ScaffoldTodo> => {
+  return customFetch<ChatMessage[] | ScaffoldTodo>(
+    getListChatRoomMessagesUrl(roomId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListChatRoomMessagesQueryKey = (roomId: number) => {
+  return [`/api/chat/rooms/${roomId}/messages`] as const;
+};
+
+export const getListChatRoomMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listChatRoomMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  roomId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listChatRoomMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListChatRoomMessagesQueryKey(roomId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listChatRoomMessages>>
+  > = ({ signal }) =>
+    listChatRoomMessages(roomId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!roomId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listChatRoomMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListChatRoomMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listChatRoomMessages>>
+>;
+export type ListChatRoomMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) Message history for a chat room
+ */
+
+export function useListChatRoomMessages<
+  TData = Awaited<ReturnType<typeof listChatRoomMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  roomId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listChatRoomMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListChatRoomMessagesQueryOptions(roomId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Student TODO — intended contract: validate membership + body text,
+insert into chat_messages, return the created message with 201.
+Returns 200 with ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Post a message into a chat room
+ */
+export const getSendChatRoomMessageUrl = (roomId: number) => {
+  return `/api/chat/rooms/${roomId}/messages`;
+};
+
+export const sendChatRoomMessage = async (
+  roomId: number,
+  sendChatMessageBody: SendChatMessageBody,
+  options?: RequestInit,
+): Promise<ScaffoldTodo | ChatMessage> => {
+  return customFetch<ScaffoldTodo | ChatMessage>(
+    getSendChatRoomMessageUrl(roomId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(sendChatMessageBody),
+    },
+  );
+};
+
+export const getSendChatRoomMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendChatRoomMessage>>,
+    TError,
+    { roomId: number; data: BodyType<SendChatMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendChatRoomMessage>>,
+  TError,
+  { roomId: number; data: BodyType<SendChatMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["sendChatRoomMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendChatRoomMessage>>,
+    { roomId: number; data: BodyType<SendChatMessageBody> }
+  > = (props) => {
+    const { roomId, data } = props ?? {};
+
+    return sendChatRoomMessage(roomId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendChatRoomMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendChatRoomMessage>>
+>;
+export type SendChatRoomMessageMutationBody = BodyType<SendChatMessageBody>;
+export type SendChatRoomMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) Post a message into a chat room
+ */
+export const useSendChatRoomMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendChatRoomMessage>>,
+    TError,
+    { roomId: number; data: BodyType<SendChatMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendChatRoomMessage>>,
+  TError,
+  { roomId: number; data: BodyType<SendChatMessageBody> },
+  TContext
+> => {
+  return useMutation(getSendChatRoomMessageMutationOptions(options));
+};
+
+/**
+ * Student TODO — intended contract: every conversation the current user
+participates in, with the other participant's name. Returns
+ScaffoldTodo until implemented.
+
+ * @summary (scaffold) List the current user's DM conversations
+ */
+export const getListDmConversationsUrl = () => {
+  return `/api/dms`;
+};
+
+export const listDmConversations = async (
+  options?: RequestInit,
+): Promise<DmConversation[] | ScaffoldTodo> => {
+  return customFetch<DmConversation[] | ScaffoldTodo>(
+    getListDmConversationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListDmConversationsQueryKey = () => {
+  return [`/api/dms`] as const;
+};
+
+export const getListDmConversationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDmConversations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDmConversations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDmConversationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDmConversations>>
+  > = ({ signal }) => listDmConversations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDmConversations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDmConversationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDmConversations>>
+>;
+export type ListDmConversationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) List the current user's DM conversations
+ */
+
+export function useListDmConversations<
+  TData = Awaited<ReturnType<typeof listDmConversations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDmConversations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDmConversationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Student TODO — intended contract: return the existing conversation
+with that user if one exists (in either column order), otherwise
+create it. Returns ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Start (or reuse) a DM conversation
+ */
+export const getStartDmConversationUrl = () => {
+  return `/api/dms/start`;
+};
+
+export const startDmConversation = async (
+  startDmBody: StartDmBody,
+  options?: RequestInit,
+): Promise<DmConversation | ScaffoldTodo> => {
+  return customFetch<DmConversation | ScaffoldTodo>(
+    getStartDmConversationUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(startDmBody),
+    },
+  );
+};
+
+export const getStartDmConversationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startDmConversation>>,
+    TError,
+    { data: BodyType<StartDmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startDmConversation>>,
+  TError,
+  { data: BodyType<StartDmBody> },
+  TContext
+> => {
+  const mutationKey = ["startDmConversation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startDmConversation>>,
+    { data: BodyType<StartDmBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startDmConversation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartDmConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startDmConversation>>
+>;
+export type StartDmConversationMutationBody = BodyType<StartDmBody>;
+export type StartDmConversationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) Start (or reuse) a DM conversation
+ */
+export const useStartDmConversation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startDmConversation>>,
+    TError,
+    { data: BodyType<StartDmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startDmConversation>>,
+  TError,
+  { data: BodyType<StartDmBody> },
+  TContext
+> => {
+  return useMutation(getStartDmConversationMutationOptions(options));
+};
+
+/**
+ * Student TODO — intended contract: participants only (403 otherwise),
+soft-deleted rows excluded, oldest first. Returns ScaffoldTodo until
+implemented.
+
+ * @summary (scaffold) Message history for a DM conversation
+ */
+export const getListDmMessagesUrl = (conversationId: number) => {
+  return `/api/dms/${conversationId}/messages`;
+};
+
+export const listDmMessages = async (
+  conversationId: number,
+  options?: RequestInit,
+): Promise<DmMessage[] | ScaffoldTodo> => {
+  return customFetch<DmMessage[] | ScaffoldTodo>(
+    getListDmMessagesUrl(conversationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListDmMessagesQueryKey = (conversationId: number) => {
+  return [`/api/dms/${conversationId}/messages`] as const;
+};
+
+export const getListDmMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDmMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  conversationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDmMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDmMessagesQueryKey(conversationId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDmMessages>>> = ({
+    signal,
+  }) => listDmMessages(conversationId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!conversationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDmMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDmMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDmMessages>>
+>;
+export type ListDmMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) Message history for a DM conversation
+ */
+
+export function useListDmMessages<
+  TData = Awaited<ReturnType<typeof listDmMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  conversationId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDmMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDmMessagesQueryOptions(conversationId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Student TODO — intended contract: participants only, validate body
+text, insert into dm_messages, return the created message with 201.
+Returns 200 with ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Send a DM
+ */
+export const getSendDmMessageUrl = (conversationId: number) => {
+  return `/api/dms/${conversationId}/messages`;
+};
+
+export const sendDmMessage = async (
+  conversationId: number,
+  sendChatMessageBody: SendChatMessageBody,
+  options?: RequestInit,
+): Promise<ScaffoldTodo | DmMessage> => {
+  return customFetch<ScaffoldTodo | DmMessage>(
+    getSendDmMessageUrl(conversationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(sendChatMessageBody),
+    },
+  );
+};
+
+export const getSendDmMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendDmMessage>>,
+    TError,
+    { conversationId: number; data: BodyType<SendChatMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendDmMessage>>,
+  TError,
+  { conversationId: number; data: BodyType<SendChatMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["sendDmMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendDmMessage>>,
+    { conversationId: number; data: BodyType<SendChatMessageBody> }
+  > = (props) => {
+    const { conversationId, data } = props ?? {};
+
+    return sendDmMessage(conversationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendDmMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendDmMessage>>
+>;
+export type SendDmMessageMutationBody = BodyType<SendChatMessageBody>;
+export type SendDmMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (scaffold) Send a DM
+ */
+export const useSendDmMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendDmMessage>>,
+    TError,
+    { conversationId: number; data: BodyType<SendChatMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendDmMessage>>,
+  TError,
+  { conversationId: number; data: BodyType<SendChatMessageBody> },
+  TContext
+> => {
+  return useMutation(getSendDmMessageMutationOptions(options));
+};

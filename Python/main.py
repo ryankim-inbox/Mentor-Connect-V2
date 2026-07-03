@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from routers import auth, users, districts, tags, requests, reports, stats, matches
+from routers import auth, users, districts, tags, requests, reports, stats, matches, chat
 from api.routers import admin, analytics, practice, python_reports, scheduling
 
 app = FastAPI(title="PeerBridge Python API")
@@ -53,6 +53,11 @@ app.include_router(requests.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(matches.router, prefix="/api")
+
+# Chat learning scaffold — REST + WebSocket stubs the student implements
+# (see Python/routers/chat.py and docs/STUDENT_CHAT_BACKEND_GUIDE.md).
+app.include_router(chat.router, prefix="/api")
+app.include_router(chat.ws_router)  # WS paths start with /ws/ — no /api prefix
 
 # Adapter routers that wrap the student practice files in Python/ without
 # modifying them (see api/adapters/).
