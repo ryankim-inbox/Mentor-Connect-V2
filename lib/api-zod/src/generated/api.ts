@@ -433,3 +433,229 @@ export const GetDistrictStatsResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * Student TODO — intended contract: the global room plus the current
+user's district room. Returns ScaffoldTodo until implemented.
+
+ * @summary (scaffold) List the current user's chat rooms
+ */
+export const ListChatRoomsResponse = zod.union([
+  zod.array(
+    zod.object({
+      id: zod.number(),
+      type: zod.enum(["global", "district"]),
+      districtId: zod.number().nullable(),
+      name: zod.string(),
+    }),
+  ),
+  zod
+    .object({
+      status: zod.enum(["todo"]),
+      mission: zod
+        .number()
+        .optional()
+        .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+      message: zod.string(),
+      guide: zod.string().optional(),
+    })
+    .describe(
+      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+    ),
+]);
+
+/**
+ * Student TODO — intended contract: recent messages (oldest first,
+soft-deleted rows excluded) with sender names. Returns ScaffoldTodo
+until implemented.
+
+ * @summary (scaffold) Message history for a chat room
+ */
+export const ListChatRoomMessagesParams = zod.object({
+  roomId: zod.coerce.number(),
+});
+
+export const ListChatRoomMessagesResponse = zod.union([
+  zod.array(
+    zod.object({
+      id: zod.number(),
+      roomId: zod.number(),
+      senderId: zod.number(),
+      senderName: zod.string(),
+      body: zod.string(),
+      createdAt: zod.string(),
+    }),
+  ),
+  zod
+    .object({
+      status: zod.enum(["todo"]),
+      mission: zod
+        .number()
+        .optional()
+        .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+      message: zod.string(),
+      guide: zod.string().optional(),
+    })
+    .describe(
+      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+    ),
+]);
+
+/**
+ * Student TODO — intended contract: validate membership + body text,
+insert into chat_messages, return the created message with 201.
+Returns 200 with ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Post a message into a chat room
+ */
+export const SendChatRoomMessageParams = zod.object({
+  roomId: zod.coerce.number(),
+});
+
+export const SendChatRoomMessageBody = zod.object({
+  body: zod.string(),
+});
+
+export const SendChatRoomMessageResponse = zod
+  .object({
+    status: zod.enum(["todo"]),
+    mission: zod
+      .number()
+      .optional()
+      .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+    message: zod.string(),
+    guide: zod.string().optional(),
+  })
+  .describe(
+    "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+  );
+
+/**
+ * Student TODO — intended contract: every conversation the current user
+participates in, with the other participant's name. Returns
+ScaffoldTodo until implemented.
+
+ * @summary (scaffold) List the current user's DM conversations
+ */
+export const ListDmConversationsResponse = zod.union([
+  zod.array(
+    zod.object({
+      id: zod.number(),
+      otherUserId: zod.number(),
+      otherUserName: zod.string(),
+      createdAt: zod.string(),
+    }),
+  ),
+  zod
+    .object({
+      status: zod.enum(["todo"]),
+      mission: zod
+        .number()
+        .optional()
+        .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+      message: zod.string(),
+      guide: zod.string().optional(),
+    })
+    .describe(
+      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+    ),
+]);
+
+/**
+ * Student TODO — intended contract: return the existing conversation
+with that user if one exists (in either column order), otherwise
+create it. Returns ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Start (or reuse) a DM conversation
+ */
+export const StartDmConversationBody = zod.object({
+  toUserId: zod.number(),
+});
+
+export const StartDmConversationResponse = zod.union([
+  zod.object({
+    id: zod.number(),
+    otherUserId: zod.number(),
+    otherUserName: zod.string(),
+    createdAt: zod.string(),
+  }),
+  zod
+    .object({
+      status: zod.enum(["todo"]),
+      mission: zod
+        .number()
+        .optional()
+        .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+      message: zod.string(),
+      guide: zod.string().optional(),
+    })
+    .describe(
+      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+    ),
+]);
+
+/**
+ * Student TODO — intended contract: participants only (403 otherwise),
+soft-deleted rows excluded, oldest first. Returns ScaffoldTodo until
+implemented.
+
+ * @summary (scaffold) Message history for a DM conversation
+ */
+export const ListDmMessagesParams = zod.object({
+  conversationId: zod.coerce.number(),
+});
+
+export const ListDmMessagesResponse = zod.union([
+  zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      senderId: zod.number(),
+      body: zod.string(),
+      createdAt: zod.string(),
+      readAt: zod.string().nullable(),
+    }),
+  ),
+  zod
+    .object({
+      status: zod.enum(["todo"]),
+      mission: zod
+        .number()
+        .optional()
+        .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+      message: zod.string(),
+      guide: zod.string().optional(),
+    })
+    .describe(
+      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+    ),
+]);
+
+/**
+ * Student TODO — intended contract: participants only, validate body
+text, insert into dm_messages, return the created message with 201.
+Returns 200 with ScaffoldTodo until implemented.
+
+ * @summary (scaffold) Send a DM
+ */
+export const SendDmMessageParams = zod.object({
+  conversationId: zod.coerce.number(),
+});
+
+export const SendDmMessageBody = zod.object({
+  body: zod.string(),
+});
+
+export const SendDmMessageResponse = zod
+  .object({
+    status: zod.enum(["todo"]),
+    mission: zod
+      .number()
+      .optional()
+      .describe("Mission number in docs\/STUDENT_CHAT_BACKEND_GUIDE.md"),
+    message: zod.string(),
+    guide: zod.string().optional(),
+  })
+  .describe(
+    "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python\/routers\/chat.py).\n",
+  );
