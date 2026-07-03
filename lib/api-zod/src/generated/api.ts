@@ -184,18 +184,36 @@ export const ListRequestsResponseItem = zod.object({
   matchedUserId: zod.number().nullish(),
   matchedUserName: zod.string().nullish(),
   createdAt: zod.string(),
+  preferredTimes: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
 });
 export const ListRequestsResponse = zod.array(ListRequestsResponseItem);
 
 /**
  * @summary Post a mentorship request
  */
+export const createRequestBodyPreferredTimesItemRegExp = new RegExp(
+  "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$",
+);
+export const createRequestBodyPreferredTimesMax = 30;
+
 export const CreateRequestBody = zod.object({
   districtId: zod.number(),
   title: zod.string(),
   description: zod.string(),
   tagIds: zod.array(zod.number()),
   role: zod.enum(["mentor", "mentee"]),
+  preferredTimes: zod
+    .array(zod.string().regex(createRequestBodyPreferredTimesItemRegExp))
+    .max(createRequestBodyPreferredTimesMax)
+    .optional()
+    .describe(
+      "Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.",
+    ),
 });
 
 /**
@@ -226,6 +244,12 @@ export const GetRequestResponse = zod.object({
   matchedUserId: zod.number().nullish(),
   matchedUserName: zod.string().nullish(),
   createdAt: zod.string(),
+  preferredTimes: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
 });
 
 /**
@@ -263,6 +287,12 @@ export const UpdateRequestResponse = zod.object({
   matchedUserId: zod.number().nullish(),
   matchedUserName: zod.string().nullish(),
   createdAt: zod.string(),
+  preferredTimes: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
 });
 
 /**
@@ -300,6 +330,12 @@ export const MatchRequestResponse = zod.object({
   matchedUserId: zod.number().nullish(),
   matchedUserName: zod.string().nullish(),
   createdAt: zod.string(),
+  preferredTimes: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
 });
 
 /**

@@ -25,4 +25,6 @@ export interface MentorshipRequest {
   /** @nullable */
   matchedUserName?: string | null;
   createdAt: string;
+  /** Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00'). */
+  preferredTimes?: string[];
 }
