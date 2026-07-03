@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useCreateRequest, useListDistricts, useListTags, getListRequestsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
+import { PreferredTimesField } from "@/components/PreferredTimesField";
 import { useAuth } from "@/lib/auth-context";
 
 export default function NewRequest() {
@@ -16,6 +17,7 @@ export default function NewRequest() {
     districtId: user?.districtId ?? 0,
     role: "mentee" as "mentor" | "mentee",
     tagIds: [] as number[],
+    preferredTimes: [] as string[],
   });
   const [error, setError] = useState("");
   const [districtSearch, setDistrictSearch] = useState("");
@@ -173,6 +175,13 @@ export default function NewRequest() {
               <p className="text-xs text-primary mt-2">{form.tagIds.length} tag{form.tagIds.length !== 1 ? "s" : ""} selected</p>
             )}
           </div>
+        </div>
+
+        <div className="bg-card border border-card-border rounded-2xl p-6">
+          <PreferredTimesField
+            value={form.preferredTimes}
+            onChange={(preferredTimes) => setForm((f) => ({ ...f, preferredTimes }))}
+          />
         </div>
 
         {error && (

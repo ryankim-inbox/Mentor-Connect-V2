@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { TagBadge } from "./TagBadge";
+import { sortTimeSlots } from "@/lib/timeSlots";
 
 interface Tag {
   id: number;
@@ -19,6 +20,7 @@ interface RequestCardProps {
   tags: Tag[];
   status: "open" | "matched" | "closed";
   createdAt: string;
+  preferredTimes?: string[];
 }
 
 export function RequestCard({
@@ -32,6 +34,7 @@ export function RequestCard({
   tags,
   status,
   createdAt,
+  preferredTimes,
 }: RequestCardProps) {
   const date = new Date(createdAt).toLocaleDateString("en-US", {
     month: "short",
@@ -41,6 +44,8 @@ export function RequestCard({
 
   const roleColor = authorRole === "mentor" ? "text-blue-600 bg-blue-50 border-blue-100" : "text-emerald-600 bg-emerald-50 border-emerald-100";
   const roleLabel = authorRole === "mentor" ? "Offering mentorship" : "Seeking a mentor";
+
+  const sortedTimes = preferredTimes && preferredTimes.length > 0 ? sortTimeSlots(preferredTimes) : [];
 
   return (
     <Link href={`/requests/${id}`}>
@@ -65,6 +70,14 @@ export function RequestCard({
             <span className="text-xs text-muted-foreground">+{tags.length - 4} more</span>
           )}
         </div>
+
+        {sortedTimes.length > 0 && (
+          <p className="text-xs text-muted-foreground mb-3 line-clamp-1">
+            <span className="font-medium">Preferred times:</span>{" "}
+            {sortedTimes.slice(0, 3).join(", ")}
+            {sortedTimes.length > 3 && ` +${sortedTimes.length - 3} more`}
+          </p>
+        )}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1">

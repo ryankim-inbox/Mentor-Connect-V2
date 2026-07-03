@@ -75,16 +75,16 @@ email can log in.
 ## 5. Fixed sample scenario (for tutoring demos)
 
 - **Question 1 / Request 1** belong to **user 1** (Alex Kim): subject `Math`,
-  topic `Algebra`, preferred time `Mon 5pm`, language `English`, style
-  `step_by_step`.
+  topic `Algebra`, preferred times `Mon 17:00` + `Wed 19:00`, language
+  `English`, style `step_by_step`.
 - **Mentor 501** (Sophia Lee) matches question 1 on every axis
-  (subject + location `Cupertino` + language + `Mon 5pm` + style) → rank 1,
+  (subject + location `Cupertino` + language + `Mon 17:00` + style) → rank 1,
   score 110 on the Recommendations page.
 - **Mentor 502** (Marcus Chen) is an equally strong match, but **user 1 blocks
   user 502** (blocks row #1). Once the student fixes `Python/get_blocks.py` to
   read the real `blocks` table, mentor 502 disappears from the matches —
   a built-in demonstration of block filtering.
-- **Users 1 and 501 share the `Mon 5pm` slot** for the Scheduling page
+- **Users 1 and 501 share the `Mon 17:00` slot** for the Scheduling page
   (`/api/scheduling/suggest?user_a=1&user_b=501`).
 - Reported users **613 & 614 have ≥5 reports** (banned tier), **402 & 403 have
   ≥3** (serious-warning tier) for the Admin Reports page.
@@ -96,9 +96,9 @@ email can log in.
 | `districts` | 32 | Bay Area school districts (`type='high_school'`) |
 | `tags` | 22 | subjects; tag names == the subject vocabulary used everywhere |
 | `users` | 1000 | ids 1–500 mentee, 501–950 mentor, 951–1000 both; every row filled (bio, subjects, location, available_times, languages, grade_level, teaching_style) |
-| `requests` | 750 | product help/offer posts; ~72% open, 20% matched, 8% closed; includes the `request` compatibility column (primary subject) |
+| `requests` | 750 | product help/offer posts; ~72% open, 20% matched, 8% closed; includes the `request` compatibility column (primary subject) and a non-empty `preferred_times` array on every row |
 | `request_tags` | 1455 | ≥1 tag per request (subject tag + extras) |
-| `questions` | 720 | practice table for `get_questions.py` / `find_matches.py`; question id N == student id N for N ≤ 500 |
+| `questions` | 720 | practice table for `get_questions.py` / `find_matches.py`; question id N == student id N for N ≤ 500; `preferred_time` (single) + `preferred_times` (full list) |
 | `reports` | 108 | engineered threshold tiers (1 / 2 / 3 / 4 / 5 / 6 reports) |
 | `blocks` | 120 | unique pairs; includes demo block 1→502 |
 | `schedules` | 3023 | one row per user per weekly slot, derived 1:1 from `users.available_times` |
@@ -111,10 +111,40 @@ Schema notes:
   `available_times`, `languages`, `grade_level`, `teaching_style`), so both the
   web app (`Python/routers/*`) and the student files (`Python/get_users.py`,
   `find_matches.py`, scheduling adapter) run against one database.
-- `questions` matches `Python/create_tables.sql` exactly but references the
-  product `users` table.
+- `questions` matches `Python/create_tables.sql` but references the product
+  `users` table and adds the `preferred_times TEXT[]` column described below.
 - All foreign keys, checks (`role`, `status`), unique constraints, and indexes
-  are created by the seed; sequences are reset after the explicit-id inserts.
+  (including GIN indexes on `requests.preferred_times` /
+  `questions.preferred_times` for `&&` overlap queries) are created by the
+  seed; sequences are reset after the explicit-id inserts.
+
+### Weekly time slots & `preferred_times`
+
+Every weekly time slot in the database is a string in one canonical format:
+
+```
+<Day> <HH>:00      — 24-hour clock, zero-padded, on the hour
+```
+
+- Days: `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun`
+- Hours: `00:00` through `23:00`
+- Valid examples: `Mon 17:00`, `Wed 19:00`, `Sat 10:00`, `Sun 15:00`
+- Invalid: `Mon 5pm`, `mon 17:00`, `Mon 17:30`, `Monday 17:00`
+
+Where slots live and how the fields relate:
+
+| Field | Meaning |
+|---|---|
+| `users.available_times TEXT[]` | slots a user is generally free (2–4 per seeded user) |
+| `schedules.slot` | the same availability, normalized to one row per user per slot (derived 1:1 from `users.available_times`) |
+| `requests.preferred_times TEXT[] NOT NULL DEFAULT '{}'` | **canonical multi-slot field** — all slots the author picked in the "Post a Request" form (e.g. Request 1 → `{"Mon 17:00","Wed 19:00"}`); empty array means the author skipped the optional selector |
+| `questions.preferred_time TEXT` | legacy single slot kept for backward compatibility (`get_questions.py`, `find_matches.py`); always equals the **first** entry of `questions.preferred_times` |
+| `questions.preferred_times TEXT[] NOT NULL DEFAULT '{}'` | the full multi-slot list for the question (≥ 2 slots per seeded row) |
+
+Seed guarantees for matching practice: every seeded request/question has ≥ 2
+preferred slots, `preferred_times` always overlaps the author's own
+`available_times`, and Request 1 / Question 1 (`{"Mon 17:00","Wed 19:00"}`)
+overlap mentor 501's availability on `Mon 17:00`.
 
 ### Compatibility objects for the current student queries
 
@@ -142,9 +172,14 @@ psql mentor_connect_mock -c "SELECT COUNT(*) FROM questions;"    -- 720
 psql mentor_connect_mock -c "SELECT COUNT(*) FROM reports;"      -- 108
 psql mentor_connect_mock -c "SELECT COUNT(*) FROM blocks;"       -- 120
 psql mentor_connect_mock -c "SELECT COUNT(*) FROM schedules;"    -- 3023
+psql mentor_connect_mock -c "SELECT role, COUNT(*) FROM users GROUP BY role ORDER BY role;"  -- 50 both / 500 mentee / 450 mentor
 psql mentor_connect_mock -c "SELECT id, email, role, location, available_times FROM users WHERE id IN (1, 501, 951);"
 psql mentor_connect_mock -c "SELECT * FROM questions WHERE id = 1;"
 psql mentor_connect_mock -c "SELECT * FROM requests WHERE id = 1;"
+# preferred times ('Ddd HH:00' slots)
+psql mentor_connect_mock -c "SELECT id, preferred_times FROM requests WHERE id = 1;"                     -- {"Mon 17:00","Wed 19:00"}
+psql mentor_connect_mock -c "SELECT id, preferred_time, preferred_times FROM questions WHERE id = 1;"    -- Mon 17:00 | {"Mon 17:00","Wed 19:00"}
+psql mentor_connect_mock -c "SELECT s1.slot FROM schedules s1 JOIN schedules s2 ON s1.slot = s2.slot WHERE s1.user_id = 1 AND s2.user_id = 501;"  -- Mon 17:00
 psql mentor_connect_mock -c "SELECT * FROM blocks LIMIT 10;"
 psql mentor_connect_mock -c "SELECT * FROM reports LIMIT 10;"
 # compatibility objects (student query shapes)
@@ -156,7 +191,7 @@ psql mentor_connect_mock -c "SELECT schedules FROM schedules_db LIMIT 5;" -- tim
 ## 8. Manual test pages (after logging in as `student001@test.edu`)
 
 - `/recommendations` — Question ID **1** → Sophia Lee (501) ranks #1 with score 110
-- `/scheduling` — User IDs **1** and **501** → shared slot `Mon 5pm` (shows the
+- `/scheduling` — User IDs **1** and **501** → shared slot `Mon 17:00` (shows the
   current `scheduling.py` bug until the student fixes it; the data is ready)
 - `/practice-lab` — question 1 matching, block status
 - `/analytics` — python-only page; renders student `analysis.py` output/errors

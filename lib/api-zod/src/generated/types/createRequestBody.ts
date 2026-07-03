@@ -13,4 +13,9 @@ export interface CreateRequestBody {
   description: string;
   tagIds: number[];
   role: CreateRequestBodyRole;
+  /**
+   * Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
+   * @maxItems 30
+   */
+  preferredTimes?: string[];
 }
