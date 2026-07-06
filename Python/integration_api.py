@@ -1,11 +1,3 @@
-"""
-Safe wrappers for exposing student Python practice code through FastAPI.
-
-This file intentionally does not implement or repair the student's algorithms.
-It imports student modules at request time, calls existing functions only when
-they are clearly available, and returns status JSON when practice code is
-incomplete.
-"""
 
 from __future__ import annotations
 
