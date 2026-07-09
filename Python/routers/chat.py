@@ -57,9 +57,44 @@ def list_chat_rooms(request: Request):
     """Mission 1 — the rooms this user can chat in."""
     # TODO(student):
     # 1. Read the current user from the session; 401 if not logged in.
+    user_id = session.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+    cursor=db.cursor()
     # 2. Look up the user's district_id from the users table.
+    cursor.execute("SELECT district_id FROM users WHERE id = %s", (user_id,))
+    user_row = cursor.fetchone()
+
+    if not user_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    district_id = user_row["district_id"]
     # 3. Query chat_rooms for the global room AND this user's district room.
-    # 4. Return a list of dicts shaped like:
+    query = """
+        SELECT id, type, district_id, name
+        FROM chat_rooms
+        WHERE type = 'global' OR district_id = %s
+        ORDER BY id \
+    """
+    cursor.execute(query, (district_id,))
+    rooms = cursor.fetchall()
+
+# 4. Return a list of dicts shaped like:
+    response_data = []
+    for room in rooms:
+        response_data.append({
+            "id": room["id"],
+            "type": room["type"],
+            "districtId": room["district_id"],
+            "name": room["name"]
+        })
+    cursor.close()
+    return response_data
     #      [{"id": 1, "type": "global", "districtId": None, "name": "Global Chat"}, ...]
     # 5. Test: curl with your login cookie, or the browser Network tab —
     #    the Global and My School tabs in the chat popup should stop showing
