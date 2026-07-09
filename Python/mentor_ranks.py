@@ -11,7 +11,7 @@
 import psycopg2
 def rank_data():
     connections = psycopg2.connect(
-        database="users_db",
+        database="mentor_connect_mock",
         host="get_users"
     )
     cursor = connections.cursor()
@@ -26,4 +26,3 @@ def rank_data():
 ranked_list=()
 
 for count in count_data:
-    

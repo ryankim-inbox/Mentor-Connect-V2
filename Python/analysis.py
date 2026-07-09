@@ -20,7 +20,7 @@ def receive_most_popular_subject():
 
 def receive_mentor_ranks():
     connections = psycopg2.connect(
-        database="mentors_db",
+        database="mentor_connect_mock",
         host="get_blocks"
     )
     cursor = connections.cursor()
@@ -34,15 +34,14 @@ def receive_mentor_ranks():
     mentor_pick_rate = {}
     for mentor in mentor_data:
         mentor_name = mentor[0]
-        # Assign a default value for pick, or get it dynamically
         mentor_pick_rate[mentor_name] = 0
 
     return mentor_pick_rate
 
 def response_time_analysis():
     connections = psycopg2.connect(
-        database='requests_db',
-        host='get_blocks' # Added missing comma here
+        database='mentor_connect_mock',
+        host='get_blocks'
     )
     cursor = connections.cursor()
     query = "SELECT request FROM requests;"
