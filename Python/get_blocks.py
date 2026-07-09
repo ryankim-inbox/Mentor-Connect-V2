@@ -42,14 +42,14 @@ def prevent_matches(blocks_data, match_possibilities):
 
 from collections import Counter
 
-def count_blocks(block_data):
-    blockers = [row[0] for row in block_data]
-    block_counts = Counter(blockers)
-    for user_id, count in block_counts.items():
-        if count == 3:
-            serious_warning(user_id)
-        elif count >= 5:
-            ban(user_id)
-def serious_warning(user_id):
-
-def ban(user_id):
+# def count_blocks(block_data):
+#     blockers = [row[0] for row in block_data]
+#     block_counts = Counter(blockers)
+#     for user_id, count in block_counts.items():
+#         if count == 3:
+#             serious_warning(user_id)
+#         elif count >= 5:
+#             ban(user_id)
+# def serious_warning(user_id):
+#
+# def ban(user_id):
