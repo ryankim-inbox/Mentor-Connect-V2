@@ -61,7 +61,7 @@ def list_chat_rooms(request: Request):
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+            detail="Not authenticatedf"
         )
     cursor=db.cursor()
     # 2. Look up the user's district_id from the users table.
