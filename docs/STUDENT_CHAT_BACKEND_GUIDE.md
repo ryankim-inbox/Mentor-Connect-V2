@@ -234,7 +234,7 @@ FROM chat_messages m
 JOIN users u ON u.id = m.sender_id
 WHERE m.room_id = %s
   AND ...            -- hide soft-deleted rows!
-ORDER BY m.created_at
+ORDER BY m.created_atd
 LIMIT 50
 ```
 

@@ -1,50 +1,6 @@
 <DataSourcesHistory>
   <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="postgres@localhost" uuid="c384f435-03aa-481f-8f85-f246e1d8f074">
-      <database-info product="" version="" jdbc-version="" driver-name="" driver-version="" dbms="POSTGRES" />
-      <driver-ref>postgresql</driver-ref>
-      <synchronize>true</synchronize>
-      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://localhost:5432/postgres</jdbc-url>
-      <jdbc-additional-properties>
-        <property name="com.intellij.clouds.kubernetes.db.host.port" />
-        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
-        <property name="com.intellij.clouds.kubernetes.db.container.port" />
-      </jdbc-additional-properties>
-      <secret-storage>master_key</secret-storage>
-      <schema-mapping />
-      <working-dir>$ProjectFileDir$</working-dir>
-    </data-source>
-  </DataSourceFromHistory>
-  <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="postgres@localhost" uuid="20f25d1c-2622-425c-b60b-014a75a80285">
-      <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
-        <identifier-quote-string>&quot;</identifier-quote-string>
-      </database-info>
-      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
-      <driver-ref>postgresql</driver-ref>
-      <synchronize>true</synchronize>
-      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://localhost:5432/postgres</jdbc-url>
-      <jdbc-additional-properties>
-        <property name="com.intellij.clouds.kubernetes.db.host.port" />
-        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
-        <property name="com.intellij.clouds.kubernetes.db.container.port" />
-      </jdbc-additional-properties>
-      <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
-      <schema-mapping>
-        <introspection-scope>
-          <node kind="database" qname="@">
-            <node kind="schema" qname="@" />
-          </node>
-        </introspection-scope>
-      </schema-mapping>
-      <working-dir>$ProjectFileDir$</working-dir>
-    </data-source>
-  </DataSourceFromHistory>
-  <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="mentor_connect@localhost" uuid="10da61c8-0316-4d13-a754-7f1f04ac8f09">
+    <data-source source="LOCAL" name="mentor_connect@localhost" uuid="d8c33b8b-6955-4a0b-8428-4f3794c111ab">
       <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
         <identifier-quote-string>&quot;</identifier-quote-string>
       </database-info>
@@ -59,7 +15,34 @@
         <property name="com.intellij.clouds.kubernetes.db.container.port" />
       </jdbc-additional-properties>
       <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
+      <user-name>ryankim</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node kind="database" qname="@">
+            <node kind="schema" qname="@" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+  </DataSourceFromHistory>
+  <DataSourceFromHistory isRemovedFromProject="false">
+    <data-source source="LOCAL" name="mentor_connect@localhost" uuid="5535ffd9-ac8d-4e39-9d74-889adfc74152">
+      <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
+        <identifier-quote-string>&quot;</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://localhost:5432/mentor_connect</jdbc-url>
+      <jdbc-additional-properties>
+        <property name="com.intellij.clouds.kubernetes.db.host.port" />
+        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
+        <property name="com.intellij.clouds.kubernetes.db.container.port" />
+      </jdbc-additional-properties>
+      <secret-storage>master_key</secret-storage>
+      <user-name>ryankim</user-name>
       <schema-mapping>
         <introspection-scope>
           <node kind="database" qname="@">
@@ -71,7 +54,7 @@
     </data-source>
   </DataSourceFromHistory>
   <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="test_db@localhost" uuid="a38c23de-3850-4717-9d48-e035b85ea989">
+    <data-source source="LOCAL" name="test_db@localhost" uuid="23b45e84-4ee5-4ebb-8791-6198abcb73c3">
       <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
         <identifier-quote-string>&quot;</identifier-quote-string>
       </database-info>
@@ -86,7 +69,7 @@
         <property name="com.intellij.clouds.kubernetes.db.container.port" />
       </jdbc-additional-properties>
       <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
+      <user-name>ryankim</user-name>
       <schema-mapping>
         <introspection-scope>
           <node kind="database" qname="@">
@@ -97,35 +80,8 @@
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </DataSourceFromHistory>
-  <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="mentor_connect_mock_1000.sql@localhost" uuid="99d3f0e6-a873-4d48-89aa-e6a17bad7497">
-      <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
-        <identifier-quote-string>&quot;</identifier-quote-string>
-      </database-info>
-      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
-      <driver-ref>postgresql</driver-ref>
-      <synchronize>true</synchronize>
-      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://localhost:5432/mentor_connect_mock_1000.sql</jdbc-url>
-      <jdbc-additional-properties>
-        <property name="com.intellij.clouds.kubernetes.db.host.port" />
-        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
-        <property name="com.intellij.clouds.kubernetes.db.container.port" />
-      </jdbc-additional-properties>
-      <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
-      <schema-mapping>
-        <introspection-scope>
-          <node kind="database" qname="@">
-            <node kind="schema" qname="@" />
-          </node>
-        </introspection-scope>
-      </schema-mapping>
-      <working-dir>$ProjectFileDir$</working-dir>
-    </data-source>
-  </DataSourceFromHistory>
-  <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="mentor_connect_mock@localhost" uuid="efc98c6a-a3c0-4d42-96a0-078b665896e2">
+  <DataSourceFromHistory isRemovedFromProject="false">
+    <data-source source="LOCAL" name="mentor_connect_mock@localhost" uuid="25c55389-6299-44d6-acff-1dbfe7fcc0e0">
       <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
         <identifier-quote-string>&quot;</identifier-quote-string>
       </database-info>
@@ -140,34 +96,7 @@
         <property name="com.intellij.clouds.kubernetes.db.container.port" />
       </jdbc-additional-properties>
       <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
-      <schema-mapping>
-        <introspection-scope>
-          <node kind="database" qname="@">
-            <node kind="schema" qname="@" />
-          </node>
-        </introspection-scope>
-      </schema-mapping>
-      <working-dir>$ProjectFileDir$</working-dir>
-    </data-source>
-  </DataSourceFromHistory>
-  <DataSourceFromHistory isRemovedFromProject="true">
-    <data-source source="LOCAL" name="mentor_connect_mock@localhost" uuid="8579f47e-e679-4f9a-8a3a-ff6ee5384e0f">
-      <database-info product="PostgreSQL" version="16.13 (Homebrew)" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="16.13" exact-driver-version="42.7">
-        <identifier-quote-string>&quot;</identifier-quote-string>
-      </database-info>
-      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
-      <driver-ref>postgresql</driver-ref>
-      <synchronize>true</synchronize>
-      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://localhost:5432/mentor_connect_mock</jdbc-url>
-      <jdbc-additional-properties>
-        <property name="com.intellij.clouds.kubernetes.db.host.port" />
-        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
-        <property name="com.intellij.clouds.kubernetes.db.container.port" />
-      </jdbc-additional-properties>
-      <secret-storage>master_key</secret-storage>
-      <user-name>rinny</user-name>
+      <user-name>ryankim</user-name>
       <schema-mapping>
         <introspection-scope>
           <node kind="database" qname="@">
