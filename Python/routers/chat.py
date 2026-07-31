@@ -103,33 +103,78 @@ def list_chat_rooms(request: Request):
 
 
 @router.get("/chat/rooms/{room_id}/messages")
-def list_room_messages(room_id: int, request: Request):
-    """Mission 2 — message history for one room."""
-    # TODO(student):
-    # 1. Read the current user from the session; 401 if not logged in.
-    # 2. Check the room exists (404 if not). For a 'district' room, also check
-    #    it is the user's own district (403 if not).
-    # 3. Query chat_messages JOIN users (for each sender's name), skipping
-    #    rows WHERE deleted_at IS NOT NULL, ordered by created_at, e.g. the
-    #    most recent 50.
-    # 4. Return a list of dicts shaped like:
-    #      [{"id": 1, "roomId": 1, "senderId": 1, "senderName": "Alex Kim",
-    #        "body": "...", "createdAt": "2026-07-01T16:00:00+00:00"}, ...]
-    #    (datetimes: use value.isoformat(), like format_user in auth.py does)
-    # 5. Test: the seeded database already has 8 chat_messages — rooms 1 and 2
-    #    should return some for user 1.
-    return _todo(2, f"implement loading message history for room {room_id} from chat_messages.")
+from datetime import datetime, timezone
+from flask import jsonify, g, request, abort
+def list_room_messages(room_id):
+    # 1. Session check (401)
+    current_user = getattr(g, "user", None)
+    if not current_user:
+        return jsonify({"error": "Unauthorized"}), 401
+    db = g.db
+    cursor = db.cursor()
+
+    # 2. Load the room to check permissions
+    cursor.execute(
+        "SELECT id, type, district_id FROM chat_rooms WHERE id = %s",
+        (room_id,)
+    )
+    room = cursor.fetchone()
+    if not room:
+        return jsonify({"error": "Room not found"}), 404
+
+    room_type = room["type"]
+    room_district_id = room["district_id"]
+
+    if room_type == "district" and room_district_id != current_user.get("district_id"):
+        return jsonify({"error": "Forbidden: You cannot access other district chats"}), 403
+
+    # 3. Query messages + sender names (with soft-delete filter and ASC order)
+    query = """
+            SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name, m.body, m.created_at
+            FROM chat_messages m
+                     JOIN users u ON u.id = m.sender_id
+            WHERE m.room_id = %s
+              AND m.deleted_at IS NULL
+            ORDER BY m.created_at ASC
+                LIMIT 50 \
+            """
+    cursor.execute(query, (room_id,))
+    rows = cursor.fetchall()
+
+    # 4. Format the result list to camelCase and convert timestamps to ISO strings
+    messages_payload = []
+    for row in rows:
+        dt = row["created_at"]
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            iso_timestamp = dt.isoformat()
+        else:
+            iso_timestamp = str(dt)
+
+        messages_payload.append({
+            "id": row["id"],
+            "roomId": row["room_id"],
+            "senderId": row["sender_id"],
+            "senderName": row["sender_name"],
+            "body": row["body"],
+            "createdAt": iso_timestamp
+        })
+
+    return jsonify(messages_payload), 200
+
 
 
 @router.post("/chat/rooms/{room_id}/messages")
 def send_room_message(room_id: int, body: SendMessageBody, request: Request):
     """Mission 3 — post a message into a room."""
     # TODO(student):
+    # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
     # 1. Read the current user from the session; 401 if not logged in.
     # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
     # 3. Validate body.body: reject empty/whitespace-only text (400); consider
     #    a max length (e.g. 2000 chars).
-    # 4. INSERT INTO chat_messages ... RETURNING *, and return the new message
+    # 4. ISERT INTO chat_messages ... RETURNING *, and return the new message
     #    in the same shape as Mission 2 (status code 201).
     # 5. Test: send from the chat popup input, then re-fetch Mission 2 and
     #    check your message is there — and that a plain `curl` without a
