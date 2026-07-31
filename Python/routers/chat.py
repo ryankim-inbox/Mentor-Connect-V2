@@ -130,7 +130,7 @@ def _format_chat_message(row) -> dict:
         column, which you get by JOINing ``users`` (see ``_fetch_chat_message``).
     Usage: ``return [_format_chat_message(m) for m in rows]`` (Mission 2), or on
         a single freshly-inserted row (Missions 3, 4).
-    Used by: Missions 2, 3, 4.
+    Used by: Missions 2, 3, 4
     """
     return {
         "id": row["id"],
@@ -401,21 +401,68 @@ def list_room_messages(room_id):
 
 
 
-@router.post("/chat/rooms/{room_id}/messages")
+from fastapi import APIRouter, Request, HTTPException, status
+from pydantic import BaseModel, Field
+
+# Define or update the Pydantic schema for validation
+class SendMessageBody(BaseModel):
+    body: str = Field(..., max_length=2000)
+
+@router.post(
+    "/chat/rooms/{room_id}/messages",
+    status_code=status.HTTP_201_CREATED
+)
 def send_room_message(room_id: int, body: SendMessageBody, request: Request):
     """Mission 3 — post a message into a room."""
-    # TODO(student):
-    # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
+
     # 1. Read the current user from the session; 401 if not logged in.
+    user_id = request.session.get("user_id")
+    user_district_id = request.session.get("district_id")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+
+    # 3. Validate body.body: reject empty/whitespace-only text (400)
+ .
+    cleaned_body = body.body.strip()
+    if not cleaned_body:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Message body cannot be empty"
+        )
+
     # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
-    # 3. Validate body.body: reject empty/whitespace-only text (400); consider
-    #    a max length (e.g. 2000 chars).
-    # 4. ISERT INTO chat_messages ... RETURNING *, and return the new message
-    #    in the same shape as Mission 2 (status code 201).
-    # 5. Test: send from the chat popup input, then re-fetch Mission 2 and
-    #    check your message is there — and that a plain `curl` without a
-    #    session cookie gets a 401.
-    return _todo(3, f"implement saving a new message to room {room_id} in chat_messages.")
+    room = db.execute(
+        "SELECT district_id FROM chat_rooms WHERE id = :room_id",
+        {"room_id": room_id}
+    ).fetchone()
+
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found"
+        )
+
+    if room["district_id"] != user_district_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this district's room"
+        )
+
+    # 4. INSERT INTO chat_messages ... RETURNING *, and return the new message
+    new_message = db.execute(
+        """
+        INSERT INTO chat_messages (room_id, user_id, body, created_at)
+        VALUES (:room_id, :user_id, :body, NOW())
+            RETURNING *
+        """,
+        {"room_id": room_id, "user_id": user_id, "body": cleaned_body}
+    ).fetchone()
+    return dict(new_message)
+.")
 
 
 # ---------------------------------------------------------------------------
