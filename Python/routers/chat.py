@@ -18,7 +18,7 @@
 # already calls these endpoints. While they return {"status": "todo"} it shows
 # a practice-task notice; as soon as you return real data, the tabs come alive.
 
-from fastapi import APIRouter, Request, WebSocket
+from fastapi import APIRouter, Request, WebSocket, HTTPException
 from pydantic import BaseModel
 
 from db import db  # imported for you — every mission's queries will use it
@@ -48,58 +48,294 @@ def _todo(mission: int, message: str) -> dict:
     }
 
 
+# ===========================================================================
+# SHARED HELPERS — your toolbox for every mission.
+#
+# These are handed to you on purpose. Read each one's Definition / Usage /
+# Used-by note, then COMPOSE them inside your endpoints — Mission 1 below is a
+# finished worked example of exactly that. Most helpers stay unused until you
+# reach the mission that needs them; that is expected, not dead code.
+#
+# The two big ideas they encode, so you don't rewrite them eight times:
+#   * every REST endpoint runs its SQL inside `with db() as conn:` and shapes
+#     rows into camelCase JSON with a `_format_*` helper;
+#   * "load + access check" (rooms, DM membership) and "re-select one row after
+#     an INSERT" are each a single helper you call, not logic you re-type.
+# ===========================================================================
+
+# A single, generous ceiling for any message body (rooms and DMs alike).
+MAX_MESSAGE_LEN = 2000
+
+
+def _require_user(request: Request) -> int:
+    """Return the logged-in user's id, or raise HTTP 401.
+
+    Definition: reads ``user_id`` out of the session cookie (SessionMiddleware
+        stores it there at login — see routers/auth.py).
+    Usage: make it the FIRST line of every REST endpoint that needs a user::
+
+            user_id = _require_user(request)
+
+        It raises ``HTTPException(401)`` itself, so you never repeat the check.
+    Used by: Missions 1, 2, 3, 5, 6, 7.
+    """
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_id
+
+
+def _clean_body(raw: str) -> str:
+    """Validate + normalise message text, or raise HTTP 400.
+
+    Definition: strips surrounding whitespace, rejects empty / whitespace-only
+        text, and enforces ``MAX_MESSAGE_LEN``.
+    Usage: run every incoming message body through it before you INSERT::
+
+            text = _clean_body(body.body)
+
+    Used by: Missions 3 and 7b (and inside the WebSocket loops, 4 and 8).
+    """
+    body = (raw or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body cannot be empty")
+    if len(body) > MAX_MESSAGE_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Message too long (max {MAX_MESSAGE_LEN} characters)",
+        )
+    return body
+
+
+def _format_room(row) -> dict:
+    """Shape a ``chat_rooms`` row into the camelCase JSON the frontend expects.
+
+    Definition: maps DB columns -> ``{id, type, districtId, name}``.
+    Usage: ``return [_format_room(r) for r in rows]`` at the end of Mission 1.
+    Used by: Mission 1.
+    """
+    return {
+        "id": row["id"],
+        "type": row["type"],
+        "districtId": row["district_id"],
+        "name": row["name"],
+    }
+
+
+def _format_chat_message(row) -> dict:
+    """Shape a ``chat_messages`` row (JOINed with the sender's name) into JSON.
+
+    Definition: maps -> ``{id, roomId, senderId, senderName, body, createdAt}``;
+        ``createdAt`` uses ``.isoformat()``. The row must carry a ``sender_name``
+        column, which you get by JOINing ``users`` (see ``_fetch_chat_message``).
+    Usage: ``return [_format_chat_message(m) for m in rows]`` (Mission 2), or on
+        a single freshly-inserted row (Missions 3, 4).
+    Used by: Missions 2, 3, 4.
+    """
+    return {
+        "id": row["id"],
+        "roomId": row["room_id"],
+        "senderId": row["sender_id"],
+        "senderName": row["sender_name"],
+        "body": row["body"],
+        "createdAt": row["created_at"].isoformat(),
+    }
+
+
+def _format_conversation(row) -> dict:
+    """Shape a ``dm_conversations`` row (from one user's POV) into JSON.
+
+    Definition: maps -> ``{id, otherUserId, otherUserName, createdAt}``. The row
+        must already resolve "the other participant" (see ``_fetch_conversation``).
+    Usage: ``return [_format_conversation(c) for c in rows]`` (Mission 5) or on a
+        single row (Mission 6).
+    Used by: Missions 5, 6.
+    """
+    return {
+        "id": row["id"],
+        "otherUserId": row["other_user_id"],
+        "otherUserName": row["other_user_name"],
+        "createdAt": row["created_at"].isoformat(),
+    }
+
+
+def _format_dm_message(row) -> dict:
+    """Shape a ``dm_messages`` row into JSON. ``readAt`` is null until seen.
+
+    Definition: maps -> ``{id, conversationId, senderId, body, createdAt, readAt}``.
+    Usage: ``return [_format_dm_message(m) for m in rows]`` (Mission 7a) or on a
+        single freshly-inserted row (Missions 7b, 8).
+    Used by: Missions 7, 8.
+    """
+    return {
+        "id": row["id"],
+        "conversationId": row["conversation_id"],
+        "senderId": row["sender_id"],
+        "body": row["body"],
+        "createdAt": row["created_at"].isoformat(),
+        "readAt": row["read_at"].isoformat() if row["read_at"] else None,
+    }
+
+
+def _load_room_for_user(cur, room_id: int, user_id: int) -> dict:
+    """Fetch a room and enforce access, or raise 404 / 403. Returns the room row.
+
+    Definition: 404 if the room doesn't exist; for a ``'district'`` room, 403
+        unless it is the caller's own district. A ``'global'`` room is open to all.
+    Usage: call it right after opening a cursor, before you read or write a room::
+
+            with db() as conn:
+                cur = conn.cursor()
+                _load_room_for_user(cur, room_id, user_id)   # guard first
+                ...                                           # then your query
+
+    Used by: Missions 2, 3, 4.
+    """
+    cur.execute(
+        "SELECT id, type, district_id, name FROM chat_rooms WHERE id = %s",
+        (room_id,),
+    )
+    room = cur.fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room["type"] == "district":
+        cur.execute("SELECT district_id FROM users WHERE id = %s", (user_id,))
+        me = cur.fetchone()
+        if not me or me["district_id"] != room["district_id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only access your own district's room",
+            )
+    return room
+
+
+def _fetch_chat_message(cur, message_id: int) -> dict:
+    """Re-select one room message JOINed with its sender's name, as JSON.
+
+    Definition: runs the same SELECT + JOIN as the history query but for a single
+        id, then formats it — so an INSERT can return the exact same shape as the
+        list endpoint.
+    Usage: after ``INSERT ... RETURNING id``::
+
+            new_id = cur.fetchone()["id"]
+            return _fetch_chat_message(cur, new_id)
+
+    Used by: Missions 3, 4.
+    """
+    cur.execute(
+        """SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name,
+                  m.body, m.created_at
+           FROM chat_messages m
+           JOIN users u ON u.id = m.sender_id
+           WHERE m.id = %s""",
+        (message_id,),
+    )
+    return _format_chat_message(cur.fetchone())
+
+
+def _load_conversation_membership(cur, conversation_id: int, user_id: int) -> dict:
+    """Fetch a DM conversation and enforce privacy, or raise 404 / 403.
+
+    Definition: 404 if it doesn't exist; 403 unless the caller is one of the two
+        participants. This is the single most important guard in the project —
+        DMs are private.
+    Usage: call it before reading or writing any DM thread (mirrors
+        ``_load_room_for_user``)::
+
+            _load_conversation_membership(cur, conversation_id, user_id)
+
+    Used by: Missions 7, 8.
+    """
+    cur.execute(
+        "SELECT id, user_a_id, user_b_id FROM dm_conversations WHERE id = %s",
+        (conversation_id,),
+    )
+    convo = cur.fetchone()
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if user_id not in (convo["user_a_id"], convo["user_b_id"]):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a participant in this conversation",
+        )
+    return convo
+
+
+def _fetch_conversation(cur, conversation_id: int, user_id: int):
+    """Load one conversation already shaped from ``user_id``'s point of view.
+
+    Definition: resolves the *other* participant (``otherUserId`` /
+        ``otherUserName``) with a ``CASE`` + JOIN and formats the row. Returns
+        ``None`` if the conversation isn't found.
+    Usage: in Mission 6, after find-or-create, return it::
+
+            return _fetch_conversation(cur, conversation_id, user_id)
+
+    Used by: Mission 6.
+    """
+    cur.execute(
+        """SELECT c.id, u.id AS other_user_id, u.name AS other_user_name, c.created_at
+           FROM dm_conversations c
+           JOIN users u
+             ON u.id = CASE WHEN c.user_a_id = %s THEN c.user_b_id ELSE c.user_a_id END
+           WHERE c.id = %s""",
+        (user_id, conversation_id),
+    )
+    row = cur.fetchone()
+    return _format_conversation(row) if row else None
+
+
+def _fetch_dm_message(cur, message_id: int) -> dict:
+    """Re-select one DM message by id, as JSON.
+
+    Definition: single-row SELECT + format, so an INSERT returns the history
+        shape (same idea as ``_fetch_chat_message``).
+    Usage: after ``INSERT ... RETURNING id``::
+
+            return _fetch_dm_message(cur, cur.fetchone()["id"])
+
+    Used by: Missions 7b, 8.
+    """
+    cur.execute(
+        """SELECT id, conversation_id, sender_id, body, created_at, read_at
+           FROM dm_messages WHERE id = %s""",
+        (message_id,),
+    )
+    return _format_dm_message(cur.fetchone())
+
+
 # ---------------------------------------------------------------------------
 # Rooms
 # ---------------------------------------------------------------------------
 
 @router.get("/chat/rooms")
 def list_chat_rooms(request: Request):
-    """Mission 1 — the rooms this user can chat in."""
-    # TODO(student):
-    # 1. Read the current user from the session; 401 if not logged in.
-    user_id = session.get("user_id")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticatedf"
-        )
-    cursor=db.cursor()
-    # 2. Look up the user's district_id from the users table.
-    cursor.execute("SELECT district_id FROM users WHERE id = %s", (user_id,))
-    user_row = cursor.fetchone()
+    """Mission 1 (DONE — your worked example) — the rooms this user can chat in.
 
-    if not user_row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    district_id = user_row["district_id"]
-    # 3. Query chat_rooms for the global room AND this user's district room.
-    query = """
-        SELECT id, type, district_id, name
-        FROM chat_rooms
-        WHERE type = 'global' OR district_id = %s
-        ORDER BY id \
+    Read this as the template for Missions 2-8. Every REST endpoint is the same
+    four steps:
+        1. authenticate            -> _require_user(request)
+        2. open a connection       -> with db() as conn: cur = conn.cursor()
+        3. run ONE %s-parameterised query
+        4. shape the rows to JSON  -> a _format_* helper
     """
-    cursor.execute(query, (district_id,))
-    rooms = cursor.fetchall()
-
-# 4. Return a list of dicts shaped like:
-    response_data = []
-    for room in rooms:
-        response_data.append({
-            "id": room["id"],
-            "type": room["type"],
-            "districtId": room["district_id"],
-            "name": room["name"]
-        })
-    cursor.close()
-    return response_data
-    #      [{"id": 1, "type": "global", "districtId": None, "name": "Global Chat"}, ...]
-    # 5. Test: curl with your login cookie, or the browser Network tab —
-    #    the Global and My School tabs in the chat popup should stop showing
-    #    the practice-task notice.
-    return _todo(1, "implement loading this user's chat rooms from the chat_rooms table.")
+    user_id = _require_user(request)                     # 1. auth (401 if logged out)
+    with db() as conn:                                   # 2. connection: auto commit + close
+        cur = conn.cursor()
+        # 3. One query returns the global room plus the caller's own district
+        #    room. If the user's district_id is NULL the subquery yields NULL,
+        #    which equals no district row — so they simply get the global room.
+        cur.execute(
+            """SELECT id, type, district_id, name
+               FROM chat_rooms
+               WHERE type = 'global'
+                  OR district_id = (SELECT district_id FROM users WHERE id = %s)
+               ORDER BY id""",
+            (user_id,),
+        )
+        rooms = cur.fetchall()
+    # 4. Shape each row into the camelCase JSON the frontend expects.
+    return [_format_room(room) for room in rooms]
 
 
 @router.get("/chat/rooms/{room_id}/messages")
@@ -270,6 +506,7 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
 #   * cleanup: remove the socket from the registry on disconnect, even after
 #     errors (try/finally), or you'll broadcast into dead connections.
 # ---------------------------------------------------------------------------
+
 
 @ws_router.websocket("/ws/chat/rooms/{room_id}")
 async def chat_room_socket(websocket: WebSocket, room_id: int):
