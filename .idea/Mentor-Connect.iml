@@ -6,8 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/Python" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/artifacts/api-server/python" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/Python/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="uv (Mentor-Connect)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.14 (Mentor-Connect) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
