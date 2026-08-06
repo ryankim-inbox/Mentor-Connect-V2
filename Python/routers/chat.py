@@ -404,7 +404,7 @@ def list_room_messages(room_id):
 from fastapi import APIRouter, Request, HTTPException, status
 from pydantic import BaseModel, Field
 
-# Define or update the Pydantic schema for validation
+
 class SendMessageBody(BaseModel):
     body: str = Field(..., max_length=2000)
 
@@ -415,7 +415,7 @@ class SendMessageBody(BaseModel):
 def send_room_message(room_id: int, body: SendMessageBody, request: Request):
     """Mission 3 — post a message into a room."""
 
-    # 1. Read the current user from the session; 401 if not logged in.
+    # 1. Read the current user from the session; 401 if not logged in
     user_id = request.session.get("user_id")
     user_district_id = request.session.get("district_id")
 
@@ -425,7 +425,7 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
             detail="Not authenticated"
         )
 
-    # 3. Validate body.body: reject empty/whitespace-only text (400)
+
  .
     cleaned_body = body.body.strip()
     if not cleaned_body:
