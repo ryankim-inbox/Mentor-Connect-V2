@@ -462,7 +462,7 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
         {"room_id": room_id, "user_id": user_id, "body": cleaned_body}
     ).fetchone()
     return dict(new_message)
-.")
+.")dp
 
 
 # ---------------------------------------------------------------------------
