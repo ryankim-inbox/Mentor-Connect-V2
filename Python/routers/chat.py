@@ -339,68 +339,46 @@ def list_chat_rooms(request: Request):
 
 
 @router.get("/chat/rooms/{room_id}/messages")
-from datetime import datetime, timezone
-from flask import jsonify, g, request, abort
-def list_room_messages(room_id):
-    # 1. Session check (401)
-    current_user = getattr(g, "user", None)
-    if not current_user:
-        return jsonify({"error": "Unauthorized"}), 401
-    db = g.db
-    cursor = db.cursor()
+def list_room_messages(room_id: int, request: Request):
+    """Mission 2 (REFERENCE SOLUTION) — one room's history, oldest -> newest.
 
-    # 2. Load the room to check permissions
-    cursor.execute(
-        "SELECT id, type, district_id FROM chat_rooms WHERE id = %s",
-        (room_id,)
-    )
-    room = cursor.fetchone()
-    if not room:
-        return jsonify({"error": "Room not found"}), 404
-
-    room_type = room["type"]
-    room_district_id = room["district_id"]
-
-    if room_type == "district" and room_district_id != current_user.get("district_id"):
-        return jsonify({"error": "Forbidden: You cannot access other district chats"}), 403
-
-    # 3. Query messages + sender names (with soft-delete filter and ASC order)
-    query = """
-            SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name, m.body, m.created_at
-            FROM chat_messages m
-                     JOIN users u ON u.id = m.sender_id
-            WHERE m.room_id = %s
-              AND m.deleted_at IS NULL
-            ORDER BY m.created_at ASC
-                LIMIT 50 \
-            """
-    cursor.execute(query, (room_id,))
-    rows = cursor.fetchall()
-
-    # 4. Format the result list to camelCase and convert timestamps to ISO strings
-    messages_payload = []
-    for row in rows:
-        dt = row["created_at"]
-        if isinstance(dt, datetime):
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            iso_timestamp = dt.isoformat()
-        else:
-            iso_timestamp = str(dt)
-
-        messages_payload.append({
-            "id": row["id"],
-            "roomId": row["room_id"],
-            "senderId": row["sender_id"],
-            "senderName": row["sender_name"],
-            "body": row["body"],
-            "createdAt": iso_timestamp
-        })
-
-    return jsonify(messages_payload), 200
+    Exactly Mission 1's four steps, plus one guard. Notice how little code is
+    left once the helpers do their job: auth, the 404/403 check and the JSON
+    shaping are one call each — none of it is re-typed here.
+    """
+    user_id = _require_user(request)                     # 1. auth (401 if logged out)
+    with db() as conn:                                   # 2. connection
+        cur = conn.cursor()
+        _load_room_for_user(cur, room_id, user_id)       #    guard: 404 / 403
+        cur.execute(                                     # 3. ONE query
+            """SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name,
+                      m.body, m.created_at
+               FROM chat_messages m
+               JOIN users u ON u.id = m.sender_id
+               WHERE m.room_id = %s
+                 AND m.deleted_at IS NULL      -- hide soft-deleted messages
+               ORDER BY m.created_at
+               LIMIT 50""",
+            (room_id,),
+        )
+        messages = cur.fetchall()
+    return [_format_chat_message(m) for m in messages]    # 4. shape to JSON
 
 
+# ===========================================================================
+# Mission 3 — REVIEW. Nothing below was fixed for you. Nine problems are
+# marked inline with  ⚠ (n)  — read each, then decide the fix yourself.
+#
+# Mission 3 is Mission 2 plus
+# one INSERT, so it should end up about as short. Every guard you hand-wrote
+# below already exists in the toolbox at the top of this file.
+# ===========================================================================
 
+# ⚠ (1) Imports in the middle of the file, and a SECOND SendMessageBody that
+#       silently overwrites the one at line 33 — it leaks into Mission 7b too.
+#       Hint: imports belong at the top. Then compare Field(max_length=...)
+#       with _clean_body: they fail with different status codes. Pick one on
+#       purpose, and make the whole file agree.
 from fastapi import APIRouter, Request, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -417,16 +395,22 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
 
     # 1. Read the current user from the session; 401 if not logged in
     user_id = request.session.get("user_id")
+
+    # ⚠ (2) This session key does not exist, so this is always None — and every
+    #       check you build on it below is meaningless.
+    #       Hint: open routers/auth.py and read what login actually writes into
+    #       the session. If a value isn't there, where must it come from?
     user_district_id = request.session.get("district_id")
 
+    # ⚠ (3) Hand-written 401. One helper already does this and raises for you.
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
 
-
- .
+    # ⚠ (4) Hand-written body validation. Another helper does trim + empty +
+    #       length in one call. Hint: what happens today with 5000 characters?
     cleaned_body = body.body.strip()
     if not cleaned_body:
         raise HTTPException(
@@ -435,6 +419,14 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
         )
 
     # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
+    # ⚠ (5) `db` is the context manager imported at line 24, not a connection —
+    #       this raises AttributeError. Mission 1 and 2 both show the one
+    #       spelling that works here. Hint: it also decides when your work is
+    #       committed, which matters a lot for the INSERT below.
+    # ⚠ (6) `:room_id` is SQLAlchemy syntax. This project talks to psycopg2.
+    #       Hint: grep any finished router for `cur.execute(` and copy the
+    #       placeholder style you see — there are two valid forms, one of which
+    #       works with the dict you are already passing.
     room = db.execute(
         "SELECT district_id FROM chat_rooms WHERE id = :room_id",
         {"room_id": room_id}
@@ -446,6 +438,11 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
             detail="Room not found"
         )
 
+    # ⚠ (7) A 'global' room stores district_id = NULL, so this rule 403s the
+    #       global room for absolutely everyone. Your check has to answer
+    #       differently for the two room types.
+    #       Hint: you never SELECTed `type`. Mission 2's guard already encodes
+    #       the whole rule — read it and ask why you are writing it twice.
     if room["district_id"] != user_district_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -453,6 +450,15 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
         )
 
     # 4. INSERT INTO chat_messages ... RETURNING *, and return the new message
+    # ⚠ (8) `user_id` is not a column on chat_messages, so this INSERT fails.
+    #       Hint: open Python/migrations/003_chat_learning_schema.sql and read
+    #       the real column list. One of the columns you pass also has a
+    #       DEFAULT — let the database do that work.
+    # ⚠ (9) `RETURNING *` hands back snake_case keys, a raw datetime, and no
+    #       senderName at all — the frontend cannot read this shape.
+    #       Hint: the toolbox has a helper for "re-select the row I just
+    #       inserted". Ask what it guarantees that RETURNING * cannot, and
+    #       compare your keys one by one against _format_chat_message.
     new_message = db.execute(
         """
         INSERT INTO chat_messages (room_id, user_id, body, created_at)
@@ -462,7 +468,6 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
         {"room_id": room_id, "user_id": user_id, "body": cleaned_body}
     ).fetchone()
     return dict(new_message)
-.")dp
 
 
 # ---------------------------------------------------------------------------
