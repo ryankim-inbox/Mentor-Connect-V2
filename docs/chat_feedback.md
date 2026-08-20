@@ -1,4 +1,4 @@
-## Step 1 : 서버 켜보기
+ ## Step 1 : 서버 켜보기
 
 ```bash
 cd Python
