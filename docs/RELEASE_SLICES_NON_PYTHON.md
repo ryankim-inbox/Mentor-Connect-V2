@@ -19,7 +19,7 @@
 | # | 슬라이스 | 왜 이 순서인가 | 등급 | 예상 공수 |
 |---|---|---|---|---|
 | 01 | 유출된 비밀정보 폐기 | 다른 작업 중에도 계속 유효하게 노출된다 | P0 | 1–2h |
-| 02 | 프로덕션 빌드·배포 경로 복구 | 이게 안 되면 어떤 수정도 배포할 수 없다 | P0 | 0.5–1d |
+| 02 | 프로덕션 실행 명령 및 빌드 이식성 | 프로덕션 오토리로더 제거 + CI가 빌드할 수 있게 | ~~P0~~ P1 · **완료** | 0.5d |
 | 03 | 파괴적 스키마 도구 차단 | 명령 한 줄로 운영 DB가 소실될 수 있다 | P0 | 2h |
 | 04 | 관리자 화면 접근 통제 | 미성년자 모더레이션 데이터가 전원에게 열려 있다 | P1 | 0.5d |
 | 05 | 인증 상태·에러 처리 정리 | 04의 가드가 오작동 없이 동작하려면 선행 필요 | P1 | 2–3h |
@@ -127,76 +127,107 @@ $ sh scripts/check-secrets.sh
 
 ---
 
-## Slice 02 — 프로덕션 빌드·배포 경로 복구
+## Slice 02 — 프로덕션 실행 명령 및 빌드 이식성
 
-**등급 P0 · 0.5–1d · 선행 없음 · 이후 모든 슬라이스의 검증 전제**
+**등급 P1 · 완료 (2026-08-19) · 초안의 P0 판정은 오류 — 아래 정정 참조**
 
-### 문제 1 — 빌드가 환경변수 없이는 실패한다 `[FACT — 실행으로 확인]`
+> ### 중대 정정 — 배포 설정을 잘못 찾았다
+>
+> 초안은 배포 설정을 `.replit`에서만 찾고 **`artifacts/*/.replit-artifact/artifact.toml`을
+> 열지 않았다.** 실제 배포 구성은 전부 그 파일들에 있다. 그 결과 초안의 문제
+> 1·2·3이 대부분 사실이 아니었고, P0 판정도 과했다. 철회 내역은
+> [부록 D](#부록-d--검증에서-철회한-주장) D-4~D-7.
+>
+> **실제 배포 구조** `[FACT — tomllib 파싱 + 실행 검증]`
+>
+> | 서비스 | 경로 | 포트 | 프로덕션 |
+> |---|---|---|---|
+> | `peerbridge` | `/` | 21288 | `serve = "static"` ← `dist/public`, `/* → /index.html` |
+> | `api-server` | `/api` | 8080 | uvicorn, 시작 헬스체크 `/api/healthz` |
+> | `mockup-sandbox` | `/__mockup` | 8081 | `[services.production]` 없음 — 개발 전용 |
+>
+> `.replit`의 `router = "application"`이 경로 기반 라우팅을 하므로 **동일 오리진이
+> 이미 성립한다.** `PORT`·`BASE_PATH`·`NODE_ENV`도 `[services.env]`가 공급한다.
 
-`artifacts/peerbridge/vite.config.ts:7-27`이 설정 평가 시점에 예외를 던진다
-(`:9-13`이 `PORT`, `:23-27`이 `BASE_PATH`).
+### 문제 1 — 프로덕션이 오토리로더로 기동한다 `[FACT — 실행으로 확인]`
 
-```ts
-const rawPort = process.env.PORT;
-if (!rawPort) throw new Error("PORT environment variable is required...");
-// ...
-const basePath = process.env.BASE_PATH;
-if (!basePath) throw new Error("BASE_PATH environment variable is required...");
+수정 전 `artifacts/api-server/.replit-artifact/artifact.toml`의 프로덕션 실행
+명령은 `["python", "Python/main.py"]`였다. 이 엔트리포인트의 `__main__` 블록은
+`uvicorn.run(..., reload=True)`를 호출한다(`Python/main.py:74-78`).
+
+실제로 그 명령을 그대로 실행해 확인했다.
+
+```
+$ PORT=8137 NODE_ENV=production python Python/main.py
+INFO:     Will watch for changes in these directories: ['/Users/rinny/IdeaProjects/Mentor-Connect']
+INFO:     Started reloader process [7444] using StatReload
+INFO:     Started server process [7447]
+INFO:     Application startup complete.
 ```
 
-실제로 실행해 확인했다.
+앱은 정상 기동하고 헬스체크도 200을 반환한다 — 즉 **동작은 하지만** 오토스케일
+인스턴스마다 `StatReload` 감시 프로세스가 붙어 `node_modules`를 포함한 저장소
+전체를 폴링한다. uvicorn은 reload를 개발 전용으로 문서화하고 있다.
 
-```
-$ env -u PORT -u BASE_PATH pnpm exec vite build --config vite.config.ts
-failed to load config from .../artifacts/peerbridge/vite.config.ts
-error during build:
-Error: PORT environment variable is required but was not provided.
-```
+### 문제 2 — Replit 밖에서 빌드가 불가능하다 `[FACT — 실행으로 확인]`
 
-`PORT`와 `BASE_PATH`를 설정하는 곳은 `.claude/launch.json:7`의 **개발용 dev 서버
-한 곳뿐**이다. `.replit`에도 루트 `package.json`에도 없다. 따라서 깨끗한 배포
-환경에서 `pnpm build`는 즉시 실패한다.
+배포에서는 `[services.env]`가 `PORT`/`BASE_PATH`를 주므로 문제가 없다. 그러나
+CI·로컬·컨테이너처럼 그 하네스가 없는 곳에서는 `vite.config.ts`가 설정 평가
+시점에 예외를 던져 `pnpm build` 자체가 불가능했다. **Slice 07의 CI 게이트를
+막는 장애물**이다.
 
-`PORT`는 dev 서버에만 쓰이는데(`server.port`) 빌드 경로에서도 필수로 강제된다 —
-이것 자체가 설계 오류다.
+`PORT`는 서버 바인딩에만 쓰이는데 빌드 경로에서도 강제된 것이 원인이다.
 
-### 문제 2 — 실행 명령이 정의되어 있지 않다 `[FACT]`
+### 문제 3 — `vite preview`에 `/api` 프록시가 없다 `[FACT]`
 
-`.replit` 전문에 `[deployment] run`이 없고, `[workflows] runButton = "Project"`에
-대응하는 `[[workflows.workflow]]` 블록도 없다. 포트 매핑은 8080/8081/21288인데
-프론트 dev는 5173, API는 8000이다.
+프록시가 `server:` 블록에만 있어 dev 서버 전용이었다. 프론트는 상대경로 +
+`credentials: "include"`로 호출하므로(`lib/chat-api.ts:59`, `lib/pythonApi.ts:42`),
+**빌드 결과물을 로컬에서 검증할 방법이 없었다.**
 
-### 문제 3 — 빌드 산출물을 서빙하는 주체가 없다 `[FACT]`
+### 한 작업
 
-- `vite.config.ts:58`이 `dist/public`으로 빌드한다
-- `vite.config.ts:66-74`의 `/api` 프록시는 `server:` 블록(`:61`) 안에 있어
-  **dev 서버 전용**이다. 빌드 결과물에는 프록시가 없다
-- 프론트는 상대경로 + `credentials: "include"`로 호출한다
-  (`lib/chat-api.ts:59`, `lib/pythonApi.ts:42`)
-
-→ **프론트와 API가 반드시 동일 오리진이어야 한다.** 정적 파일을 서빙하는 주체가
-현재 어디에도 정의되어 있지 않다.
-
-### 작업
-
-1. `vite.config.ts`에서 `PORT` 필수 강제를 dev/preview 경로로 한정한다.
-   `BASE_PATH`는 기본값 `/`를 둔다.
-2. `.replit`에 빌드·실행 명령을 명시하고 포트를 정합시킨다.
-3. 동일 오리진 서빙 방식을 확정한다. 선택지:
-   - **(a)** FastAPI가 `dist/public`을 정적 마운트 — Python 트랙과 통합 필요
-   - **(b)** 리버스 프록시가 `/api`는 백엔드로, 그 외는 정적으로 라우팅
-   - 어느 쪽이든 `main.py:39-46`의 CORS 하드코딩(`localhost:8080`, `localhost:5173`)은
-     동일 오리진에서 무관해지므로 별도 수정이 필요 없다 `[INFER]`
-4. 결정한 방식을 `replit.md`에 기록한다. 현재 `replit.md:69`는
-   `cd Python && python main.py`를 안내하는데, 이 경로는 `reload=True`를 켠다.
+1. **`artifacts/api-server/.replit-artifact/artifact.toml`** — 프로덕션 실행을
+   `python -m uvicorn main:app --host 0.0.0.0 --port 8080 --app-dir Python`으로
+   교체. `--app-dir`가 `Python/`을 `sys.path`에 넣어 `main:app`이 기존과 동일하게
+   해석되면서 `__main__`을 우회한다. **Python 소스는 건드리지 않았다.**
+2. **`artifacts/peerbridge/vite.config.ts`** — `defineConfig`를 함수형으로 바꿔
+   `command === "serve"`일 때만 `PORT`를 요구하고, `BASE_PATH`는 `"/"`로 기본값을
+   둔다. 오류 메시지에 해결 방법을 넣었다.
+3. **같은 파일** — `/api` 프록시를 `server`와 `preview`가 공유하도록 분리.
+4. **`replit.md`** — `## Deployment` 절을 신설해 위 구조를 기록. 문서에 없던 것이
+   초안이 이를 놓친 원인이므로, 재발 방지가 목적이다.
 
 ### 완료 판정
 
-- [ ] 환경변수를 수동 주입하지 않고 `pnpm build`가 성공한다
-- [ ] 문서화된 명령 하나로 프론트+API가 동일 오리진에 기동한다
-- [ ] 브라우저에서 로그인 → `/dashboard` 진입까지 네트워크 에러 없이 동작한다
-- [ ] `artifacts/peerbridge/dist/`가 여전히 커밋되지 않는다
-      (현재 0건 — `git ls-files artifacts/peerbridge/dist`)
+- [x] `pnpm build`가 환경변수 없이 성공한다 — 확인, 산출물 해시가 `PORT`/`BASE_PATH`를
+      준 경우와 **동일**하다(`index-CrC1FaDB.css` / `index-DrLYRSc5.js`)
+- [x] `vite dev`는 여전히 `PORT`를 요구한다 — `Error: PORT ... required to serve`
+- [x] 잘못된 `PORT` 값을 거부한다 — `Error: Invalid PORT value: "abc"`
+- [x] 프로덕션 명령이 리로더 없이 기동한다 — `StatReload` 로그 사라짐, 헬스체크 200
+- [x] **동일 오리진 전 구간 통합 검증** — 아래
+- [x] `artifacts/peerbridge/dist/`가 여전히 커밋되지 않는다 (0건)
+
+빌드 산출물을 `vite preview`로 서빙하고 그 경유로 FastAPI까지 도달하는지 확인했다.
+
+```
+$ curl -o /dev/null -w "%{http_code} %{content_type}" http://127.0.0.1:4173/
+200 text/html                                    ← 정적 SPA
+
+$ curl http://127.0.0.1:4173/api/healthz
+{"status":"ok","backend":"python-fastapi"}       ← 프록시 → FastAPI
+
+$ curl -o /dev/null -w "%{http_code}" http://127.0.0.1:4173/dashboard
+200                                              ← SPA 폴백
+```
+
+### 남은 것
+
+- `.replit`의 `[[ports]]`가 8081(mockup-sandbox)을 외부에 노출하는데, 해당 아티팩트에는
+  `[services.production]`이 없다. 개발 전용으로 보이나 **프로덕션 노출 여부는 미확인**
+  `[UNKNOWN]` → Slice 08에서 확정.
+- `Python/main.py:39-46`의 CORS 하드코딩은 동일 오리진에서는 무해하다. 다만
+  `__main__`의 `reload=True`는 여전히 남아 있어, dev 실행 경로에서는 그대로다
+  (개발에서는 의도된 동작이므로 수정 대상 아님).
 
 ---
 
@@ -644,12 +675,12 @@ Severity: 2 low | 11 moderate | 23 high
 
 ## 부록 C — 미확인 항목
 
-| 항목 | 확인 방법 |
-|---|---|
-| 배포 인스턴스가 실행 중인 커밋 | 배포 URL `/api/healthz` 응답 + Replit 배포 이력 SHA |
-| `mockup-sandbox` 릴리즈 포함 여부 | Replit 배포 설정의 빌드 범위 |
-| 운영 환경 변수 (`NODE_ENV`, `BASE_PATH`) | Replit Secrets 패널 |
-| 유출된 PAT의 유효성·스코프 | GitHub 설정의 PAT 목록 (읽기 전용 감사 범위상 미검증) |
+| 항목 | 확인 방법 | 상태 |
+|---|---|---|
+| 배포 인스턴스가 실행 중인 커밋 | 배포 URL `/api/healthz` 응답 + Replit 배포 이력 SHA | 미확인 |
+| `mockup-sandbox` 프로덕션 노출 | `[services.production]`이 없어 개발 전용으로 보이나, `.replit`이 8081을 외부 매핑한다 | Slice 08에서 확정 |
+| 유출된 PAT의 유효성·스코프 | GitHub 설정의 PAT 목록 (읽기 전용 감사 범위상 미검증) | 미확인 |
+| ~~운영 환경 변수~~ | ~~Replit Secrets 패널~~ | **해소** — `artifact.toml`의 `[services.env]`가 공급 (Slice 02) |
 
 ## 부록 D — 검증에서 철회한 주장
 
@@ -691,6 +722,40 @@ Severity: 2 low | 11 moderate | 23 high
 **`dist`가 `district`의 부분 문자열이라 생긴 오탐**이었다. 실제 매칭은
 `district.ts` · `districtStats.ts` · `districtType.ts` · `schema/districts.ts`다.
 `git ls-files | grep '/dist/'`는 0건이며 `.gitignore:4`가 정상 동작한다.
+
+### D-4. "빌드가 실패해 배포가 불가능하다" (P0) — 등급 정정
+
+`artifacts/peerbridge/.replit-artifact/artifact.toml`의 `[services.env]`가
+`PORT=21288`, `BASE_PATH=/`를 공급한다 `[FACT]`. 그 값으로 빌드하면 성공한다
+(검증 완료). 따라서 **배포는 막혀 있지 않았다.** 실패하는 것은 Replit 하네스
+밖에서 돌릴 때뿐이므로, P0(배포 불능)이 아니라 P1(CI·이식성) 문제였다.
+
+### D-5. "실행 명령이 정의되어 있지 않다" — 철회
+
+`.replit`에는 없지만 `artifact.toml`의 `[services.production.run]` /
+`[services.development].run`에 서비스별로 정의되어 있다 `[FACT]`. 초안이 `.replit`만
+보고 내린 결론이었다.
+
+### D-6. "빌드 산출물을 서빙하는 주체가 없다" — 철회
+
+`peerbridge`의 `[services.production]`에 `serve = "static"`,
+`publicDir = "artifacts/peerbridge/dist/public"`, `/* → /index.html` 리라이트가
+모두 정의되어 있다 `[FACT]`. `publicDir`은 `vite.config.ts`의 `outDir`과 일치한다.
+동일 오리진은 Replit의 경로 라우터가 이미 보장하고 있었다.
+
+### D-7. "포트가 불일치한다" — 철회
+
+`.replit`의 `[[ports]]`(8080 / 8081 / 21288)는 각 `artifact.toml`의 `localPort`와
+**정확히 일치한다** `[FACT]`. 초안은 dev 포트(5173, 8000)와 비교해 불일치로 오판했다.
+
+> **덧붙여 — 감사 보고서의 블로커 #7도 철회된다.** "`https_only`가 `NODE_ENV`에
+> 의존하는데 배포에서 설정되지 않는다"고 했으나, `api-server`의
+> `[services.production.run.env]`에 `NODE_ENV = "production"`이 **설정되어 있다**
+> `[FACT]`. 세션 쿠키의 `https_only`는 프로덕션에서 켜진다.
+
+> **교훈** — `.replit`이 배포 설정의 전부라고 가정하고 `artifact.toml`을 찾지
+> 않았다. 파일 하나를 근거로 "설정이 없다"는 부재 증명을 내린 것이 오류의 형태다.
+> 부재를 주장하려면 그 설정이 있을 수 있는 위치를 전부 뒤졌다는 근거가 필요하다.
 
 ### 검증으로 **강화된** 항목
 

@@ -22,8 +22,24 @@ args = ["echo", "no-build"]
 [services.production.build.env]
 NODE_ENV = "production"
 
+# Start uvicorn directly rather than via `python Python/main.py`.
+#
+# That entrypoint's __main__ block calls uvicorn.run(..., reload=True), so
+# production booted the autoreloader: verified locally, it logs
+# "Will watch for changes in these directories: ['<repo root>']" and starts a
+# StatReload supervisor that polls the whole tree, node_modules included, on
+# every autoscale instance. Uvicorn documents reload as development-only.
+#
+# `--app-dir Python` puts Python/ on sys.path so `main:app` resolves the same
+# way the old command did, while skipping __main__ entirely. Keep --port in
+# sync with localPort above and with PORT below.
 [services.production.run]
-args = ["python", "Python/main.py"]
+args = [
+  "python", "-m", "uvicorn", "main:app",
+  "--host", "0.0.0.0",
+  "--port", "8080",
+  "--app-dir", "Python",
+]
 
 [services.production.run.env]
 PORT = "8080"
