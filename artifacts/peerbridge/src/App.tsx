@@ -1,10 +1,11 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, useSearch } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
 import { ChatWidget } from "@/components/ChatWidget";
+import { FeatureGate, FeatureUnavailable } from "@/components/FeatureUnavailable";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -20,9 +21,13 @@ import Recommendations from "@/pages/Recommendations";
 import PracticeLab from "@/pages/PracticeLab";
 import Analytics from "@/pages/Analytics";
 import Scheduling from "@/pages/Scheduling";
-import AdminReports from "@/pages/AdminReports";
 import NotFound from "@/pages/not-found";
 import { RequireAuth } from "@/components/RequireAuth";
+import {
+  getFeatureForAppLocation,
+  isFeatureEnabled,
+  releaseSurface,
+} from "@/lib/release-flags";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,8 +47,10 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
           <Route path="/register" component={Register} />
-          <Route path="/dashboard/practice-lab">
-            <RequireAuth><Dashboard initialTab="practice-lab" /></RequireAuth>
+          <Route path={releaseSurface.appRoutes.dashboardPractice}>
+            <FeatureGate feature="practice">
+              <RequireAuth><Dashboard initialTab="practice-lab" /></RequireAuth>
+            </FeatureGate>
           </Route>
           <Route path="/dashboard">
             <RequireAuth><Dashboard /></RequireAuth>
@@ -63,26 +70,31 @@ function Router() {
           <Route path="/requests">
             <RequireAuth><Requests /></RequireAuth>
           </Route>
-          <Route path="/profile/:id">
-            {(params) => <RequireAuth><Profile id={params.id ?? ""} /></RequireAuth>}
+          <Route path="/profile">
+            <RequireAuth><Profile /></RequireAuth>
           </Route>
           <Route path="/settings">
             <RequireAuth><Settings /></RequireAuth>
           </Route>
-          <Route path="/recommendations">
-            <RequireAuth><Recommendations /></RequireAuth>
+          <Route path={releaseSurface.appRoutes.matching}>
+            <FeatureGate feature="matching">
+              <RequireAuth><Recommendations /></RequireAuth>
+            </FeatureGate>
           </Route>
-          <Route path="/practice-lab">
-            <RequireAuth><PracticeLab /></RequireAuth>
+          <Route path={releaseSurface.appRoutes.practice}>
+            <FeatureGate feature="practice">
+              <RequireAuth><PracticeLab /></RequireAuth>
+            </FeatureGate>
           </Route>
-          <Route path="/analytics">
-            <RequireAuth><Analytics /></RequireAuth>
+          <Route path={releaseSurface.appRoutes.analytics}>
+            <FeatureGate feature="analytics">
+              <RequireAuth><Analytics /></RequireAuth>
+            </FeatureGate>
           </Route>
-          <Route path="/scheduling">
-            <RequireAuth><Scheduling /></RequireAuth>
-          </Route>
-          <Route path="/admin/reports">
-            <RequireAuth><AdminReports /></RequireAuth>
+          <Route path={releaseSurface.appRoutes.scheduling}>
+            <FeatureGate feature="scheduling">
+              <RequireAuth><Scheduling /></RequireAuth>
+            </FeatureGate>
           </Route>
           <Route component={NotFound} />
         </Switch>
@@ -91,16 +103,31 @@ function Router() {
   );
 }
 
+function ReleaseAwareApp() {
+  const [location] = useLocation();
+  const search = useSearch();
+  const feature = getFeatureForAppLocation(`${location}${search}`);
+
+  // This must stay outside AuthProvider: an unavailable deep link must not
+  // trigger the global auth query or mount a feature page before being closed.
+  if (feature && !isFeatureEnabled(feature)) {
+    return <FeatureUnavailable feature={feature} />;
+  }
+
+  return (
+    <AuthProvider>
+      <Router />
+      {isFeatureEnabled("chat") && <ChatWidget />}
+    </AuthProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AuthProvider>
-            <Router />
-            {/* Floating chat popup for logged-in users (chat learning scaffold). */}
-            <ChatWidget />
-          </AuthProvider>
+          <ReleaseAwareApp />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

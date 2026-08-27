@@ -73,51 +73,86 @@ export const GetMeResponse = zod.object({
 });
 
 /**
- * @summary Get user profile
+ * The gateway accepts this operation only when the authenticated session
+user id exactly equals the canonical path id. It returns 401 when no
+valid session exists and 404 for another user's id, without forwarding
+the profile request upstream.
+
+ * @summary Get the authenticated user's minimum profile
  */
 export const GetUserParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const GetUserResponse = zod.object({
-  id: zod.number(),
-  email: zod.string(),
-  name: zod.string(),
-  role: zod.enum(["mentor", "mentee", "both"]),
-  districtId: zod.number(),
-  districtName: zod.string().nullish(),
-  bio: zod.string().nullish(),
-  subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
-  createdAt: zod.string(),
-});
+export const getUserResponseNameMax = 120;
+
+export const getUserResponseSubjectsItemMax = 80;
+
+export const getUserResponseSubjectsMax = 20;
+
+export const GetUserResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string().max(getUserResponseNameMax),
+    subjects: zod
+      .array(zod.string().max(getUserResponseSubjectsItemMax))
+      .max(getUserResponseSubjectsMax),
+    createdAt: zod.string(),
+  })
+  .describe(
+    "Gateway-redacted response for GET\/PATCH \/users\/{id}. This schema is\nnever a public directory profile: only the session owner can receive it.\n",
+  );
 
 /**
- * @summary Update user profile
+ * The gateway accepts only name, bio, and subjects for the authenticated
+session owner. Identity and authorization fields, including id, email,
+role, and is_verified, are rejected before any upstream request.
+
+ * @summary Update the authenticated user's allowed profile fields
  */
 export const UpdateUserParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const UpdateUserBody = zod.object({
-  name: zod.string().optional(),
-  bio: zod.string().nullish(),
-  role: zod.enum(["mentor", "mentee", "both"]).optional(),
-  subjects: zod.array(zod.string()).optional(),
-});
+export const updateUserBodyNameMax = 120;
 
-export const UpdateUserResponse = zod.object({
-  id: zod.number(),
-  email: zod.string(),
-  name: zod.string(),
-  role: zod.enum(["mentor", "mentee", "both"]),
-  districtId: zod.number(),
-  districtName: zod.string().nullish(),
-  bio: zod.string().nullish(),
-  subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
-  createdAt: zod.string(),
-});
+export const updateUserBodyBioMax = 2000;
+
+export const updateUserBodySubjectsItemMax = 80;
+
+export const updateUserBodySubjectsMax = 20;
+
+export const UpdateUserBody = zod
+  .object({
+    name: zod.string().min(1).max(updateUserBodyNameMax).optional(),
+    bio: zod.string().max(updateUserBodyBioMax).nullish(),
+    subjects: zod
+      .array(zod.string().min(1).max(updateUserBodySubjectsItemMax))
+      .max(updateUserBodySubjectsMax)
+      .optional(),
+  })
+  .describe(
+    "Allowlisted self-profile fields. Other fields are rejected by the gateway.",
+  );
+
+export const updateUserResponseNameMax = 120;
+
+export const updateUserResponseSubjectsItemMax = 80;
+
+export const updateUserResponseSubjectsMax = 20;
+
+export const UpdateUserResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string().max(updateUserResponseNameMax),
+    subjects: zod
+      .array(zod.string().max(updateUserResponseSubjectsItemMax))
+      .max(updateUserResponseSubjectsMax),
+    createdAt: zod.string(),
+  })
+  .describe(
+    "Gateway-redacted response for GET\/PATCH \/users\/{id}. This schema is\nnever a public directory profile: only the session owner can receive it.\n",
+  );
 
 /**
  * @summary List all school districts

@@ -45,20 +45,15 @@ A full-stack app for California high school students to connect as mentors and m
 - `/profile/:id` — User profiles with bio, subjects, requests
 - `/settings` — Edit profile, manage blocked users
 
-**API routes (all under /api):**
+**Public API routes (gateway allowlist, all under /api):**
 - Auth: `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me`
-- Users: `/users/:id` (GET, PATCH)
-- Districts: `/districts` (GET), `/districts/:id` (GET)
-- Requests: `/requests` (GET, POST), `/requests/:id` (GET, PATCH, DELETE), `/requests/:id/match` (POST)
-- Tags: `/tags` (GET)
-- Reports: `/reports` (POST)
-- Blocks: `/blocks` (GET, POST, DELETE)
-- Stats: `/stats/overview` (GET), `/stats/district/:id` (GET)
-- Matching (wraps `Python/find_matches.py`): `/matches/:questionId` (GET), `/matches` (POST), `/practice/*`
-- Analytics adapters (wrap `Python/analysis.py`): `/analysis/status`, `/analytics/weekly-matches`, `/analytics/popular-subjects`, `/analytics/popular-time-slots`, `/analytics/mentor-response-rates`
-- Python reports adapter (wraps `Python/reports.py`): `/python-reports/status`, `/python-reports/summary`
-- Scheduling adapter (wraps `Python/scheduling.py`): `/scheduling/status`, `/scheduling/overview`, `/scheduling/suggest`
-- Admin adapter (wraps `Python/get_blocks.py`): `/admin/flagged-users`
+- Health: `/healthz`
+
+The Python service still contains additional internal routes, but the API
+Shield does not forward them unless they are explicitly allowlisted. In
+particular, the admin and Python-report route families are quarantined at the
+gateway and return a fixed external 404 for every method and encoded-path
+variant. They are not public API contracts.
 
 ## Deployment
 
@@ -70,17 +65,19 @@ so everything shares one origin:
 | Service | Path | Port | Production |
 |---|---|---|---|
 | `peerbridge` | `/` | 21288 | `serve = "static"` from `artifacts/peerbridge/dist/public`, with `/* → /index.html` rewrite |
-| `api-server` | `/api` | 8080 | `python -m uvicorn main:app --app-dir Python`, startup health probe on `/api/healthz` |
+| `api-gateway` | `/api`, `/livez`, `/ws` | 8080 | TypeScript API Shield, with explicit route/method allowlist |
+| `api-server` | no public path | 8181 (loopback only) | Private `uvicorn` upstream for the API Shield |
 | `mockup-sandbox` | `/__mockup` | 8081 | no `[services.production]` block — development only |
 
 Same origin is a requirement, not a convenience: the SPA calls the API with
 relative paths plus `credentials: "include"`, so a cross-origin split would
 drop the session cookie.
 
-**Environment variables come from `[services.env]` in those files**, not from
-your shell. `peerbridge` gets `PORT=21288` and `BASE_PATH=/`; `api-server` gets
-`PORT=8080` and `NODE_ENV=production` (the latter is what turns on
-`https_only` for the session cookie in `Python/main.py`).
+**Environment variables come from artifact service settings**, not from your
+shell. `peerbridge` gets `PORT=21288` and `BASE_PATH=/`; `api-gateway` gets
+`PORT=8080` and a loopback `GATEWAY_UPSTREAM_ORIGIN`; `api-server` binds only
+to `127.0.0.1:8181`. `NODE_ENV=production` remains set for the Python process,
+which turns on `https_only` for the session cookie in `Python/main.py`.
 
 Running the same commands *outside* Replit means supplying those yourself:
 
@@ -88,9 +85,9 @@ Running the same commands *outside* Replit means supplying those yourself:
 # build (no port needed; BASE_PATH defaults to "/")
 pnpm --filter @workspace/peerbridge run build
 
-# serve the built SPA and proxy /api to a local backend
+# serve the built SPA and proxy /api to the local API Shield
 PORT=4173 pnpm --filter @workspace/peerbridge exec vite preview
-VITE_API_PROXY_TARGET=http://localhost:8000   # optional; this is the default
+VITE_API_PROXY_TARGET=http://127.0.0.1:8080   # optional; this is the API Shield default
 ```
 
 `vite dev` and `vite preview` both proxy `/api`, which is what reproduces the
@@ -100,6 +97,7 @@ deployed same-origin layout locally.
 
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
+- `pnpm test:gateway` — API Shield allowlist, private-upstream, normalization, and quarantine regression tests
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `cd Python && python main.py` — run the FastAPI backend for **development** (port 8000; enables autoreload — see `Python/README.md`). Production does not use this entrypoint; see [Deployment](#deployment).

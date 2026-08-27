@@ -1,18 +1,19 @@
 kind = "api"
-previewPath = "/api" # TODO - should be excluded from preview in the first place
-title = "API Server"
+title = "Private Python Backend"
 version = "1.0.0"
 id = "3B4_FFSkEVBkAeYMFRJ2e"
 
 [[services]]
-localPort = 8080
-name = "API Server"
-paths = ["/api"]
+localPort = 8181
+name = "Private Python Backend"
+# No public path may target this process. The TypeScript API Shield owns /api
+# and /ws, then reaches this loopback-only service over 127.0.0.1:8181.
+paths = []
 
 # The backend source of truth moved to the repo-root Python/ folder.
 # artifacts/api-server/python/ is kept only as legacy reference.
 [services.development]
-run = "cd ../../Python && python main.py"
+run = "cd ../../Python && python -m uvicorn main:app --host 127.0.0.1 --port 8181"
 
 [services.production]
 
@@ -36,13 +37,13 @@ NODE_ENV = "production"
 [services.production.run]
 args = [
   "python", "-m", "uvicorn", "main:app",
-  "--host", "0.0.0.0",
-  "--port", "8080",
+  "--host", "127.0.0.1",
+  "--port", "8181",
   "--app-dir", "Python",
 ]
 
 [services.production.run.env]
-PORT = "8080"
+PORT = "8181"
 NODE_ENV = "production"
 
 [services.production.health.startup]

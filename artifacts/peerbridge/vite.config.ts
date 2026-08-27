@@ -40,12 +40,11 @@ function resolvePort(command: "build" | "serve"): number | undefined {
 // The SPA calls the API with relative paths (`/api/...`) plus
 // `credentials: "include"`, so it must be same-origin with the backend. In
 // deployment Replit's path router handles that: this app is mounted at "/" and
-// the API artifact at "/api". Locally there is no such router, so dev *and*
-// preview proxy /api to the FastAPI server — otherwise a production build can
-// only be verified in deployment.
+// the API Shield artifact owns "/api". Locally there is no such router, so dev
+// and preview proxy /api to the Shield — never directly to the Python server.
 const apiProxy = {
   "/api": {
-    target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8000",
+    target: process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
     changeOrigin: true,
     secure: false,
   },
