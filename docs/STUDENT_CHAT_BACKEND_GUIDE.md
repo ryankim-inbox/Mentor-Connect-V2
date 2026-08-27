@@ -324,7 +324,7 @@ closes. Note it's `async def` (WebSockets are asynchronous by nature).
    JSON) to **every** socket in that room's list — including the sender.
 5. Wrap the loop so `WebSocketDisconnect` removes the socket from the
    registry (`try/except/finally`). If you skip this, the next broadcast
-   crashes on a dead connection.
+   crashes on a dead connection
 
 **Test:** log in as `student001@test.edu` in one window and
 `mentor501@test.edu` (same district) in a private/incognito window. Browser

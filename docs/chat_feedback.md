@@ -1,5 +1,4 @@
  ## Step 1 : 서버 켜보기
-
 ```bash
 cd Python
 source ../.venv/bin/activate
