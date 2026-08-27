@@ -5,12 +5,21 @@
  * PeerBridge - Student Mentorship Platform API
  * OpenAPI spec version: 0.1.0
  */
-import type { UpdateUserBodyRole } from "./updateUserBodyRole";
 
+/**
+ * Allowlisted self-profile fields. Other fields are rejected by the gateway.
+ */
 export interface UpdateUserBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
   name?: string;
-  /** @nullable */
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
   bio?: string | null;
-  role?: UpdateUserBodyRole;
+  /** @maxItems 20 */
   subjects?: string[];
 }

@@ -319,20 +319,18 @@ export default function Analytics() {
                           ? "text-amber-600"
                           : "text-rose-600";
                 return (
-                  <Link key={m.mentorId} href={`/profile/${m.mentorId}`}>
-                    <div className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-accent transition-colors cursor-pointer">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{m.mentorName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {m.totalRequests ?? 0} requests ·{" "}
-                          {typeof m.avgResponseHours === "number" ? `~${m.avgResponseHours.toFixed(1)}h avg reply` : "no reply data"}
-                        </p>
-                      </div>
-                      <span className={`text-lg font-bold tabular-nums ${color}`}>
-                        {pct === null ? "—" : `${pct}%`}
-                      </span>
+                  <div key={m.mentorId} className="flex items-center justify-between py-2 px-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{m.mentorName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {m.totalRequests ?? 0} requests ·{" "}
+                        {typeof m.avgResponseHours === "number" ? `~${m.avgResponseHours.toFixed(1)}h avg reply` : "no reply data"}
+                      </p>
                     </div>
-                  </Link>
+                    <span className={`text-lg font-bold tabular-nums ${color}`}>
+                      {pct === null ? "—" : `${pct}%`}
+                    </span>
+                  </div>
                 );
               })}
             </div>
@@ -340,19 +338,6 @@ export default function Analytics() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <Link href="/admin/reports">
-          <div className="flex items-center justify-between bg-rose-50 border border-rose-200 rounded-2xl p-5 hover:bg-rose-100 transition-colors cursor-pointer">
-            <div>
-              <h3 className="font-semibold text-rose-900">Flagged accounts</h3>
-              <p className="text-sm text-rose-700 mt-0.5">
-                Review users with multiple reports — open the safety review page.
-              </p>
-            </div>
-            <span className="text-rose-700 font-medium">Open →</span>
-          </div>
-        </Link>
-      </div>
     </div>
   );
 }

@@ -173,6 +173,18 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
+  artifacts/api-gateway:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.3.5
+      tsx:
+        specifier: 'catalog:'
+        version: 4.21.0
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+
   artifacts/api-server: {}
 
   artifacts/mockup-sandbox:

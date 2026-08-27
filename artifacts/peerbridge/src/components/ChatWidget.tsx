@@ -138,7 +138,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center">
       <WifiOff className="h-8 w-8 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
-        Can't reach the Python backend — is <code>Python/main.py</code> running on port 8000?
+        Can't reach the service right now. Please try again later.
       </p>
       <Button variant="outline" size="sm" onClick={onRetry}>
         Try again
