@@ -37,6 +37,7 @@ import type {
   MessageResponse,
   RegisterBody,
   ScaffoldTodo,
+  SelfProfile,
   SendChatMessageBody,
   StartDmBody,
   StatsOverview,
@@ -447,7 +448,12 @@ export function useGetMe<
 }
 
 /**
- * @summary Get user profile
+ * The gateway accepts this operation only when the authenticated session
+user id exactly equals the canonical path id. It returns 401 when no
+valid session exists and 404 for another user's id, without forwarding
+the profile request upstream.
+
+ * @summary Get the authenticated user's minimum profile
  */
 export const getGetUserUrl = (id: number) => {
   return `/api/users/${id}`;
@@ -456,8 +462,8 @@ export const getGetUserUrl = (id: number) => {
 export const getUser = async (
   id: number,
   options?: RequestInit,
-): Promise<User> => {
-  return customFetch<User>(getGetUserUrl(id), {
+): Promise<SelfProfile> => {
+  return customFetch<SelfProfile>(getGetUserUrl(id), {
     ...options,
     method: "GET",
   });
@@ -501,7 +507,7 @@ export type GetUserQueryResult = NonNullable<
 export type GetUserQueryError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Get user profile
+ * @summary Get the authenticated user's minimum profile
  */
 
 export function useGetUser<
@@ -524,7 +530,11 @@ export function useGetUser<
 }
 
 /**
- * @summary Update user profile
+ * The gateway accepts only name, bio, and subjects for the authenticated
+session owner. Identity and authorization fields, including id, email,
+role, and is_verified, are rejected before any upstream request.
+
+ * @summary Update the authenticated user's allowed profile fields
  */
 export const getUpdateUserUrl = (id: number) => {
   return `/api/users/${id}`;
@@ -534,8 +544,8 @@ export const updateUser = async (
   id: number,
   updateUserBody: UpdateUserBody,
   options?: RequestInit,
-): Promise<User> => {
-  return customFetch<User>(getUpdateUserUrl(id), {
+): Promise<SelfProfile> => {
+  return customFetch<SelfProfile>(getUpdateUserUrl(id), {
     ...options,
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -544,7 +554,7 @@ export const updateUser = async (
 };
 
 export const getUpdateUserMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -585,13 +595,13 @@ export type UpdateUserMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateUser>>
 >;
 export type UpdateUserMutationBody = BodyType<UpdateUserBody>;
-export type UpdateUserMutationError = ErrorType<unknown>;
+export type UpdateUserMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Update user profile
+ * @summary Update the authenticated user's allowed profile fields
  */
 export const useUpdateUser = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

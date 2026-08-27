@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useGetStatsOverview } from "@workspace/api-client-react";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
+import { isFeatureEnabled } from "@/lib/release-flags";
 
 export default function Landing() {
   const { data: stats } = useGetStatsOverview();
@@ -16,6 +17,17 @@ export default function Landing() {
   }, [isLoading, user, navigate]);
 
   if (user) return null;
+
+  const statsCards = stats
+    ? [
+        { label: "Students registered", value: stats.totalUsers },
+        { label: "School districts", value: stats.totalDistricts },
+        { label: "Open requests", value: stats.openRequests },
+        ...(isFeatureEnabled("matching")
+          ? [{ label: "Successful matches", value: stats.successfulMatches }]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="min-h-screen">
@@ -50,23 +62,13 @@ export default function Landing() {
       {stats && (
         <section className="py-16 bg-white border-y border-border">
           <div className="max-w-6xl mx-auto px-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-              <div>
-                <p className="text-4xl font-bold text-primary">{stats.totalUsers.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-1">Students registered</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-primary">{stats.totalDistricts.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-1">School districts</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-primary">{stats.openRequests.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-1">Open requests</p>
-              </div>
-              <div>
-                <p className="text-4xl font-bold text-primary">{stats.successfulMatches.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-1">Successful matches</p>
-              </div>
+            <div className={`grid grid-cols-2 gap-8 text-center ${statsCards.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+              {statsCards.map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-4xl font-bold text-primary">{value.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>

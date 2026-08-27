@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
 import { TagBadge } from "@/components/TagBadge";
 
 type JsonRecord = Record<string, unknown>;
@@ -194,11 +193,7 @@ function MatchCard({ match }: { match: MentorMatch }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">#{match.rank}</div>
-          <Link href={`/profile/${match.mentorId}`}>
-            <span className="mt-1 block cursor-pointer text-lg font-semibold text-foreground hover:text-primary">
-              {match.mentorName}
-            </span>
-          </Link>
+          <span className="mt-1 block text-lg font-semibold text-foreground">{match.mentorName}</span>
         </div>
         <div className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
           {match.score}

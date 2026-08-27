@@ -4,15 +4,14 @@ import {
   useGetRequest,
   useMatchRequest,
   useDeleteRequest,
-  useGetUser,
   getGetRequestQueryKey,
   getListRequestsQueryKey,
-  getGetUserQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
 import { sortTimeSlots } from "@/lib/timeSlots";
+import { isFeatureEnabled } from "@/lib/release-flags";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
@@ -21,6 +20,7 @@ interface Props {
 
 export default function RequestDetail({ id }: Props) {
   const requestId = Number(id);
+  const connectEnabled = isFeatureEnabled("connect");
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -35,18 +35,14 @@ export default function RequestDetail({ id }: Props) {
   const isMatched = user?.id === request?.matchedUserId;
   const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched || justMatched);
 
-  const matchedWithId = isAuthor ? request?.matchedUserId : request?.authorId;
-  const { data: matchedUserProfile } = useGetUser(matchedWithId ?? 0, {
-    query: {
-      queryKey: getGetUserQueryKey(matchedWithId ?? 0),
-      enabled: !!matchedWithId && showMatchedPanel,
-    }
-  });
-
   const matchMutation = useMatchRequest();
   const deleteMutation = useDeleteRequest();
 
   const handleMatch = () => {
+    if (!connectEnabled) {
+      return;
+    }
+
     matchMutation.mutate({ id: requestId }, {
       onSuccess: () => {
         setJustMatched(true);
@@ -82,7 +78,7 @@ export default function RequestDetail({ id }: Props) {
     );
   }
 
-  const canMatch = user && !isAuthor && request.status === "open";
+  const canMatch = connectEnabled && user && !isAuthor && request.status === "open";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -105,46 +101,15 @@ export default function RequestDetail({ id }: Props) {
                 {justMatched ? "You're connected!" : "This request has been matched"}
               </h3>
               <p className="text-green-700 text-sm mt-1">
-                {isAuthor
-                  ? <>
-                      <span className="font-semibold">{request.matchedUserName}</span> has accepted your request and wants to connect.
-                    </>
-                  : <>
-                      You are connected with <span className="font-semibold">{request.authorName}</span>.
-                    </>
-                }
+                Private participant profiles are unavailable while the release uses self-only profile access.
               </p>
-              {matchedUserProfile && (
-                <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 bg-white border border-green-100 rounded-xl p-4">
-                    <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Next step — reach out</p>
-                    <p className="text-sm font-semibold text-foreground">{matchedUserProfile.name}</p>
-                    <p className="text-sm text-muted-foreground">{matchedUserProfile.email}</p>
-                    {matchedUserProfile.districtName && (
-                      <p className="text-xs text-muted-foreground mt-1">{matchedUserProfile.districtName}</p>
-                    )}
-                    {matchedUserProfile.bio && (
-                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{matchedUserProfile.bio}</p>
-                    )}
-                    <Link href={`/profile/${matchedUserProfile.id}`}>
-                      <button className="mt-3 text-xs text-primary font-medium hover:underline">View full profile</button>
-                    </Link>
-                  </div>
-                  <div className="sm:w-48 bg-white border border-green-100 rounded-xl p-4">
-                    <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Tips</p>
-                    <ul className="text-xs text-muted-foreground space-y-1.5">
-                      <li>Send an intro email with your goals</li>
-                      <li>Suggest a time to meet or video call</li>
-                      <li>Set clear expectations upfront</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
-              {!matchedUserProfile && (request.matchedUserId || isAuthor) && (
-                <p className="text-sm text-green-700 mt-2">
-                  Contact them at their school email to get started.
-                </p>
-              )}
+              <div className="mt-4 sm:w-52 bg-white border border-green-100 rounded-xl p-4">
+                <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Tips</p>
+                <ul className="text-xs text-muted-foreground space-y-1.5">
+                  <li>Use the approved contact flow when it becomes available.</li>
+                  <li>Set clear expectations before scheduling a meeting.</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -199,9 +164,7 @@ export default function RequestDetail({ id }: Props) {
 
         <div className="border-t border-border pt-4 flex items-center justify-between">
           <div>
-            <Link href={`/profile/${request.authorId}`}>
-              <span className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors">{request.authorName}</span>
-            </Link>
+            <span className="font-semibold text-foreground">{request.authorName}</span>
             <span className="text-muted-foreground mx-2">·</span>
             <Link href={`/districts/${request.districtId}`}>
               <span className="text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors">{request.districtName}</span>
@@ -220,6 +183,11 @@ export default function RequestDetail({ id }: Props) {
               >
                 {matchMutation.isPending ? "Connecting..." : "Connect"}
               </button>
+            )}
+            {!connectEnabled && user && !isAuthor && request.status === "open" && (
+              <p className="self-center text-xs text-muted-foreground" role="status">
+                Matching is being prepared for a future release.
+              </p>
             )}
             {!isAuthor && user && (
               <button

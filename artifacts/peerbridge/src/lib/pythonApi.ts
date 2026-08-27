@@ -1,5 +1,4 @@
-// Small fetch helper for the Python adapter endpoints (/api/analytics/*,
-// /api/admin/*, /api/scheduling/*, /api/python-reports/*).
+// Small fetch helper for the non-quarantined Python adapter endpoints.
 //
 // Those endpoints wrap the student practice files in Python/ and answer with
 // a common envelope plus the live import/call status of the student module.
