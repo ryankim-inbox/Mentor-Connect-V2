@@ -5,6 +5,7 @@ import { useGetStatsOverview, useListRequests, useListDistricts } from "@workspa
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
 import PracticeLab from "@/pages/PracticeLab";
+import { isFeatureEnabled, releaseSurface } from "@/lib/release-flags";
 
 type DashboardTab = "overview" | "practice-lab";
 
@@ -13,11 +14,11 @@ interface DashboardProps {
 }
 
 function getDashboardTabFromUrl(): DashboardTab {
-  if (typeof window === "undefined") {
+  if (!isFeatureEnabled("practice") || typeof window === "undefined") {
     return "overview";
   }
 
-  return window.location.pathname.endsWith("/practice-lab") ||
+  return window.location.pathname.endsWith(releaseSurface.appRoutes.dashboardPractice) ||
     new URLSearchParams(window.location.search).get("tab") === "practice-lab"
     ? "practice-lab"
     : "overview";
@@ -25,7 +26,10 @@ function getDashboardTabFromUrl(): DashboardTab {
 
 export default function Dashboard({ initialTab }: DashboardProps = {}) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<DashboardTab>(() => initialTab ?? getDashboardTabFromUrl());
+  const practiceEnabled = isFeatureEnabled("practice");
+  const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
+    practiceEnabled ? initialTab ?? getDashboardTabFromUrl() : "overview",
+  );
   const { data: stats } = useGetStatsOverview();
   const { data: recentRequests } = useListRequests({ status: "open" }, {
     query: { queryKey: ["listRequests", "open", "dashboard"] }
@@ -44,6 +48,10 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
   }, []);
 
   const selectTab = (tab: DashboardTab) => {
+    if (tab === "practice-lab" && !practiceEnabled) {
+      return;
+    }
+
     setActiveTab(tab);
 
     if (typeof window === "undefined") {
@@ -53,7 +61,7 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
     if (tab === "overview") {
       window.history.pushState({}, "", "/dashboard");
     } else {
-      window.history.pushState({}, "", "/dashboard/practice-lab");
+      window.history.pushState({}, "", releaseSurface.appRoutes.dashboardPractice);
     }
   };
 
@@ -69,6 +77,20 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
   }
 
   const topDistricts = districts?.slice(0, 6) ?? [];
+  const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
+    { id: "overview", label: "Dashboard Overview" },
+  ];
+  if (practiceEnabled) {
+    dashboardTabs.push({ id: "practice-lab", label: "Python Practice Lab" });
+  }
+
+  const overviewStats = [
+    { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
+    ...(isFeatureEnabled("matching")
+      ? [{ label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" }]
+      : []),
+    { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -80,10 +102,7 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
       </div>
 
       <div className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-card-border bg-card p-2">
-        {[
-          { id: "overview" as const, label: "Dashboard Overview" },
-          { id: "practice-lab" as const, label: "Python Practice Lab" },
-        ].map((tab) => (
+        {dashboardTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -99,16 +118,12 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
         ))}
       </div>
 
-      {activeTab === "practice-lab" ? (
+      {practiceEnabled && activeTab === "practice-lab" ? (
         <PracticeLab />
       ) : (
         <>
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            {[
-              { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
-              { label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" },
-              { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
-            ].map(({ label, value, color }) => (
+          <div className={`grid gap-4 mb-8 ${overviewStats.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+            {overviewStats.map(({ label, value, color }) => (
               <div key={label} className="bg-card border border-card-border rounded-xl p-5">
                 <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
                 <p className="text-sm text-muted-foreground mt-1">{label}</p>

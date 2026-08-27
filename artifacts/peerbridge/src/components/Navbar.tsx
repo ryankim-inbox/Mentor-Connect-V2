@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { isFeatureEnabled, releaseSurface } from "@/lib/release-flags";
 
 export function Navbar() {
   const { user, refetch } = useAuth();
@@ -44,18 +45,26 @@ export function Navbar() {
                 <Link href="/requests/new">
                   <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Post a Request</span>
                 </Link>
-                <Link href="/recommendations">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Matches</span>
-                </Link>
-                <Link href="/dashboard/practice-lab">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Python Practice Lab</span>
-                </Link>
-                <Link href="/analytics">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Analytics</span>
-                </Link>
-                <Link href="/scheduling">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Scheduling</span>
-                </Link>
+                {isFeatureEnabled("matching") && (
+                  <Link href={releaseSurface.appRoutes.matching}>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Matches</span>
+                  </Link>
+                )}
+                {isFeatureEnabled("practice") && (
+                  <Link href={releaseSurface.appRoutes.dashboardPractice}>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Python Practice Lab</span>
+                  </Link>
+                )}
+                {isFeatureEnabled("analytics") && (
+                  <Link href={releaseSurface.appRoutes.analytics}>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Analytics</span>
+                  </Link>
+                )}
+                {isFeatureEnabled("scheduling") && (
+                  <Link href={releaseSurface.appRoutes.scheduling}>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Scheduling</span>
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -63,7 +72,7 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
-                <Link href={`/profile/${user.id}`}>
+                <Link href="/profile">
                   <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:block">
                     {user.name}
                   </span>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { TagBadge } from "@/components/TagBadge";
+import { isFeatureEnabled } from "@/lib/release-flags";
 
 interface MentorMatch {
   rank: number;
@@ -476,11 +477,7 @@ export default function Recommendations() {
                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       #{m.rank}
                     </span>
-                    <Link href={`/profile/${m.mentorId}`}>
-                      <span className="text-lg font-semibold text-foreground hover:text-primary cursor-pointer">
-                        {m.mentorName}
-                      </span>
-                    </Link>
+                    <span className="text-lg font-semibold text-foreground">{m.mentorName}</span>
                     <span className="text-xs text-muted-foreground">- {m.district}</span>
                   </div>
 
@@ -516,14 +513,15 @@ export default function Recommendations() {
                   )}
 
                   <div className="mt-4 flex gap-2">
-                    <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
-                      Request match
-                    </button>
-                    <Link href={`/profile/${m.mentorId}`}>
-                      <button className="px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent transition-colors">
-                        View profile
+                    {isFeatureEnabled("connect") ? (
+                      <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
+                        Request match
                       </button>
-                    </Link>
+                    ) : (
+                      <p className="self-center text-xs text-muted-foreground" role="status">
+                        Match requests are being prepared.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

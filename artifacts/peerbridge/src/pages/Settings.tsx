@@ -2,9 +2,6 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   useUpdateUser,
-  useListBlocks,
-  useUnblockUser,
-  getListBlocksQueryKey,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,22 +14,18 @@ export default function Settings() {
   const [form, setForm] = useState({
     name: user?.name ?? "",
     bio: user?.bio ?? "",
-    role: user?.role ?? "mentee",
     subjects: user?.subjects?.join(", ") ?? "",
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
   const updateUser = useUpdateUser();
-  const { data: blocks } = useListBlocks();
-  const unblockMutation = useUnblockUser();
 
   useEffect(() => {
     if (user) {
       setForm({
         name: user.name,
         bio: user.bio ?? "",
-        role: user.role,
         subjects: user.subjects?.join(", ") ?? "",
       });
     }
@@ -64,7 +57,6 @@ export default function Settings() {
         data: {
           name: form.name,
           bio: form.bio || null,
-          role: form.role as "mentor" | "mentee" | "both",
           subjects,
         },
       },
@@ -81,14 +73,6 @@ export default function Settings() {
         },
       }
     );
-  };
-
-  const handleUnblock = (blockedUserId: number) => {
-    unblockMutation.mutate({ blockedUserId }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListBlocksQueryKey() });
-      },
-    });
   };
 
   return (
@@ -117,26 +101,6 @@ export default function Settings() {
               disabled
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-muted text-muted-foreground cursor-not-allowed"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Role</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["mentee", "mentor", "both"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, role: r }))}
-                  className={`py-2.5 rounded-lg text-sm font-medium border transition-colors capitalize ${
-                    form.role === r
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-foreground border-input hover:bg-accent"
-                  }`}
-                >
-                  {r === "both" ? "Both" : r === "mentor" ? "Mentor" : "Mentee"}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div>
@@ -174,28 +138,6 @@ export default function Settings() {
             {updateUser.isPending ? "Saving..." : "Save changes"}
           </button>
         </form>
-      </div>
-
-      <div className="bg-card border border-card-border rounded-2xl p-6">
-        <h2 className="font-semibold text-lg mb-4">Blocked users</h2>
-        {(!blocks || blocks.length === 0) ? (
-          <p className="text-muted-foreground text-sm">No blocked users.</p>
-        ) : (
-          <div className="space-y-3">
-            {blocks.map((block) => (
-              <div key={block.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                <span className="font-medium text-foreground">{block.blockedUserName}</span>
-                <button
-                  onClick={() => handleUnblock(block.blockedUserId)}
-                  disabled={unblockMutation.isPending}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Unblock
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

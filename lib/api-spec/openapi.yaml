@@ -132,7 +132,12 @@ paths:
     get:
       operationId: getUser
       tags: [users]
-      summary: Get user profile
+      summary: Get the authenticated user's minimum profile
+      description: |
+        The gateway accepts this operation only when the authenticated session
+        user id exactly equals the canonical path id. It returns 401 when no
+        valid session exists and 404 for another user's id, without forwarding
+        the profile request upstream.
       parameters:
         - name: id
           in: path
@@ -141,13 +146,19 @@ paths:
             type: integer
       responses:
         "200":
-          description: User profile
+          description: Minimum self profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/SelfProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Not found
+          description: Not found or not owned by the authenticated session
           content:
             application/json:
               schema:
@@ -156,7 +167,11 @@ paths:
     patch:
       operationId: updateUser
       tags: [users]
-      summary: Update user profile
+      summary: Update the authenticated user's allowed profile fields
+      description: |
+        The gateway accepts only name, bio, and subjects for the authenticated
+        session owner. Identity and authorization fields, including id, email,
+        role, and is_verified, are rejected before any upstream request.
       parameters:
         - name: id
           in: path
@@ -171,11 +186,29 @@ paths:
               $ref: "#/components/schemas/UpdateUserBody"
       responses:
         "200":
-          description: Updated user
+          description: Updated minimum self profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/SelfProfile"
+        "400":
+          description: Invalid or disallowed profile update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found or not owned by the authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /districts:
     get:
@@ -735,20 +768,48 @@ components:
           type: string
       required: [id, email, name, role, districtId, isVerified, createdAt, subjects]
 
+    SelfProfile:
+      type: object
+      description: |
+        Gateway-redacted response for GET/PATCH /users/{id}. This schema is
+        never a public directory profile: only the session owner can receive it.
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          maxLength: 120
+        subjects:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 80
+        createdAt:
+          type: string
+      required: [id, name, subjects, createdAt]
+
     UpdateUserBody:
       type: object
+      description: Allowlisted self-profile fields. Other fields are rejected by the gateway.
+      additionalProperties: false
+      minProperties: 1
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 120
         bio:
           type: ["string", "null"]
-        role:
-          type: string
-          enum: [mentor, mentee, both]
+          maxLength: 2000
         subjects:
           type: array
+          maxItems: 20
           items:
             type: string
+            minLength: 1
+            maxLength: 80
 
     District:
       type: object

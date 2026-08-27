@@ -68,20 +68,35 @@ export interface AuthResponse {
   message: string;
 }
 
-export type UpdateUserBodyRole =
-  (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole];
+/**
+ * Gateway-redacted response for GET/PATCH /users/{id}. This schema is
+never a public directory profile: only the session owner can receive it.
 
-export const UpdateUserBodyRole = {
-  mentor: "mentor",
-  mentee: "mentee",
-  both: "both",
-} as const;
+ */
+export interface SelfProfile {
+  id: number;
+  /** @maxLength 120 */
+  name: string;
+  /** @maxItems 20 */
+  subjects: string[];
+  createdAt: string;
+}
 
+/**
+ * Allowlisted self-profile fields. Other fields are rejected by the gateway.
+ */
 export interface UpdateUserBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
   name?: string;
-  /** @nullable */
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
   bio?: string | null;
-  role?: UpdateUserBodyRole;
+  /** @maxItems 20 */
   subjects?: string[];
 }
 
