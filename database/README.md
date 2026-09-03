@@ -5,6 +5,10 @@ for local development, website testing, and the student Python practice files in
 `Python/`. It creates **every table the app and the student code expect** and
 fills them with 1000 well-formed fake users plus related records.
 
+The deployment schema source of truth is `database/schema/canonical.sql`.
+The schema section in this seed is a local compatibility fixture only; keep it
+aligned with the canonical schema, but never deploy from the seed.
+
 > **WARNING** — the seed DROPs and recreates its tables. Only ever run it
 > against a local test database (e.g. `mentor_connect_mock`). Never point it at
 > production or at a database whose data you care about.
@@ -63,11 +67,11 @@ PORT=8080 BASE_PATH=/ pnpm --filter @workspace/peerbridge dev
 
 ## 4. Demo logins (password for every user: `Password123!`)
 
-| Email | User ID | Role |
-|---|---|---|
-| `student001@test.edu` | 1 | mentee |
-| `mentor501@test.edu` | 501 | mentor |
-| `both951@test.edu` | 951 | both |
+| Email                 | User ID | Role   |
+| --------------------- | ------- | ------ |
+| `student001@test.edu` | 1       | mentee |
+| `mentor501@test.edu`  | 501     | mentor |
+| `both951@test.edu`    | 951     | both   |
 
 All 1000 users share the same bcrypt hash of `Password123!`, so any seeded
 email can log in.
@@ -91,18 +95,18 @@ email can log in.
 
 ## 6. What the seed creates
 
-| Table | Rows | Notes |
-|---|---|---|
-| `districts` | 32 | Bay Area school districts (`type='high_school'`) |
-| `tags` | 22 | subjects; tag names == the subject vocabulary used everywhere |
-| `users` | 1000 | ids 1–500 mentee, 501–950 mentor, 951–1000 both; every row filled (bio, subjects, location, available_times, languages, grade_level, teaching_style) |
-| `requests` | 750 | product help/offer posts; ~72% open, 20% matched, 8% closed; includes the `request` compatibility column (primary subject) and a non-empty `preferred_times` array on every row |
-| `request_tags` | 1455 | ≥1 tag per request (subject tag + extras) |
-| `questions` | 720 | practice table for `get_questions.py` / `find_matches.py`; question id N == student id N for N ≤ 500; `preferred_time` (single) + `preferred_times` (full list) |
-| `reports` | 108 | engineered threshold tiers (1 / 2 / 3 / 4 / 5 / 6 reports) |
-| `blocks` | 120 | unique pairs; includes demo block 1→502 |
-| `schedules` | 3023 | one row per user per weekly slot, derived 1:1 from `users.available_times` |
-| views | 6 | 4 analytics helpers (`v_popular_subjects`, `v_mentor_ranks`, `v_popular_time_slots`, `v_response_times`) + 2 compatibility views (`mentors`, `schedules_db`) |
+| Table          | Rows | Notes                                                                                                                                                                           |
+| -------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `districts`    | 32   | Bay Area school districts (`type='high_school'`)                                                                                                                                |
+| `tags`         | 22   | subjects; tag names == the subject vocabulary used everywhere                                                                                                                   |
+| `users`        | 1000 | ids 1–500 mentee, 501–950 mentor, 951–1000 both; every row filled (bio, subjects, location, available_times, languages, grade_level, teaching_style)                            |
+| `requests`     | 750  | product help/offer posts; ~72% open, 20% matched, 8% closed; includes the `request` compatibility column (primary subject) and a non-empty `preferred_times` array on every row |
+| `request_tags` | 1455 | ≥1 tag per request (subject tag + extras)                                                                                                                                       |
+| `questions`    | 720  | practice table for `get_questions.py` / `find_matches.py`; question id N == student id N for N ≤ 500; `preferred_time` (single) + `preferred_times` (full list)                 |
+| `reports`      | 108  | engineered threshold tiers (1 / 2 / 3 / 4 / 5 / 6 reports)                                                                                                                      |
+| `blocks`       | 120  | unique pairs; includes demo block 1→502                                                                                                                                         |
+| `schedules`    | 3023 | one row per user per weekly slot, derived 1:1 from `users.available_times`                                                                                                      |
+| views          | 6    | 4 analytics helpers (`v_popular_subjects`, `v_mentor_ranks`, `v_popular_time_slots`, `v_response_times`) + 2 compatibility views (`mentors`, `schedules_db`)                    |
 
 Schema notes:
 
@@ -133,13 +137,13 @@ Every weekly time slot in the database is a string in one canonical format:
 
 Where slots live and how the fields relate:
 
-| Field | Meaning |
-|---|---|
-| `users.available_times TEXT[]` | slots a user is generally free (2–4 per seeded user) |
-| `schedules.slot` | the same availability, normalized to one row per user per slot (derived 1:1 from `users.available_times`) |
-| `requests.preferred_times TEXT[] NOT NULL DEFAULT '{}'` | **canonical multi-slot field** — all slots the author picked in the "Post a Request" form (e.g. Request 1 → `{"Mon 17:00","Wed 19:00"}`); empty array means the author skipped the optional selector |
-| `questions.preferred_time TEXT` | legacy single slot kept for backward compatibility (`get_questions.py`, `find_matches.py`); always equals the **first** entry of `questions.preferred_times` |
-| `questions.preferred_times TEXT[] NOT NULL DEFAULT '{}'` | the full multi-slot list for the question (≥ 2 slots per seeded row) |
+| Field                                                    | Meaning                                                                                                                                                                                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users.available_times TEXT[]`                           | slots a user is generally free (2–4 per seeded user)                                                                                                                                                 |
+| `schedules.slot`                                         | the same availability, normalized to one row per user per slot (derived 1:1 from `users.available_times`)                                                                                            |
+| `requests.preferred_times TEXT[] NOT NULL DEFAULT '{}'`  | **canonical multi-slot field** — all slots the author picked in the "Post a Request" form (e.g. Request 1 → `{"Mon 17:00","Wed 19:00"}`); empty array means the author skipped the optional selector |
+| `questions.preferred_time TEXT`                          | legacy single slot kept for backward compatibility (`get_questions.py`, `find_matches.py`); always equals the **first** entry of `questions.preferred_times`                                         |
+| `questions.preferred_times TEXT[] NOT NULL DEFAULT '{}'` | the full multi-slot list for the question (≥ 2 slots per seeded row)                                                                                                                                 |
 
 Seed guarantees for matching practice: every seeded request/question has ≥ 2
 preferred slots, `preferred_times` always overlaps the author's own
@@ -153,11 +157,11 @@ match the product schema. Since `.py` files must never be modified, the seed
 provides objects shaped after those queries so they work as written once the
 student code connects to this database:
 
-| Student query (file) | Provided by |
-|---|---|
-| `SELECT request FROM requests;` (`Python/analysis.py`) | `requests.request` column — mirrors each request's primary subject (Request 1 → `'Math'`) |
-| `SELECT mentor FROM mentors;` (`Python/analysis.py`) | `mentors` view — mentor/both users with `name AS mentor` plus subjects, location, available_times, languages, grade_level, teaching_style, district_id |
-| `SELECT schedules FROM schedules_db;` (`Python/scheduling.py`) | `schedules_db` view — `slot AS schedules` plus user_id, created_at |
+| Student query (file)                                           | Provided by                                                                                                                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SELECT request FROM requests;` (`Python/analysis.py`)         | `requests.request` column — mirrors each request's primary subject (Request 1 → `'Math'`)                                                              |
+| `SELECT mentor FROM mentors;` (`Python/analysis.py`)           | `mentors` view — mentor/both users with `name AS mentor` plus subjects, location, available_times, languages, grade_level, teaching_style, district_id |
+| `SELECT schedules FROM schedules_db;` (`Python/scheduling.py`) | `schedules_db` view — `slot AS schedules` plus user_id, created_at                                                                                     |
 
 These are read-only conveniences; the app itself never touches them.
 
@@ -201,5 +205,5 @@ psql mentor_connect_mock -c "SELECT schedules FROM schedules_db LIMIT 5;" -- tim
 
 The file was generated deterministically (hash-of-id based, no wall-clock
 randomness) — the same generator always produces a byte-identical file. Treat
-`mentor_connect_mock_1000.sql` as the source of truth and edit/regenerate it as
-one unit; don't hand-edit individual rows.
+`mentor_connect_mock_1000.sql` as the source of truth for mock data only and
+edit/regenerate it as one unit; don't hand-edit individual rows.

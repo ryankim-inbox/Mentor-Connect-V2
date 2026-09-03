@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": "0001",
+  "canonicalFile": "canonical.sql",
+  "canonicalSha256": "72a5171f3224c0c6a122ba511525fa1e83c43e8c2d1eab5bc9aba788d87446f4",
+  "catalogFile": "local-catalog.json",
+  "catalogSha256": "8b26749db4dec597b01c14dd0bbeb1de3de90927fda5f6c527c92b41a9e3bb29",
+  "tableCount": 13,
+  "columnCount": 86,
+  "constraintCount": 43,
+  "indexCount": 37,
+  "capturedFrom": "local mentor_connect_mock catalog via a read-only transaction",
+  "capturedOn": "2026-09-02",
+  "productionStatus": "[UNKNOWN]"
+}
