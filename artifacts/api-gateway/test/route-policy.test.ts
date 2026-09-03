@@ -103,3 +103,24 @@ test("does not over-block neighboring route names", () => {
   assert.equal(classifyQuarantinedRoute("/api/practice-data/matching/42"), undefined);
   assert.equal(classifyQuarantinedRoute("/api/requests/42/matching"), undefined);
 });
+
+test("classifies chat, direct-message, and WebSocket route-family variants", () => {
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ["/api/chat/rooms", "chat"],
+    ["/api/chat%2Frooms", "chat"],
+    ["/API/CHAT/ROOMS", "chat"],
+    ["/api/safe/../chat/rooms", "chat"],
+    ["/api/dms/1", "dms"],
+    ["/api/dms%2F1", "dms"],
+    ["/API/DMS/1", "dms"],
+    ["/api/safe/../dms/1", "dms"],
+    ["/ws/chat/1", "websocket"],
+    ["/ws%2Fchat%2F1", "websocket"],
+    ["/WS/CHAT/1", "websocket"],
+    ["/safe/../ws/chat/1", "websocket"],
+  ];
+
+  for (const [target, expectedFamily] of cases) {
+    assert.equal(classifyQuarantinedRoute(target), expectedFamily, target);
+  }
+});

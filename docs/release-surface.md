@@ -1,7 +1,8 @@
 # PeerBridge release surface
 
 Status: Slice 03 admin/report quarantine, Slice 04 self-only profile policy,
-and Slice 05 matching/practice/Connect kill switch implemented (2026-08-26)
+Slice 05 matching/practice/Connect kill switch, and Slice 06 chat/DM/WebSocket
+kill switch implemented (2026-09-02)
 
 This document fixes the intended reduced release surface. The client flags
 reduce UI exposure; the TypeScript API Shield is the server-side boundary. A
@@ -23,7 +24,7 @@ honored only by a Vite development server. Production builds ignore every
 | Mentor matching | `VITE_FEATURE_MATCHING=true` | false | `/recommendations` | Student profile and eligibility data | Gateway quarantines `/api/matches/**` before auth or upstream | Matching owner — assignment required | Bidirectional block exclusion, report policy, verified-mentor filter, self-match prevention, atomic state transitions, concurrency, and tie-break tests pass |
 | Practice lab | `VITE_FEATURE_PRACTICE=true` | false | `/practice-lab`, `/dashboard/practice-lab` | Matching, location, and block test data | Gateway quarantines `/api/practice/**` before auth or upstream | Learning-platform owner — assignment required | The matching safety checklist and quarantine-removal review pass |
 | Connect | `VITE_FEATURE_CONNECT=true` | false | Request-detail match action | Match state and contact information | Gateway quarantines `/api/requests/*/match` before auth or upstream | Matching owner — assignment required | Safe match authorization, state-transition, concurrency, and rollback E2E pass |
-| Chat | `VITE_FEATURE_CHAT=true` | false | Floating chat widget | Messages, participants, and presence | None yet; Slice 02/06 required | Messaging owner — assignment required | Participant authorization, persistence, XSS, spam, and WebSocket E2E pass |
+| Chat | `VITE_FEATURE_CHAT=true` | false | No production widget, navigation, or background work | Messages, participants, and presence | Gateway quarantines `/api/chat/**`, `/api/dms/**`, and `/ws/**` before upstream; upgrades receive 403 | Messaging owner — assignment required | Authenticated room creation, participant-only reads, WS session verification, persistence, XSS, spam, rate-limit, and E2E pass |
 | Analytics | `VITE_FEATURE_ANALYTICS=true` | false | `/analytics` | Aggregate and mentor response data | None yet; Slice 02 required | Analytics owner — assignment required | Approved aggregate schema, access policy, and response redaction pass |
 | Scheduling | `VITE_FEATURE_SCHEDULING=true` | false | `/scheduling` | Student availability data | None yet; Slice 02 required | Scheduling owner — assignment required | Self-only / approved matching access policy and response schema pass |
 
@@ -151,6 +152,52 @@ pnpm --filter @workspace/peerbridge build
 rg -n "/api/(matches|practice)|/match" artifacts/peerbridge/dist
 ```
 
+### Slice 06 chat, DM, and WebSocket kill switch
+
+- Every ordinary HTTP method for `/api/chat/**`, `/api/dms/**`, and `/ws/**` is
+  classified before URL parsing, header validation, authentication,
+  request-body reads, or an upstream request. Encoded separators, repeated
+  decoding, slash and backslash variants, matrix parameters, dot segments,
+  trailing slashes, and case variants use the same normalization as the other
+  quarantined families. Upgrade requests take the separate unconditional 403
+  path before any upstream connection can be created.
+- Anonymous and authenticated HTTP requests receive the fixed 404
+  `{"error":"not_found"}`. The `gateway.quarantine_denied` metric records only
+  the coarse `chat`, `dms`, or `websocket` family plus its normal correlation
+  fields. The gateway tests assert that the upstream request/connection count
+  for every chat, DM, and non-upgrade WebSocket request is zero.
+- Every HTTP Upgrade request ends as `403 {"error":"websocket_unavailable",…}`
+  before an upstream connection is possible. It emits `gateway.upgrade_denied`
+  with the coarse `websocket` route family; it never negotiates a WebSocket
+  session or forwards credentials upstream.
+- `ChatWidget` is loaded only through a Vite development-only lazy import.
+  Consequently production has no chat widget or navigation, no chat polling or
+  reconnect loop, and no chat module to emit console errors or requests. The
+  disabled UI has no `localStorage` or `sessionStorage` use, so it cannot retain
+  a browser message draft.
+- This kill switch does not delete or alter any chat room, DM, or message data.
+  Feature disablement is not a data-retention or deletion policy; any retention
+  change requires its own reviewed, approved data operation.
+
+Re-enable checklist:
+
+- Authenticated room creation and participant-only room/DM reads pass.
+- WebSocket session verification and message persistence pass.
+- XSS handling, spam controls, rate limiting, and end-to-end coverage pass.
+- A separately reviewed change removes the gateway quarantine and restores the
+  production module only after the preceding checks have evidence.
+
+Verification:
+
+```sh
+pnpm --filter @workspace/api-gateway test
+pnpm --filter @workspace/api-gateway test:shield
+pnpm --filter @workspace/peerbridge typecheck
+pnpm --filter @workspace/peerbridge build
+pnpm --filter @workspace/api-gateway exec tsx --test ../peerbridge/test/release-surface.test.ts
+if rg -n "/api/(chat|dms)|/ws/" artifacts/peerbridge/dist; then exit 1; fi
+```
+
 ## Client behavior while a feature is disabled
 
 - Risky routes are classified before the global authentication provider mounts.
@@ -166,7 +213,8 @@ rg -n "/api/(matches|practice)|/match" artifacts/peerbridge/dist
   `AuthProvider` mounts. Their production routes show the same safe
   unavailable state, while the development-only page modules and Connect
   mutation are excluded from the production bundle.
-- The chat widget is not mounted, so it cannot start polling.
+- The chat widget is absent from the production build, so it cannot start
+  polling, reconnecting, navigating, or storing a draft in browser storage.
 - The Connect action and recommendation match-request entry point are absent
   from production.
 
