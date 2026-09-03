@@ -8,11 +8,12 @@ lifecycle action beyond that read-only validation.
 Until the approved migration runner arrives in Slices 09–10, the only supported
 database migration entrypoint is a dry-run guard. It validates the requested
 target without connecting to or changing a database, then appends one JSON line
-to the caller-selected audit log:
+to a configuration-owned audit log:
 
 ```sh
 DATABASE_URL='postgresql://...@staging-db.internal:5432/mentor_connect' \
-MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_AUDIT_LOG='/secure/audit/migrations.jsonl' \
 pnpm run migration:dry-run -- \
   --env staging \
   --actor release-engineer \
@@ -23,12 +24,19 @@ pnpm run migration:dry-run -- \
   --audit-log /secure/audit/migrations.jsonl
 ```
 
-The environment must be `staging` or `production`; `MIGRATION_ALLOWED_HOSTS`
-is required and must contain the `DATABASE_URL` hostname. The guard refuses
-missing or duplicate arguments, non-PostgreSQL URLs, unmatched hosts, and any
-run without `--dry-run`. Keep the allowlist and audit log outside the
-repository. Do not put credentials, a database URL, or a backup artifact in an
-audit entry.
+The environment must be `staging` or `production`. Its matching, separately
+configured allowlist (`MIGRATION_ALLOWED_HOSTS_STAGING` or
+`MIGRATION_ALLOWED_HOSTS_PRODUCTION`) must contain the `DATABASE_URL` hostname;
+the other environment's list is never considered. The guard refuses missing or
+duplicate arguments, non-PostgreSQL URLs, unmatched hosts, and any run without
+`--dry-run`.
+
+`MIGRATION_AUDIT_LOG` is configuration-owned and must exactly match the
+`--audit-log` argument. It must be an absolute canonical path below an existing
+non-symlink directory. Existing audit logs must be regular files; devices such
+as `/dev/null` and symbolic links are rejected. Keep allowlists and audit-log
+configuration outside the repository. Do not put credentials, a database URL,
+or a backup artifact in an audit entry.
 
 Each completed dry run records the actor, exact migration ID, target
 environment and host, approval ID, backup ID, start/end timestamps, dry-run

@@ -1,4 +1,5 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, lstat, realpath } from "node:fs/promises";
+import path from "node:path";
 
 const valueOptions = new Set([
   "--env",
@@ -59,7 +60,8 @@ function validateMetadata(options) {
 
 function validatedTargetHost(environment) {
   if (!process.env.DATABASE_URL) fail("DATABASE_URL is required");
-  if (!process.env.MIGRATION_ALLOWED_HOSTS) fail("MIGRATION_ALLOWED_HOSTS is required");
+  const allowlistVariable = `MIGRATION_ALLOWED_HOSTS_${environment.toUpperCase()}`;
+  if (!process.env[allowlistVariable]) fail(`${allowlistVariable} is required`);
 
   let databaseUrl;
   try {
@@ -72,10 +74,10 @@ function validatedTargetHost(environment) {
   }
   if (!databaseUrl.hostname) fail("DATABASE_URL must include a host");
 
-  const allowedHosts = process.env.MIGRATION_ALLOWED_HOSTS.split(",")
+  const allowedHosts = process.env[allowlistVariable].split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
-  if (allowedHosts.length === 0) fail("MIGRATION_ALLOWED_HOSTS must list at least one host");
+  if (allowedHosts.length === 0) fail(`${allowlistVariable} must list at least one host`);
 
   const targetHost = databaseUrl.hostname.toLowerCase();
   if (!allowedHosts.includes(targetHost)) {
@@ -84,10 +86,48 @@ function validatedTargetHost(environment) {
   return targetHost;
 }
 
+async function validatedAuditDestination(options) {
+  const configuredDestination = process.env.MIGRATION_AUDIT_LOG;
+  const requestedDestination = options.get("--audit-log");
+  if (!configuredDestination) fail("MIGRATION_AUDIT_LOG is required");
+  if (requestedDestination !== configuredDestination) {
+    fail("--audit-log must match configured MIGRATION_AUDIT_LOG");
+  }
+  if (!path.isAbsolute(configuredDestination)) {
+    fail("MIGRATION_AUDIT_LOG must be an absolute path");
+  }
+
+  const configuredDirectory = path.dirname(configuredDestination);
+  let resolvedDirectory;
+  try {
+    resolvedDirectory = await realpath(configuredDirectory);
+  } catch {
+    fail("MIGRATION_AUDIT_LOG parent directory must exist");
+  }
+  if (configuredDirectory !== resolvedDirectory) {
+    fail("MIGRATION_AUDIT_LOG parent directory must not be a symbolic link");
+  }
+
+  try {
+    const destinationStatus = await lstat(configuredDestination);
+    if (destinationStatus.isSymbolicLink()) {
+      fail("MIGRATION_AUDIT_LOG must not be a symbolic link");
+    }
+    if (!destinationStatus.isFile()) {
+      fail("MIGRATION_AUDIT_LOG must be a regular file");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  return configuredDestination;
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   validateMetadata(options);
   const targetHost = validatedTargetHost(options.get("--env"));
+  const auditDestination = await validatedAuditDestination(options);
   const startedAt = new Date().toISOString();
   const endedAt = new Date().toISOString();
   const entry = {
@@ -103,7 +143,7 @@ async function main() {
     result: "dry-run-complete",
   };
 
-  await appendFile(options.get("--audit-log"), `${JSON.stringify(entry)}\n`, "utf8");
+  await appendFile(auditDestination, `${JSON.stringify(entry)}\n`, "utf8");
   console.log("migration dry-run guard completed; no database changes were executed");
 }
 
