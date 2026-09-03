@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "advisoryLockKey": "774301992604150",
+  "ledgerTable": "mentor_connect_schema_migrations",
+  "migrations": [
+    {
+      "id": "0001_canonical_baseline",
+      "path": "../schema/canonical.sql",
+      "sha256": "72a5171f3224c0c6a122ba511525fa1e83c43e8c2d1eab5bc9aba788d87446f4"
+    }
+  ]
+}
