@@ -10,10 +10,12 @@ independently editable baseline. `database/schema/version.json` pins the
 materialization checksum and identifies the current ledger tail by both
 `schemaVersion` and `currentMigrationId`.
 
-Version `0001` was frozen from a read-only introspection of the local
-`mentor_connect_mock` catalog on 2026-09-02: 13 tables, 86 columns, 43
-constraints, and 37 indexes. The normalized current-schema evidence is
-`database/schema/local-catalog.json`.
+Version `0002` is the current ledger tail: 13 tables, 86 columns, 46
+constraints, and 39 indexes. Its normalized catalog was reproduced in a
+disposable loopback PostgreSQL cluster and is stored in
+`database/schema/local-catalog.json`. See
+`docs/runbooks/database-integrity-preflight.md` for preflight, quarantine,
+constraint, plan, deletion-policy, and recovery details.
 
 The Drizzle definitions in `lib/db/src/schema/` represent the current
 materialized schema for application queries and types. They are not an
@@ -22,11 +24,11 @@ foreign-key, and check constraints plus non-constraint indexes with the frozen
 catalog. Do not use `drizzle-kit push`, `db push`, or a package lifecycle hook
 to reconcile a database. Those entrypoints are deliberately absent.
 
-The production schema is **[UNKNOWN]**. No production introspection was
-performed for this slice. The local catalog, canonical SQL, and mock seed are
-not evidence of production state. Release remains blocked until an authorized
-operator captures production catalog metadata with the read-only diff command
-and every difference is covered by an approved migration plan.
+The staging and production schemas, preflight results, query plans, p95, and
+index lock times are **[UNKNOWN]**. No remote introspection was performed for
+this slice. The local catalog, canonical SQL, and mock seed are not evidence of
+remote state. Production application is forbidden before the Slice 11 recovery
+rehearsal.
 
 ## Read-only checks
 
@@ -56,7 +58,7 @@ DATABASE_URL='postgresql://user@localhost:5432/mentor_connect_mock' \
 ```
 
 Neither database command prints `DATABASE_URL`. A zero diff establishes only
-that the inspected target matches version `0001`; it does not establish data
+that the inspected target matches version `0002`; it does not establish data
 consistency.
 
 ## Ordered migration and runtime ledger contract
@@ -65,8 +67,8 @@ consistency.
 prefix of each migration ID. Migration IDs and paths must be unique, numeric
 prefixes must strictly increase, and each SHA-256 must match the referenced
 file. `0001_canonical_baseline.sql` is immutable history. The current canonical
-file is mechanically derived from that history; after migration `0002` is
-appended, it is the exact bytes of `0001` followed by the exact bytes of `0002`.
+file is mechanically derived from that history and is the exact bytes of
+`0001` followed by the exact bytes of `0002`.
 
 The library-only `runMigrationTransaction({ client, ledger, appSha })` in
 `lib/db/tools/migration-runner.mjs` defines the contract consumed by the next

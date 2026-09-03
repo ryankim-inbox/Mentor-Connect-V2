@@ -75,6 +75,10 @@ export const dmConversationsTable = pgTable(
   },
   (table) => [
     check("dm_conversations_check", sql`${table.userAId} <> ${table.userBId}`),
+    check(
+      "dm_conversations_canonical_pair_check",
+      sql`${table.userAId} < ${table.userBId}`,
+    ),
     unique("dm_conversations_user_a_id_user_b_id_key").on(
       table.userAId,
       table.userBId,

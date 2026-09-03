@@ -219,3 +219,34 @@ test("Drizzle constraints and indexes match every frozen catalog table", () => {
     );
   }
 });
+
+test("Drizzle exposes the new integrity checks and matching indexes", () => {
+  assert.deepEqual(
+    getTableConfig(blocksTable)
+      .checks.map((check) => check.name)
+      .sort(),
+    ["blocks_no_self_check"],
+  );
+  assert.deepEqual(
+    getTableConfig(reportsTable)
+      .checks.map((check) => check.name)
+      .sort(),
+    ["reports_no_self_check"],
+  );
+  assert.deepEqual(
+    getTableConfig(dmConversationsTable)
+      .checks.map((check) => check.name)
+      .sort(),
+    ["dm_conversations_canonical_pair_check", "dm_conversations_check"],
+  );
+  assert.ok(
+    getTableConfig(usersTable).indexes.some(
+      (index) => index.config.name === "idx_users_matching_lookup",
+    ),
+  );
+  assert.ok(
+    getTableConfig(requestsTable).indexes.some(
+      (index) => index.config.name === "idx_requests_open_matching_lookup",
+    ),
+  );
+});

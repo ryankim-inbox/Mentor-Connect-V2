@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   pgTable,
@@ -27,7 +29,13 @@ export const reportsTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("idx_reports_reported").on(table.reportedUserId)],
+  (table) => [
+    check(
+      "reports_no_self_check",
+      sql`${table.reporterId} <> ${table.reportedUserId}`,
+    ),
+    index("idx_reports_reported").on(table.reportedUserId),
+  ],
 );
 
 export const blocksTable = pgTable(
@@ -45,6 +53,10 @@ export const blocksTable = pgTable(
       .defaultNow(),
   },
   (table) => [
+    check(
+      "blocks_no_self_check",
+      sql`${table.blockerId} <> ${table.blockedUserId}`,
+    ),
     unique("blocks_blocker_id_blocked_user_id_key").on(
       table.blockerId,
       table.blockedUserId,
