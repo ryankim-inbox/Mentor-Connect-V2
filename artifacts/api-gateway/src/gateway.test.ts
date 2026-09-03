@@ -274,6 +274,19 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
     );
     assert.equal(responseStatus(upgrade), 403);
     assert.match(upgrade, /websocket_unavailable/);
+
+    const authenticatedUpgrade = await rawRequest(
+      fixture.gatewayOrigin,
+      "GET /ws/dms/1 HTTP/1.1\r\n" +
+        "Host: gateway.test\r\n" +
+        "Cookie: peerbridge_session=valid\r\n" +
+        "Connection: Upgrade\r\n" +
+        "Upgrade: websocket\r\n" +
+        "Sec-WebSocket-Version: 13\r\n" +
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
+    );
+    assert.equal(responseStatus(authenticatedUpgrade), 403);
+    assert.match(authenticatedUpgrade, /websocket_unavailable/);
     assert.equal(calls.length, 0);
   } finally {
     await stopFixture(fixture);

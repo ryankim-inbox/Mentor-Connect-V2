@@ -4,6 +4,9 @@ export const QUARANTINED_ROUTE_FAMILIES = {
   matches: "matches",
   practice: "practice",
   requestMatch: "request-match",
+  chat: "chat",
+  dms: "dms",
+  websocket: "websocket",
 } as const;
 
 export type QuarantinedRouteFamily =
@@ -96,6 +99,10 @@ export function classifyQuarantinedRoute(requestTarget: string): QuarantinedRout
 
   const segments = normalizedPath.slice(1).split("/");
 
+  if (segments[0] === "ws") {
+    return QUARANTINED_ROUTE_FAMILIES.websocket;
+  }
+
   if (segments[0] !== "api") {
     return undefined;
   }
@@ -114,6 +121,14 @@ export function classifyQuarantinedRoute(requestTarget: string): QuarantinedRout
 
   if (segments[1] === QUARANTINED_ROUTE_FAMILIES.practice) {
     return QUARANTINED_ROUTE_FAMILIES.practice;
+  }
+
+  if (segments[1] === QUARANTINED_ROUTE_FAMILIES.chat) {
+    return QUARANTINED_ROUTE_FAMILIES.chat;
+  }
+
+  if (segments[1] === QUARANTINED_ROUTE_FAMILIES.dms) {
+    return QUARANTINED_ROUTE_FAMILIES.dms;
   }
 
   // A request identifier is deliberately not parsed here: no spelling of an

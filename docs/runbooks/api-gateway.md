@@ -37,8 +37,9 @@ query string, trailing slash, double slash, dot segment, percent encoding, 대�
 GET /livez는 gateway 자체 liveness endpoint이며 upstream을 호출하지 않는다.
 
 그 밖의 모든 API 경로와 method는 404로 닫힌다. 특히 admin, python-reports,
-matches, practice, request match, chat, dms, 다른 사용자의 users 경로, 그리고 모든 WebSocket upgrade는
-upstream 연결 전에 차단된다. WebSocket upgrade의 응답은 403이다.
+matches, practice, request match, chat, dms, `/ws/**`, 다른 사용자의 users 경로, 그리고 모든 WebSocket upgrade는
+upstream 연결 전에 차단된다. `/api/chat/**`, `/api/dms/**`, `/ws/**`의 일반 HTTP 요청은
+quarantine 404이며, HTTP WebSocket upgrade는 경로나 인증 상태와 관계없이 upstream 연결 전에 403이다.
 
 새 API를 열려면 gatewayAllowlist에 method, canonical path, body 정책, 인증 정책을
 명시하고, 허용되지 않은 경로가 upstream에 도달하지 않는 회귀 테스트를 추가해야 한다.

@@ -452,28 +452,9 @@ function rejectUpgrade(
   config: GatewayConfig,
 ): void {
   const requestId = randomUUID();
-  const quarantinedRoute = classifyQuarantinedRoute(request.url ?? "");
-
-  if (quarantinedRoute) {
-    const body = Buffer.from(JSON.stringify({ error: "not_found" }));
-    socket.write(
-      "HTTP/1.1 404 Not Found\r\n" +
-        "Content-Type: application/json; charset=utf-8\r\n" +
-        "Cache-Control: no-store\r\n" +
-        "Connection: close\r\n" +
-        "Content-Length: " + body.length + "\r\n" +
-        "X-Request-Id: " + requestId + "\r\n\r\n",
-    );
-    socket.end(body);
-    log(config, "gateway.quarantine_denied", {
-      correlationId: requestId,
-      outcome: "denied",
-      routeFamily: quarantinedRoute,
-      status: 404,
-    });
-    return;
-  }
-
+  // Upgrades never join an upstream connection. Keep their external response
+  // distinct from ordinary HTTP quarantine requests: the WebSocket handshake
+  // must always terminate with 403 before an upgrade can be established.
   const body = Buffer.from(JSON.stringify({ error: "websocket_unavailable", requestId }));
 
   socket.write(
@@ -489,6 +470,7 @@ function rejectUpgrade(
   log(config, "gateway.upgrade_denied", {
     method: request.method?.toUpperCase() ?? "GET",
     requestId,
+    routeFamily: "websocket",
     status: 403,
   });
 }

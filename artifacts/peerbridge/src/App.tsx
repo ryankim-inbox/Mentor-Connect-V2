@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
-import { ChatWidget } from "@/components/ChatWidget";
 import { FeatureGate, FeatureUnavailable } from "@/components/FeatureUnavailable";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
@@ -35,6 +34,9 @@ const DevelopmentRecommendations = import.meta.env.DEV
   : null;
 const DevelopmentPracticeLab = import.meta.env.DEV
   ? lazy(() => import("@/pages/PracticeLab"))
+  : null;
+const DevelopmentChatWidget = import.meta.env.DEV
+  ? lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })))
   : null;
 
 const queryClient = new QueryClient({
@@ -160,7 +162,11 @@ function ReleaseAwareApp() {
   return (
     <AuthProvider>
       <Router />
-      {isFeatureEnabled("chat") && <ChatWidget />}
+      {DevelopmentChatWidget && isFeatureEnabled("chat") && (
+        <Suspense fallback={null}>
+          <DevelopmentChatWidget />
+        </Suspense>
+      )}
     </AuthProvider>
   );
 }
