@@ -33,10 +33,13 @@ duplicate arguments, non-PostgreSQL URLs, unmatched hosts, and any run without
 
 `MIGRATION_AUDIT_LOG` is configuration-owned and must exactly match the
 `--audit-log` argument. It must be an absolute canonical path below an existing
-non-symlink directory. Existing audit logs must be regular files; devices such
-as `/dev/null` and symbolic links are rejected. Keep allowlists and audit-log
-configuration outside the repository. Do not put credentials, a database URL,
-or a backup artifact in an audit entry.
+non-symlink directory and name a pre-existing regular file. The guard opens
+that file atomically with the platform no-follow flag, validates the opened file
+descriptor, writes through that descriptor, and closes it. Devices such as
+`/dev/null`, symbolic links, absent files, and platforms without no-follow
+opens are rejected. Keep allowlists and audit-log configuration outside the
+repository. Do not put credentials, a database URL, or a backup artifact in an
+audit entry.
 
 Each completed dry run records the actor, exact migration ID, target
 environment and host, approval ID, backup ID, start/end timestamps, dry-run
