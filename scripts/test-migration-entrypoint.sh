@@ -6,6 +6,7 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 AUDIT_ROOT=$(CDPATH= cd -- "$TMP" && pwd -P)
+touch "$AUDIT_ROOT/approved-migration-audit.jsonl"
 
 run_entrypoint() {
   DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
@@ -36,6 +37,22 @@ node -e '
   if (entry.targetHost !== "staging-db.internal") throw new Error("wrong target host");
   if (entry.dryRun !== true || entry.result !== "dry-run-complete") throw new Error("dry-run was not recorded");
 ' "$AUDIT_ROOT/approved-migration-audit.jsonl"
+
+set +e
+DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG="$AUDIT_ROOT/missing-migration-audit.jsonl" \
+node "$ROOT/scripts/migration-entrypoint.mjs" \
+  --env staging --actor release-engineer --migration-id 20260902_add_index \
+  --backup-id backup-20260902 --approval-id change-123 --dry-run \
+  --audit-log "$AUDIT_ROOT/missing-migration-audit.jsonl" > "$TMP/missing-stdout" 2> "$TMP/missing-stderr"
+STATUS=$?
+set -e
+
+[ "$STATUS" -ne 0 ]
+grep -F 'must reference a pre-existing regular file' "$TMP/missing-stderr" > /dev/null
+[ ! -e "$AUDIT_ROOT/missing-migration-audit.jsonl" ]
 
 set +e
 DATABASE_URL='postgresql://migration-user:secret@production-db.internal:5432/mentor_connect' \

@@ -1,4 +1,5 @@
-import { appendFile, lstat, realpath } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 const valueOptions = new Set([
@@ -86,7 +87,7 @@ function validatedTargetHost(environment) {
   return targetHost;
 }
 
-async function validatedAuditDestination(options) {
+async function openApprovedAuditLog(options) {
   const configuredDestination = process.env.MIGRATION_AUDIT_LOG;
   const requestedDestination = options.get("--audit-log");
   if (!configuredDestination) fail("MIGRATION_AUDIT_LOG is required");
@@ -108,42 +109,59 @@ async function validatedAuditDestination(options) {
     fail("MIGRATION_AUDIT_LOG parent directory must not be a symbolic link");
   }
 
+  if (!Number.isInteger(constants.O_NOFOLLOW)) {
+    fail("platform does not support no-follow audit log opens");
+  }
+
+  let auditFile;
   try {
-    const destinationStatus = await lstat(configuredDestination);
-    if (destinationStatus.isSymbolicLink()) {
-      fail("MIGRATION_AUDIT_LOG must not be a symbolic link");
-    }
+    auditFile = await open(
+      configuredDestination,
+      constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW,
+    );
+  } catch (error) {
+    if (error.code === "ENOENT") fail("MIGRATION_AUDIT_LOG must reference a pre-existing regular file");
+    if (error.code === "ELOOP") fail("MIGRATION_AUDIT_LOG must not be a symbolic link");
+    throw error;
+  }
+
+  try {
+    const destinationStatus = await auditFile.stat();
     if (!destinationStatus.isFile()) {
       fail("MIGRATION_AUDIT_LOG must be a regular file");
     }
+    return auditFile;
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    await auditFile.close();
+    throw error;
   }
-
-  return configuredDestination;
 }
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   validateMetadata(options);
   const targetHost = validatedTargetHost(options.get("--env"));
-  const auditDestination = await validatedAuditDestination(options);
-  const startedAt = new Date().toISOString();
-  const endedAt = new Date().toISOString();
-  const entry = {
-    actor: options.get("--actor"),
-    migrationId: options.get("--migration-id"),
-    targetEnvironment: options.get("--env"),
-    targetHost,
-    backupId: options.get("--backup-id"),
-    approvalId: options.get("--approval-id"),
-    dryRun: true,
-    startedAt,
-    endedAt,
-    result: "dry-run-complete",
-  };
+  const auditFile = await openApprovedAuditLog(options);
+  try {
+    const startedAt = new Date().toISOString();
+    const endedAt = new Date().toISOString();
+    const entry = {
+      actor: options.get("--actor"),
+      migrationId: options.get("--migration-id"),
+      targetEnvironment: options.get("--env"),
+      targetHost,
+      backupId: options.get("--backup-id"),
+      approvalId: options.get("--approval-id"),
+      dryRun: true,
+      startedAt,
+      endedAt,
+      result: "dry-run-complete",
+    };
 
-  await appendFile(auditDestination, `${JSON.stringify(entry)}\n`, "utf8");
+    await auditFile.writeFile(`${JSON.stringify(entry)}\n`, "utf8");
+  } finally {
+    await auditFile.close();
+  }
   console.log("migration dry-run guard completed; no database changes were executed");
 }
 
