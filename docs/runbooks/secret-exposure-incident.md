@@ -22,6 +22,13 @@ status check on `main`. That branch-protection change is external and remains
 `[UNKNOWN]` until its configuration and a successful protected-branch run are
 recorded in the ledger.
 
+If the repository is organization-owned, an administrator must add the
+Gitleaks Action license to the repository's encrypted `GITLEAKS_LICENSE`
+secret. The workflow references that secret but never prints, stores, or
+requires its value in this worktree. Whether this repository needs that
+external configuration remains `[UNKNOWN]` until ownership and a successful
+workflow run are evidenced.
+
 ## Operator procedure
 
 1. Open an incident ticket and assign the owners named in the ledger. Record

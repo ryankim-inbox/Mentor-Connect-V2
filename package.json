@@ -12,7 +12,8 @@
     "secrets:scan": "sh scripts/check-secrets.sh",
     "secrets:scan:self-test": "sh scripts/check-secrets.sh --self-test",
     "secrets:history": "sh scripts/check-secret-history.sh",
-    "test:secrets": "sh scripts/test-secret-history.sh"
+    "test:secret-workflow-policy": "sh scripts/test-secret-workflow-policy.sh",
+    "test:secrets": "sh scripts/test-secret-history.sh && sh scripts/test-secret-workflow-policy.sh"
   },
   "private": true,
   "devDependencies": {

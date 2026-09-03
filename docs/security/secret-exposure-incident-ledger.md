@@ -14,7 +14,7 @@ The required schema is in [the rotation-ledger template](secret-rotation-ledger.
 | `SESSION_SECRET` | Historical Git exposure | Application operations owner `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | BLOCKED |
 | Password-hash account linkage and reset | Historical database dump exposure | Account security owner `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | BLOCKED |
 | Git history rewrite and force-push coordination | Historical Git exposure | Repository administrator `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | BLOCKED |
-| Required CI check on `main` | `secret-history-scan` workflow | Repository administrator `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | BLOCKED |
+| Required CI check on `main` and organization-license configuration if applicable | `secret-history-scan` workflow | Repository administrator `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | `[UNKNOWN]` | BLOCKED |
 
 There are six `[UNKNOWN]` rows. This ledger must not be marked closed until
 each is independently evidenced; repository changes cannot close them.
