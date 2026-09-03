@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, useSearch } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,8 +18,6 @@ import NewRequest from "@/pages/NewRequest";
 import RequestDetail from "@/pages/RequestDetail";
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
-import Recommendations from "@/pages/Recommendations";
-import PracticeLab from "@/pages/PracticeLab";
 import Analytics from "@/pages/Analytics";
 import Scheduling from "@/pages/Scheduling";
 import NotFound from "@/pages/not-found";
@@ -29,6 +28,15 @@ import {
   releaseSurface,
 } from "@/lib/release-flags";
 
+// These imports are folded out of production builds. Disabled matching and
+// practice pages therefore cannot leave their API calls in an emitted chunk.
+const DevelopmentRecommendations = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Recommendations"))
+  : null;
+const DevelopmentPracticeLab = import.meta.env.DEV
+  ? lazy(() => import("@/pages/PracticeLab"))
+  : null;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -37,6 +45,27 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function DevelopmentFeatureLoading() {
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-20 text-center text-muted-foreground" role="status">
+      Loading feature…
+    </div>
+  );
+}
+
+function DashboardRoute({ initialTab }: { initialTab?: "overview" | "practice-lab" }) {
+  return (
+    <RequireAuth>
+      <Suspense fallback={<DevelopmentFeatureLoading />}>
+        <Dashboard
+          initialTab={initialTab}
+          PracticeLab={DevelopmentPracticeLab ?? undefined}
+        />
+      </Suspense>
+    </RequireAuth>
+  );
+}
 
 function Router() {
   return (
@@ -48,12 +77,14 @@ function Router() {
           <Route path="/login" component={Login} />
           <Route path="/register" component={Register} />
           <Route path={releaseSurface.appRoutes.dashboardPractice}>
-            <FeatureGate feature="practice">
-              <RequireAuth><Dashboard initialTab="practice-lab" /></RequireAuth>
-            </FeatureGate>
+            {DevelopmentPracticeLab ? (
+              <FeatureGate feature="practice">
+                <DashboardRoute initialTab="practice-lab" />
+              </FeatureGate>
+            ) : <FeatureUnavailable feature="practice" />}
           </Route>
           <Route path="/dashboard">
-            <RequireAuth><Dashboard /></RequireAuth>
+            <DashboardRoute />
           </Route>
           <Route path="/districts">
             <RequireAuth><Districts /></RequireAuth>
@@ -77,14 +108,26 @@ function Router() {
             <RequireAuth><Settings /></RequireAuth>
           </Route>
           <Route path={releaseSurface.appRoutes.matching}>
-            <FeatureGate feature="matching">
-              <RequireAuth><Recommendations /></RequireAuth>
-            </FeatureGate>
+            {DevelopmentRecommendations ? (
+              <FeatureGate feature="matching">
+                <RequireAuth>
+                  <Suspense fallback={<DevelopmentFeatureLoading />}>
+                    <DevelopmentRecommendations />
+                  </Suspense>
+                </RequireAuth>
+              </FeatureGate>
+            ) : <FeatureUnavailable feature="matching" />}
           </Route>
           <Route path={releaseSurface.appRoutes.practice}>
-            <FeatureGate feature="practice">
-              <RequireAuth><PracticeLab /></RequireAuth>
-            </FeatureGate>
+            {DevelopmentPracticeLab ? (
+              <FeatureGate feature="practice">
+                <RequireAuth>
+                  <Suspense fallback={<DevelopmentFeatureLoading />}>
+                    <DevelopmentPracticeLab />
+                  </Suspense>
+                </RequireAuth>
+              </FeatureGate>
+            ) : <FeatureUnavailable feature="practice" />}
           </Route>
           <Route path={releaseSurface.appRoutes.analytics}>
             <FeatureGate feature="analytics">
