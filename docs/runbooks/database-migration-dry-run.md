@@ -7,13 +7,14 @@ lifecycle action beyond that read-only validation.
 
 Until the approved migration runner arrives in Slices 09–10, the only supported
 database migration entrypoint is a dry-run guard. It validates the requested
-target without connecting to or changing a database, then appends one JSON line
-to a configuration-owned audit log:
+target without connecting to or changing a database, then writes one JSON line
+to a deployment-owned, pre-opened audit sink:
 
 ```sh
 DATABASE_URL='postgresql://...@staging-db.internal:5432/mentor_connect' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
-MIGRATION_AUDIT_LOG='/secure/audit/migrations.jsonl' \
+MIGRATION_AUDIT_FD=3 \
+MIGRATION_AUDIT_APPEND_ONLY=1 \
 pnpm run migration:dry-run -- \
   --env staging \
   --actor release-engineer \
@@ -21,7 +22,7 @@ pnpm run migration:dry-run -- \
   --backup-id backup-20260902 \
   --approval-id change-123 \
   --dry-run \
-  --audit-log /secure/audit/migrations.jsonl
+  3>> /secure/audit/migrations.jsonl
 ```
 
 The environment must be `staging` or `production`. Its matching, separately
@@ -31,15 +32,20 @@ the other environment's list is never considered. The guard refuses missing or
 duplicate arguments, non-PostgreSQL URLs, unmatched hosts, and any run without
 `--dry-run`.
 
-`MIGRATION_AUDIT_LOG` is configuration-owned and must exactly match the
-`--audit-log` argument. It must be an absolute canonical path below an existing
-non-symlink directory and name a pre-existing regular file. The guard opens
-that file atomically with the platform no-follow flag, validates the opened file
-descriptor, writes through that descriptor, and closes it. Devices such as
-`/dev/null`, symbolic links, absent files, and platforms without no-follow
-opens are rejected. Keep allowlists and audit-log configuration outside the
-repository. Do not put credentials, a database URL, or a backup artifact in an
-audit entry.
+The trusted deployment launcher must open the approved, pre-existing regular
+audit file with append-only semantics, pass the inherited descriptor number as
+`MIGRATION_AUDIT_FD`, and set `MIGRATION_AUDIT_APPEND_ONLY=1`. The migration
+process never receives or resolves an audit pathname. It validates the inherited
+descriptor with `fstat`, rejects missing, invalid, directory, device, pipe, or
+other non-regular sinks, and writes only through that descriptor. The runtime
+cannot portably verify the descriptor's append flag, so the launcher-owned
+append-only guarantee is explicit and required.
+
+Audit-file selection, directory/file permissions, ownership, rotation, and
+durability (including flush/sync policy and durable storage) are deployment
+responsibilities and are currently environment-specific configuration, not
+repository facts. Keep this configuration outside the repository. Do not put
+credentials, a database URL, or a backup artifact in an audit entry.
 
 Each completed dry run records the actor, exact migration ID, target
 environment and host, approval ID, backup ID, start/end timestamps, dry-run

@@ -1,6 +1,4 @@
-import { constants } from "node:fs";
-import { open, realpath } from "node:fs/promises";
-import path from "node:path";
+import { fstatSync, writeSync } from "node:fs";
 
 const valueOptions = new Set([
   "--env",
@@ -8,7 +6,6 @@ const valueOptions = new Set([
   "--migration-id",
   "--backup-id",
   "--approval-id",
-  "--audit-log",
 ]);
 const requiredOptions = [...valueOptions];
 const safeIdentifier = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -87,53 +84,40 @@ function validatedTargetHost(environment) {
   return targetHost;
 }
 
-async function openApprovedAuditLog(options) {
-  const configuredDestination = process.env.MIGRATION_AUDIT_LOG;
-  const requestedDestination = options.get("--audit-log");
-  if (!configuredDestination) fail("MIGRATION_AUDIT_LOG is required");
-  if (requestedDestination !== configuredDestination) {
-    fail("--audit-log must match configured MIGRATION_AUDIT_LOG");
+function validatedAuditSink() {
+  const rawDescriptor = process.env.MIGRATION_AUDIT_FD;
+  if (rawDescriptor === undefined) fail("MIGRATION_AUDIT_FD is required");
+  if (!/^\d+$/.test(rawDescriptor)) {
+    fail("MIGRATION_AUDIT_FD must be a non-negative integer");
   }
-  if (!path.isAbsolute(configuredDestination)) {
-    fail("MIGRATION_AUDIT_LOG must be an absolute path");
+  const descriptor = Number(rawDescriptor);
+  if (!Number.isSafeInteger(descriptor)) {
+    fail("MIGRATION_AUDIT_FD must be a non-negative integer");
+  }
+  if (process.env.MIGRATION_AUDIT_APPEND_ONLY !== "1") {
+    fail("MIGRATION_AUDIT_APPEND_ONLY=1 is required from the audit launcher");
   }
 
-  const configuredDirectory = path.dirname(configuredDestination);
-  let resolvedDirectory;
+  let sinkStatus;
   try {
-    resolvedDirectory = await realpath(configuredDirectory);
+    sinkStatus = fstatSync(descriptor);
   } catch {
-    fail("MIGRATION_AUDIT_LOG parent directory must exist");
+    fail("MIGRATION_AUDIT_FD must reference an open regular file");
   }
-  if (configuredDirectory !== resolvedDirectory) {
-    fail("MIGRATION_AUDIT_LOG parent directory must not be a symbolic link");
-  }
-
-  if (!Number.isInteger(constants.O_NOFOLLOW)) {
-    fail("platform does not support no-follow audit log opens");
+  if (!sinkStatus.isFile()) {
+    fail("MIGRATION_AUDIT_FD must reference a regular file");
   }
 
-  let auditFile;
-  try {
-    auditFile = await open(
-      configuredDestination,
-      constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW,
-    );
-  } catch (error) {
-    if (error.code === "ENOENT") fail("MIGRATION_AUDIT_LOG must reference a pre-existing regular file");
-    if (error.code === "ELOOP") fail("MIGRATION_AUDIT_LOG must not be a symbolic link");
-    throw error;
-  }
+  return descriptor;
+}
 
-  try {
-    const destinationStatus = await auditFile.stat();
-    if (!destinationStatus.isFile()) {
-      fail("MIGRATION_AUDIT_LOG must be a regular file");
-    }
-    return auditFile;
-  } catch (error) {
-    await auditFile.close();
-    throw error;
+function appendAuditEntry(descriptor, entry) {
+  const payload = Buffer.from(`${JSON.stringify(entry)}\n`, "utf8");
+  let offset = 0;
+  while (offset < payload.length) {
+    const written = writeSync(descriptor, payload, offset, payload.length - offset, null);
+    if (written <= 0) fail("audit sink did not accept the complete entry");
+    offset += written;
   }
 }
 
@@ -141,27 +125,23 @@ async function main() {
   const options = parseArguments(process.argv.slice(2));
   validateMetadata(options);
   const targetHost = validatedTargetHost(options.get("--env"));
-  const auditFile = await openApprovedAuditLog(options);
-  try {
-    const startedAt = new Date().toISOString();
-    const endedAt = new Date().toISOString();
-    const entry = {
-      actor: options.get("--actor"),
-      migrationId: options.get("--migration-id"),
-      targetEnvironment: options.get("--env"),
-      targetHost,
-      backupId: options.get("--backup-id"),
-      approvalId: options.get("--approval-id"),
-      dryRun: true,
-      startedAt,
-      endedAt,
-      result: "dry-run-complete",
-    };
+  const auditDescriptor = validatedAuditSink();
+  const startedAt = new Date().toISOString();
+  const endedAt = new Date().toISOString();
+  const entry = {
+    actor: options.get("--actor"),
+    migrationId: options.get("--migration-id"),
+    targetEnvironment: options.get("--env"),
+    targetHost,
+    backupId: options.get("--backup-id"),
+    approvalId: options.get("--approval-id"),
+    dryRun: true,
+    startedAt,
+    endedAt,
+    result: "dry-run-complete",
+  };
 
-    await auditFile.writeFile(`${JSON.stringify(entry)}\n`, "utf8");
-  } finally {
-    await auditFile.close();
-  }
+  appendAuditEntry(auditDescriptor, entry);
   console.log("migration dry-run guard completed; no database changes were executed");
 }
 
