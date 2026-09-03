@@ -1,4 +1,14 @@
 import { fstatSync, writeSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { verifySchemaAssets } from "../lib/db/tools/schema-assets.mjs";
+import { planMigrationDryRun } from "../lib/db/tools/migration-plan.mjs";
+
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
 const valueOptions = new Set([
   "--env",
@@ -10,8 +20,10 @@ const valueOptions = new Set([
 const requiredOptions = [...valueOptions];
 const safeIdentifier = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-function fail(message) {
-  throw new Error(message);
+function fail(message, failureCode = "entrypoint_rejected") {
+  const error = new Error(message);
+  error.failureCode = failureCode;
+  throw error;
 }
 
 function parseArguments(argv) {
@@ -37,7 +49,9 @@ function parseArguments(argv) {
     if (!options.has(option)) fail(`${option} is required`);
   }
   if (options.get("--dry-run") !== true) {
-    fail("migration entrypoint only supports --dry-run until a migration runner is approved");
+    fail(
+      "migration entrypoint only supports --dry-run until a migration runner is approved",
+    );
   }
 
   return options;
@@ -49,14 +63,21 @@ function validateMetadata(options) {
     fail("--env must be staging or production");
   }
 
-  for (const option of ["--actor", "--migration-id", "--backup-id", "--approval-id"]) {
+  for (const option of [
+    "--actor",
+    "--migration-id",
+    "--backup-id",
+    "--approval-id",
+  ]) {
     if (!safeIdentifier.test(options.get(option))) {
-      fail(`${option} must contain only letters, digits, dots, underscores, or hyphens`);
+      fail(
+        `${option} must contain only letters, digits, dots, underscores, or hyphens`,
+      );
     }
   }
 }
 
-function validatedTargetHost(environment) {
+function validatedTarget(environment) {
   if (!process.env.DATABASE_URL) fail("DATABASE_URL is required");
   const allowlistVariable = `MIGRATION_ALLOWED_HOSTS_${environment.toUpperCase()}`;
   if (!process.env[allowlistVariable]) fail(`${allowlistVariable} is required`);
@@ -67,21 +88,40 @@ function validatedTargetHost(environment) {
   } catch {
     fail("DATABASE_URL must be a valid PostgreSQL URL");
   }
-  if (databaseUrl.protocol !== "postgresql:" && databaseUrl.protocol !== "postgres:") {
+  if (
+    databaseUrl.protocol !== "postgresql:" &&
+    databaseUrl.protocol !== "postgres:"
+  ) {
     fail("DATABASE_URL must use the postgresql protocol");
   }
   if (!databaseUrl.hostname) fail("DATABASE_URL must include a host");
 
-  const allowedHosts = process.env[allowlistVariable].split(",")
+  const allowedHosts = process.env[allowlistVariable]
+    .split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
-  if (allowedHosts.length === 0) fail(`${allowlistVariable} must list at least one host`);
+  if (allowedHosts.length === 0)
+    fail(`${allowlistVariable} must list at least one host`);
 
   const targetHost = databaseUrl.hostname.toLowerCase();
   if (!allowedHosts.includes(targetHost)) {
     fail(`DATABASE_URL host is not allowlisted for environment ${environment}`);
   }
-  return targetHost;
+  let targetDatabase;
+  try {
+    targetDatabase = decodeURIComponent(databaseUrl.pathname.slice(1));
+  } catch {
+    fail("DATABASE_URL database name must use valid percent encoding");
+  }
+  if (!targetDatabase || targetDatabase.includes("/")) {
+    fail("DATABASE_URL must identify exactly one database");
+  }
+  return {
+    databaseUrl: process.env.DATABASE_URL,
+    targetHost,
+    targetPort: databaseUrl.port || "5432",
+    targetDatabase,
+  };
 }
 
 function validatedAuditSink() {
@@ -115,7 +155,13 @@ function appendAuditEntry(descriptor, entry) {
   const payload = Buffer.from(`${JSON.stringify(entry)}\n`, "utf8");
   let offset = 0;
   while (offset < payload.length) {
-    const written = writeSync(descriptor, payload, offset, payload.length - offset, null);
+    const written = writeSync(
+      descriptor,
+      payload,
+      offset,
+      payload.length - offset,
+      null,
+    );
     if (written <= 0) fail("audit sink did not accept the complete entry");
     offset += written;
   }
@@ -124,25 +170,47 @@ function appendAuditEntry(descriptor, entry) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   validateMetadata(options);
-  const targetHost = validatedTargetHost(options.get("--env"));
+  const target = validatedTarget(options.get("--env"));
   const auditDescriptor = validatedAuditSink();
   const startedAt = new Date().toISOString();
-  const endedAt = new Date().toISOString();
   const entry = {
     actor: options.get("--actor"),
     migrationId: options.get("--migration-id"),
     targetEnvironment: options.get("--env"),
-    targetHost,
+    targetHost: target.targetHost,
+    targetPort: target.targetPort,
+    targetDatabase: target.targetDatabase,
     backupId: options.get("--backup-id"),
     approvalId: options.get("--approval-id"),
     dryRun: true,
     startedAt,
-    endedAt,
-    result: "dry-run-complete",
   };
 
-  appendAuditEntry(auditDescriptor, entry);
-  console.log("migration dry-run guard completed; no database changes were executed");
+  try {
+    const { ledger } = await verifySchemaAssets({ rootDir });
+    const plan = await planMigrationDryRun({
+      databaseUrl: target.databaseUrl,
+      ledger,
+      migrationId: entry.migrationId,
+    });
+    appendAuditEntry(auditDescriptor, {
+      ...entry,
+      ...plan,
+      endedAt: new Date().toISOString(),
+      result: "dry-run-validated",
+    });
+    console.log(
+      `migration dry-run validated a read-only plan of ${plan.plannedMigrationCount} migration(s); no database changes were executed`,
+    );
+  } catch (error) {
+    appendAuditEntry(auditDescriptor, {
+      ...entry,
+      endedAt: new Date().toISOString(),
+      result: "dry-run-failed",
+      failureCode: error.failureCode ?? "validation_failed",
+    });
+    throw error;
+  }
 }
 
 main().catch((error) => {

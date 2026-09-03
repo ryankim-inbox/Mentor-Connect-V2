@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import { connect } from "node:net";
 import { test } from "node:test";
-import { createGatewayServer, type GatewayLogger, type GatewayOptions } from "./gateway.js";
+import {
+  createGatewayServer,
+  type GatewayLogger,
+  type GatewayOptions,
+} from "./gateway.js";
 
 interface UpstreamCall {
   readonly body: string;
@@ -81,7 +90,11 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
 
     if (request.url === "/api/auth/me") {
       if (request.headers.cookie === "peerbridge_session=valid") {
-        response.writeHead(200, { "content-type": "application/json" });
+        response.writeHead(200, {
+          "cache-control": "public, max-age=3600",
+          "content-type": "application/json",
+          vary: "Accept-Encoding, accept-encoding",
+        });
         response.end(JSON.stringify({ id: 7, email: "student@example.test" }));
         return;
       }
@@ -108,7 +121,12 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
 async function startFixture(
   gatewayOptions: Omit<GatewayOptions, "upstreamOrigin" | "logger"> = {},
   upstream: Server = createFixtureUpstream([]),
-): Promise<{ gateway: Server; gatewayOrigin: string; upstream: Server; upstreamOrigin: string }> {
+): Promise<{
+  gateway: Server;
+  gatewayOrigin: string;
+  upstream: Server;
+  upstreamOrigin: string;
+}> {
   const upstreamOrigin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin,
@@ -119,7 +137,10 @@ async function startFixture(
   return { gateway, gatewayOrigin, upstream, upstreamOrigin };
 }
 
-async function stopFixture(fixture: { gateway: Server; upstream: Server }): Promise<void> {
+async function stopFixture(fixture: {
+  gateway: Server;
+  upstream: Server;
+}): Promise<void> {
   await close(fixture.gateway);
   await close(fixture.upstream);
 }
@@ -148,10 +169,14 @@ function responseStatus(rawResponse: string): number {
 }
 
 function getSetCookies(response: Response): readonly string[] {
-  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const headers = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
   return typeof headers.getSetCookie === "function"
     ? headers.getSetCookie()
-    : [headers.get("set-cookie")].filter((value): value is string => value !== null);
+    : [headers.get("set-cookie")].filter(
+        (value): value is string => value !== null,
+      );
 }
 
 test("accepts only a literal loopback private upstream", () => {
@@ -164,7 +189,9 @@ test("accepts only a literal loopback private upstream", () => {
     /loopback origin/,
   );
 
-  const gateway = createGatewayServer({ upstreamOrigin: "http://127.0.0.1:8181" });
+  const gateway = createGatewayServer({
+    upstreamOrigin: "http://127.0.0.1:8181",
+  });
   gateway.close();
 });
 
@@ -184,7 +211,10 @@ test("proxies only the minimal allowlist and deliberately forwards response data
     assert.equal(health.headers.get("location"), null);
     assert.deepEqual(await health.json(), { status: "ok" });
 
-    const loginPayload = JSON.stringify({ email: "student@example.test", password: "safe-test-password" });
+    const loginPayload = JSON.stringify({
+      email: "student@example.test",
+      password: "safe-test-password",
+    });
     const login = await fetch(fixture.gatewayOrigin + "/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -231,7 +261,9 @@ test("denies unregistered methods, paths, query strings, and path-normalization 
     ]) {
       const raw = await rawRequest(
         fixture.gatewayOrigin,
-        "GET " + target + " HTTP/1.1\r\nHost: gateway.test\r\nConnection: close\r\n\r\n",
+        "GET " +
+          target +
+          " HTTP/1.1\r\nHost: gateway.test\r\nConnection: close\r\n\r\n",
       );
       assert.ok([400, 404].includes(responseStatus(raw)), target);
     }
@@ -300,33 +332,47 @@ test("requires the same cookie for protected paths and verifies a session before
   try {
     const noCookie = await fetch(fixture.gatewayOrigin + "/api/auth/me");
     assert.equal(noCookie.status, 401);
+    assert.equal(noCookie.headers.get("cache-control"), "no-store");
+    assert.equal(noCookie.headers.get("vary"), "Cookie");
     assert.equal(calls.length, 0);
 
     const me = await fetch(fixture.gatewayOrigin + "/api/auth/me", {
       headers: { cookie: "peerbridge_session=valid" },
     });
     assert.equal(me.status, 200);
+    assert.equal(me.headers.get("cache-control"), "no-store");
+    assert.equal(me.headers.get("vary"), "Accept-Encoding, Cookie");
     assert.deepEqual(await me.json(), { id: 7, email: "student@example.test" });
     assert.equal(calls[0]?.cookie, "peerbridge_session=valid");
 
-    const invalidLogout = await fetch(fixture.gatewayOrigin + "/api/auth/logout", {
-      method: "POST",
-      headers: { cookie: "peerbridge_session=invalid" },
-    });
+    const invalidLogout = await fetch(
+      fixture.gatewayOrigin + "/api/auth/logout",
+      {
+        method: "POST",
+        headers: { cookie: "peerbridge_session=invalid" },
+      },
+    );
     assert.equal(invalidLogout.status, 401);
     assert.equal(calls.at(-1)?.path, "/api/auth/me");
 
-    const validLogout = await fetch(fixture.gatewayOrigin + "/api/auth/logout", {
-      method: "POST",
-      headers: { cookie: "peerbridge_session=valid" },
-    });
+    const validLogout = await fetch(
+      fixture.gatewayOrigin + "/api/auth/logout",
+      {
+        method: "POST",
+        headers: { cookie: "peerbridge_session=valid" },
+      },
+    );
     assert.equal(validLogout.status, 200);
     assert.deepEqual(await validLogout.json(), { loggedOut: true });
     assert.deepEqual(
       calls.slice(-2).map((call) => call.path),
       ["/api/auth/me", "/api/auth/logout"],
     );
-    assert.ok(getSetCookies(validLogout).includes("peerbridge_session=; Max-Age=0; Path=/"));
+    assert.ok(
+      getSetCookies(validLogout).includes(
+        "peerbridge_session=; Max-Age=0; Path=/",
+      ),
+    );
   } finally {
     await stopFixture(fixture);
   }
@@ -352,7 +398,7 @@ test("enforces request body limits and redacts credentials and payloads from gat
     const tooLarge = await fetch(gatewayOrigin + "/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: "\"123456789\"",
+      body: '"123456789"',
     });
     assert.equal(tooLarge.status, 413);
     assert.equal(calls.length, 0);
@@ -384,9 +430,11 @@ test("enforces request body limits and redacts credentials and payloads from gat
 });
 
 test("returns a bounded timeout response when the private upstream does not answer", async () => {
-  const upstream = createServer((_request: IncomingMessage, _response: ServerResponse) => {
-    // Keep the request open until the gateway's abort signal closes the socket.
-  });
+  const upstream = createServer(
+    (_request: IncomingMessage, _response: ServerResponse) => {
+      // Keep the request open until the gateway's abort signal closes the socket.
+    },
+  );
   const fixture = await startFixture({ upstreamTimeoutMs: 25 }, upstream);
 
   try {
@@ -401,7 +449,10 @@ test("returns a bounded timeout response when the private upstream does not answ
 
 test("maintenance mode preserves liveness but fail-closes API forwarding", async () => {
   const calls: UpstreamCall[] = [];
-  const fixture = await startFixture({ maintenanceMode: true }, createFixtureUpstream(calls));
+  const fixture = await startFixture(
+    { maintenanceMode: true },
+    createFixtureUpstream(calls),
+  );
 
   try {
     const livez = await fetch(fixture.gatewayOrigin + "/livez");

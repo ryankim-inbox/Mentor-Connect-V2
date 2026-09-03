@@ -4,11 +4,12 @@
 
 Migration `0002_integrity_constraints_indexes` is an append-only ledger entry.
 Production application is forbidden until the Slice 11 recovery rehearsal is
-approved. No command in `@workspace/db` can apply SQL: `migration:apply`
-accepts only `--dry-run`, validates the environment-to-host binding, verifies
-the repository ledger, and does not open a database connection. The guarded
-root launcher remains the only migration gate and still requires actor,
-migration, backup, approval, and trusted append-only audit-descriptor metadata.
+approved. No command in `@workspace/db` can apply SQL. The guarded root
+`migration:dry-run` is the sole migration orchestration command: it validates
+the environment-to-host binding and immutable repository/target ledger through
+a read-only connection, plans the named target, and audits success or failure.
+It still requires actor, migration, backup, approval, and trusted append-only
+audit-descriptor metadata.
 
 Staging and production preflight, plan, p95, and index lock-time evidence are
 all **[UNKNOWN]**. Local disposable-cluster results are not evidence for either
@@ -27,9 +28,10 @@ export MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal'
 ```
 
 The tools never print `DATABASE_URL`. The three database inspection commands
-begin `TRANSACTION READ ONLY`, set a transaction-local `public, pg_catalog`
-search path, confirm `transaction_read_only=on`, and commit or roll back before
-disconnecting.
+begin one repeatable-read `TRANSACTION READ ONLY`, set a transaction-local `public, pg_catalog`
+search path plus 15-second statement and idle-in-transaction timeouts and a
+2-second lock timeout, confirm `transaction_read_only=on`, and commit or roll
+back before disconnecting.
 
 ## Required staging sequence
 
@@ -37,47 +39,60 @@ Run only under the approved staging read-only identity. These commands are
 documented for an authorized operator; they were not run by Slice 10:
 
 ```sh
-pnpm --filter db migration:preflight -- --env staging
-pnpm --filter db migration:apply -- --env staging --dry-run
-pnpm --filter db constraints:verify -- --env staging
-pnpm --filter db explain:verify -- --env staging
+PREFLIGHT_EVIDENCE_FD=3 PREFLIGHT_EVIDENCE_APPEND_ONLY=1 \
+  node lib/db/tools/schema-cli.mjs migration:preflight --env staging \
+  3>> /secure/evidence/integrity-preflight.jsonl
+MIGRATION_AUDIT_FD=3 MIGRATION_AUDIT_APPEND_ONLY=1 \
+  node scripts/migration-entrypoint.mjs --env staging --actor RELEASE_ACTOR \
+  --migration-id 0002_integrity_constraints_indexes \
+  --backup-id BACKUP_ID --approval-id APPROVAL_ID --dry-run \
+  3>> /secure/audit/migrations.jsonl
+pnpm --filter @workspace/db constraints:verify -- --env staging
+pnpm --filter @workspace/db explain:verify -- --env staging
 ```
 
 `migration:preflight` must report `violations 0; quarantine not-required`.
-Any nonzero result exits unsuccessfully. It emits deterministic JSON with this
-shape:
+Any nonzero result exits unsuccessfully. Ordinary stdout is bounded aggregate
+evidence only: per-check counts, the total, whether quarantine is required,
+and whether protected details were truncated. It never includes row or
+relationship identifiers. Detailed candidates are written as JSONL pages of
+at most 100 candidates to the launcher-owned regular-file descriptor, with a
+hard maximum of 1,000 candidates per run. The launcher must pre-open that
+protected append-only evidence file and set both evidence environment values.
+For example, stdout has this shape:
 
 ```json
 {
   "readOnly": true,
   "cleanupPerformed": false,
-  "violationCount": 1,
+  "violationCount": "1",
   "checks": [
     {
       "id": "self_block",
       "category": "self_relation",
-      "violationCount": 1,
-      "candidates": [{ "id": 17, "blockerId": 4, "blockedUserId": 4 }]
+      "violationCount": "1"
     }
   ],
   "quarantine": {
     "required": true,
-    "candidateCount": 1,
-    "candidates": [
-      {
-        "checkId": "self_block",
-        "candidate": { "id": 17, "blockerId": 4, "blockedUserId": 4 }
-      }
-    ]
+    "candidateCount": "1"
+  },
+  "evidence": {
+    "protectedSink": true,
+    "candidateLimit": 1000,
+    "candidatesWritten": 1,
+    "truncated": false
   },
   "approvalTaskRequired": true
 }
 ```
 
-Never delete, rewrite, reorder, or canonicalize reported candidates during
-preflight. Save the output as release evidence, quarantine the listed row IDs
-from the release, and open a separate data-remediation change with explicit
-owner and approval. Re-run preflight after that separately reviewed work.
+Never copy protected candidate pages into CI logs or ordinary reports. Never
+delete, rewrite, reorder, or canonicalize reported candidates during preflight.
+Keep the protected sink under release-evidence access controls, quarantine the
+listed rows from the release, and open a separate data-remediation change with
+explicit owner and approval. Re-run preflight after that separately reviewed
+work.
 
 ## Invariants and deletion policy
 

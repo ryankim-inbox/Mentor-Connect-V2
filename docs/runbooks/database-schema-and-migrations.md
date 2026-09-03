@@ -94,11 +94,13 @@ release slice. It:
 7. commits everything together or rolls back everything on any failure.
 
 There is intentionally no mutating CLI or package script for this function.
-The Slice 08 `scripts/migration-entrypoint.mjs` remains dry-run-only and still
-requires its environment-specific host allowlist, actor, migration ID, backup
-ID, approval ID, and trusted-launcher audit descriptor. A future apply
-entrypoint must retain all of those controls and write its outcome to that
-launcher-owned sink before it may call the runner.
+The guarded `scripts/migration-entrypoint.mjs` is the sole supported dry-run
+orchestration path. It requires its environment-specific host allowlist, actor,
+migration ID, backup ID, approval ID, and trusted-launcher audit descriptor;
+then it validates the immutable repository and target ledger in a read-only
+transaction and records the resulting plan. The package exposes no migration
+apply CLI. A future apply entrypoint must retain all controls and write its
+outcome to that launcher-owned sink before it may call the runner.
 
 The operational ledger table is excluded from application-schema diffs. An
 existing database that predates the ledger may therefore show schema diff `0`
@@ -132,8 +134,11 @@ teaching/legacy inputs and must never be treated as deployment truth:
 | `Python/migrations/002_requests_preferred_times.sql` | `05492283bcced9a6b3df90cf066d650b94521e2ec4c39de6aa84a0fff8108bb9` |
 | `Python/migrations/003_chat_learning_schema.sql`     | `c119572f161cd0cc1836e454bf8eef3ea47d48da604f051ab29fc4dbe0929822` |
 
-`database/mentor_connect_mock_1000.sql` remains a deterministic local data
-seed and legacy compatibility fixture. Its schema section is not authoritative.
+`database/mentor_connect_mock_1000.sql` is checksum-pinned by
+`database/fixtures/legacy-fixtures.json` as destructive fixture
+`mentor-connect-mock-1000-v1`, compatible only with `legacy-pre-0002` and
+forbidden for deployment. It is not a current-schema data seed. Run
+`pnpm --filter @workspace/db fixture:check` to enforce this boundary.
 
 ## Forward-only corrections and recovery
 

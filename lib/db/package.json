@@ -9,13 +9,12 @@
   },
   "scripts": {
     "schema:check": "node tools/schema-cli.mjs schema:check",
+    "fixture:check": "node tools/schema-cli.mjs fixture:check",
     "migration:status": "node tools/schema-cli.mjs migration:status",
     "schema:diff": "node tools/schema-cli.mjs schema:diff",
-    "migration:preflight": "node tools/schema-cli.mjs migration:preflight",
-    "migration:apply": "node tools/schema-cli.mjs migration:apply",
     "constraints:verify": "node tools/schema-cli.mjs constraints:verify",
     "explain:verify": "node tools/schema-cli.mjs explain:verify",
-    "test": "node --test test/schema-tool.test.mjs test/schema-version.test.mjs test/sql-safety.test.mjs test/integrity-tool.test.mjs && tsx --test test/drizzle-schema.test.ts && sh test/disposable-postgres.sh"
+    "test": "node --test test/schema-tool.test.mjs test/schema-version.test.mjs test/sql-safety.test.mjs test/integrity-tool.test.mjs test/legacy-fixture.test.mjs && tsx --test test/drizzle-schema.test.ts && sh test/disposable-postgres.sh && sh test/operator-commands-disposable.sh"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

@@ -28,41 +28,59 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link href={user ? "/dashboard" : "/"}>
-              <span className="text-xl font-bold text-primary cursor-pointer">PeerBridge</span>
+            <Link href={user ? "/profile" : "/"}>
+              <span className="text-xl font-bold text-primary cursor-pointer">
+                PeerBridge
+              </span>
             </Link>
-            {user && (
+            {user && isFeatureEnabled("core") && (
               <div className="hidden md:flex items-center gap-6">
                 <Link href="/dashboard">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</span>
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    Dashboard
+                  </span>
                 </Link>
                 <Link href="/districts">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Districts</span>
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    Districts
+                  </span>
                 </Link>
                 <Link href="/requests">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Browse Requests</span>
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    Browse Requests
+                  </span>
                 </Link>
                 <Link href="/requests/new">
-                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Post a Request</span>
+                  <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    Post a Request
+                  </span>
                 </Link>
                 {isFeatureEnabled("matching") && (
                   <Link href={releaseSurface.appRoutes.matching}>
-                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Matches</span>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      Matches
+                    </span>
                   </Link>
                 )}
                 {isFeatureEnabled("practice") && (
                   <Link href={releaseSurface.appRoutes.dashboardPractice}>
-                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Python Practice Lab</span>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      Python Practice Lab
+                    </span>
                   </Link>
                 )}
                 {isFeatureEnabled("analytics") && (
                   <Link href={releaseSurface.appRoutes.analytics}>
-                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Analytics</span>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      Analytics
+                    </span>
                   </Link>
                 )}
                 {isFeatureEnabled("scheduling") && (
                   <Link href={releaseSurface.appRoutes.scheduling}>
-                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Scheduling</span>
+                    <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                      Scheduling
+                    </span>
                   </Link>
                 )}
               </div>
@@ -96,11 +114,13 @@ export function Navbar() {
                     Log in
                   </button>
                 </Link>
-                <Link href="/register">
-                  <button className="text-sm px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                    Sign up
-                  </button>
-                </Link>
+                {isFeatureEnabled("core") && (
+                  <Link href={releaseSurface.appRoutes.register}>
+                    <button className="text-sm px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                      Sign up
+                    </button>
+                  </Link>
+                )}
               </>
             )}
           </div>

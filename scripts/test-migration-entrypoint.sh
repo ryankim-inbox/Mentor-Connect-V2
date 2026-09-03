@@ -8,7 +8,7 @@ trap 'rm -rf "$TMP"' EXIT
 AUDIT_FILE="$TMP/migration-audit.jsonl"
 touch "$AUDIT_FILE"
 
-run_entrypoint() {
+run_unreachable_entrypoint() {
   DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
   MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
   MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
@@ -17,25 +17,57 @@ run_entrypoint() {
   node "$ROOT/scripts/migration-entrypoint.mjs" \
     --env staging \
     --actor release-engineer \
-    --migration-id 20260902_add_index \
+    --migration-id 0002_integrity_constraints_indexes \
     --backup-id backup-20260902 \
     --approval-id change-123 \
     --dry-run \
     3>> "$AUDIT_FILE"
 }
 
-run_entrypoint > "$TMP/stdout"
+set +e
+DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_AUDIT_FD=3 \
+MIGRATION_AUDIT_APPEND_ONLY=1 \
+node "$ROOT/scripts/migration-entrypoint.mjs" \
+  --env staging --actor release-engineer --migration-id 9999_not_in_ledger \
+  --backup-id backup-20260902 --approval-id change-123 --dry-run \
+  3>> "$AUDIT_FILE" > "$TMP/unknown-stdout" 2> "$TMP/unknown-stderr"
+STATUS=$?
+set -e
 
+[ "$STATUS" -ne 0 ]
+grep -F 'migration is not present in the immutable ledger' "$TMP/unknown-stderr" > /dev/null
 node -e '
   const fs = require("node:fs");
-  const [entry] = fs.readFileSync(process.argv[1], "utf8").trim().split("\n").map(JSON.parse);
-  const required = ["actor", "migrationId", "targetEnvironment", "targetHost", "backupId", "approvalId", "startedAt", "endedAt", "result"];
+  const entries = fs.readFileSync(process.argv[1], "utf8").trim().split("\n").map(JSON.parse);
+  const entry = entries.at(-1);
+  if (entry.migrationId !== "9999_not_in_ledger") throw new Error("wrong failed migration id");
+  if (entry.result !== "dry-run-failed") throw new Error("failure was not audited");
+  if (entry.failureCode !== "migration_not_in_ledger") throw new Error("failure code is ambiguous");
+' "$AUDIT_FILE"
+
+set +e
+run_unreachable_entrypoint > "$TMP/unreachable-stdout" 2> "$TMP/unreachable-stderr"
+STATUS=$?
+set -e
+
+[ "$STATUS" -ne 0 ]
+grep -F 'read-only migration planning could not connect to the approved target' "$TMP/unreachable-stderr" > /dev/null
+! grep -F 'secret' "$TMP/unreachable-stdout" "$TMP/unreachable-stderr" > /dev/null
+node -e '
+  const fs = require("node:fs");
+  const entries = fs.readFileSync(process.argv[1], "utf8").trim().split("\n").map(JSON.parse);
+  const entry = entries.at(-1);
+  const required = ["actor", "migrationId", "targetEnvironment", "targetHost", "targetPort", "targetDatabase", "backupId", "approvalId", "startedAt", "endedAt", "result"];
   for (const field of required) if (!entry[field]) throw new Error(`missing audit field: ${field}`);
   if (entry.actor !== "release-engineer") throw new Error("wrong actor");
-  if (entry.migrationId !== "20260902_add_index") throw new Error("wrong migration id");
+  if (entry.migrationId !== "0002_integrity_constraints_indexes") throw new Error("wrong migration id");
   if (entry.targetEnvironment !== "staging") throw new Error("wrong environment");
   if (entry.targetHost !== "staging-db.internal") throw new Error("wrong target host");
-  if (entry.dryRun !== true || entry.result !== "dry-run-complete") throw new Error("dry-run was not recorded");
+  if (entry.targetPort !== "5432" || entry.targetDatabase !== "mentor_connect") throw new Error("target identity is incomplete");
+  if (entry.dryRun !== true || entry.result !== "dry-run-failed") throw new Error("failed dry-run was not recorded");
+  if (entry.failureCode !== "database_connection_failed") throw new Error("connection failure code is ambiguous");
 ' "$AUDIT_FILE"
 
 set +e

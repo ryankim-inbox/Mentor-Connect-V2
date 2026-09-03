@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { createGatewayServer } from "../src/gateway.ts";
@@ -84,6 +89,7 @@ test("anonymous profile lookup is rejected without any upstream call", async (co
   const response = await fetch(harness.origin + "/api/users/1");
 
   assert.equal(response.status, 401);
+  assert.equal(response.headers.get("vary"), "Cookie");
   assert.deepEqual(await response.json(), { error: "unauthorized" });
   assert.equal(harness.calls.authMe, 0);
   assert.equal(harness.calls.user, 0);
@@ -127,6 +133,8 @@ test("a self profile response is an explicit minimum schema", async (context) =>
   const body = await response.json();
 
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("vary"), "Cookie");
   assert.deepEqual(body, {
     id: 1,
     name: "Student One",
@@ -158,7 +166,9 @@ test("all non-allowlisted PATCH fields are rejected before authentication or pro
     });
 
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { error: "invalid_profile_update" });
+    assert.deepEqual(await response.json(), {
+      error: "invalid_profile_update",
+    });
   }
 
   assert.equal(harness.calls.authMe, 0);
@@ -221,7 +231,11 @@ test("encoded, doubled, and query-string user paths do not bypass the allowlist"
   assert.equal(harness.calls.user, 0);
 });
 
-function sendJson(response: ServerResponse, status: number, body: unknown): void {
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+): void {
   response.writeHead(status, { "content-type": "application/json" });
   response.end(JSON.stringify(body));
 }
