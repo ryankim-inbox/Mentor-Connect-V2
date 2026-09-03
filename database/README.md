@@ -5,9 +5,11 @@ for local development, website testing, and the student Python practice files in
 `Python/`. It creates **every table the app and the student code expect** and
 fills them with 1000 well-formed fake users plus related records.
 
-The deployment schema source of truth is `database/schema/canonical.sql`.
-The schema section in this seed is a local compatibility fixture only; keep it
-aligned with the canonical schema, but never deploy from the seed.
+The checksum-pinned migration chain in `database/migrations/ledger.json` is the
+deployment schema source of truth. `database/schema/canonical.sql` is its
+deterministically verified current materialization. The schema section in this
+seed is a local compatibility fixture only; keep it aligned with that current
+schema, but never deploy from the seed.
 
 > **WARNING** — the seed DROPs and recreates its tables. Only ever run it
 > against a local test database (e.g. `mentor_connect_mock`). Never point it at
