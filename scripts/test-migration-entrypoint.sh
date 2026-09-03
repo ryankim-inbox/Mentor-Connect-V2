@@ -5,10 +5,14 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+AUDIT_ROOT=$(CDPATH= cd -- "$TMP" && pwd -P)
 
 run_entrypoint() {
   DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
-  MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+  MIGRATION_ALLOWED_HOSTS='staging-db.internal,production-db.internal' \
+  MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+  MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+  MIGRATION_AUDIT_LOG="$AUDIT_ROOT/approved-migration-audit.jsonl" \
   node "$ROOT/scripts/migration-entrypoint.mjs" \
     --env staging \
     --actor release-engineer \
@@ -16,7 +20,7 @@ run_entrypoint() {
     --backup-id backup-20260902 \
     --approval-id change-123 \
     --dry-run \
-    --audit-log "$TMP/migration-audit.jsonl"
+    --audit-log "$AUDIT_ROOT/approved-migration-audit.jsonl"
 }
 
 run_entrypoint > "$TMP/stdout"
@@ -31,11 +35,14 @@ node -e '
   if (entry.targetEnvironment !== "staging") throw new Error("wrong environment");
   if (entry.targetHost !== "staging-db.internal") throw new Error("wrong target host");
   if (entry.dryRun !== true || entry.result !== "dry-run-complete") throw new Error("dry-run was not recorded");
-' "$TMP/migration-audit.jsonl"
+' "$AUDIT_ROOT/approved-migration-audit.jsonl"
 
 set +e
 DATABASE_URL='postgresql://migration-user:secret@production-db.internal:5432/mentor_connect' \
-MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS='staging-db.internal,production-db.internal' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG="$AUDIT_ROOT/approved-migration-audit.jsonl" \
 node "$ROOT/scripts/migration-entrypoint.mjs" \
   --env staging --actor release-engineer --migration-id 20260902_add_index \
   --backup-id backup-20260902 --approval-id change-123 --dry-run \
@@ -50,6 +57,59 @@ grep -F 'not allowlisted for environment staging' "$TMP/rejected-stderr" > /dev/
 set +e
 DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
 MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG="$AUDIT_ROOT/approved-migration-audit.jsonl" \
+node "$ROOT/scripts/migration-entrypoint.mjs" \
+  --env staging --actor release-engineer --migration-id 20260902_add_index \
+  --backup-id backup-20260902 --approval-id change-123 --dry-run \
+  --audit-log "$AUDIT_ROOT/caller-selected-audit.jsonl" > "$TMP/substitution-stdout" 2> "$TMP/substitution-stderr"
+STATUS=$?
+set -e
+
+[ "$STATUS" -ne 0 ]
+grep -F 'must match configured MIGRATION_AUDIT_LOG' "$TMP/substitution-stderr" > /dev/null
+[ ! -e "$AUDIT_ROOT/caller-selected-audit.jsonl" ]
+
+ln -s "$AUDIT_ROOT/real-audit.jsonl" "$AUDIT_ROOT/symlinked-audit.jsonl"
+set +e
+DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG="$AUDIT_ROOT/symlinked-audit.jsonl" \
+node "$ROOT/scripts/migration-entrypoint.mjs" \
+  --env staging --actor release-engineer --migration-id 20260902_add_index \
+  --backup-id backup-20260902 --approval-id change-123 --dry-run \
+  --audit-log "$AUDIT_ROOT/symlinked-audit.jsonl" > "$TMP/symlink-stdout" 2> "$TMP/symlink-stderr"
+STATUS=$?
+set -e
+
+[ "$STATUS" -ne 0 ]
+grep -F 'must not be a symbolic link' "$TMP/symlink-stderr" > /dev/null
+[ ! -e "$AUDIT_ROOT/real-audit.jsonl" ]
+
+set +e
+DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG='/dev/null' \
+node "$ROOT/scripts/migration-entrypoint.mjs" \
+  --env staging --actor release-engineer --migration-id 20260902_add_index \
+  --backup-id backup-20260902 --approval-id change-123 --dry-run \
+  --audit-log /dev/null > "$TMP/device-stdout" 2> "$TMP/device-stderr"
+STATUS=$?
+set -e
+
+[ "$STATUS" -ne 0 ]
+grep -F 'must be a regular file' "$TMP/device-stderr" > /dev/null
+
+set +e
+DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+MIGRATION_ALLOWED_HOSTS='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
+MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
+MIGRATION_AUDIT_LOG="$AUDIT_ROOT/approved-migration-audit.jsonl" \
 node "$ROOT/scripts/migration-entrypoint.mjs" \
   --env staging --actor release-engineer --migration-id 20260902_add_index \
   --backup-id backup-20260902 --approval-id change-123 \
