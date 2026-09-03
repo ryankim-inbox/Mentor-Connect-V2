@@ -8,7 +8,11 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test:gateway": "pnpm --filter @workspace/api-gateway run test && pnpm --filter @workspace/api-gateway run test:shield",
-    "gateway:verify-boundary": "node scripts/verify-api-boundary.mjs"
+    "gateway:verify-boundary": "node scripts/verify-api-boundary.mjs",
+    "secrets:scan": "sh scripts/check-secrets.sh",
+    "secrets:scan:self-test": "sh scripts/check-secrets.sh --self-test",
+    "secrets:history": "sh scripts/check-secret-history.sh",
+    "test:secrets": "sh scripts/test-secret-history.sh"
   },
   "private": true,
   "devDependencies": {
