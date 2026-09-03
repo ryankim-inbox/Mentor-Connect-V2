@@ -47,6 +47,12 @@ export const usersTable = pgTable(
     ),
     index("idx_users_district").on(table.districtId),
     index("idx_users_role").on(table.role),
+    index("idx_users_matching_lookup").on(
+      table.districtId,
+      table.role,
+      table.isVerified,
+      table.id,
+    ),
   ],
 );
 

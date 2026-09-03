@@ -11,6 +11,11 @@ deterministically verified current materialization. The schema section in this
 seed is a local compatibility fixture only; keep it aligned with that current
 schema, but never deploy from the seed.
 
+Version `0002` integrity preflight, quarantine evidence, deletion policies,
+constraint verification, representative EXPLAIN checks, and roll-forward
+recovery are documented in
+`docs/runbooks/database-integrity-preflight.md`.
+
 > **WARNING** — the seed DROPs and recreates its tables. Only ever run it
 > against a local test database (e.g. `mentor_connect_mock`). Never point it at
 > production or at a database whose data you care about.

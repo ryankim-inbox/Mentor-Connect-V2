@@ -50,6 +50,9 @@ export const requestsTable = pgTable(
     index("idx_requests_district").on(table.districtId),
     index("idx_requests_author").on(table.authorId),
     index("idx_requests_preferred_times").using("gin", table.preferredTimes),
+    index("idx_requests_open_matching_lookup")
+      .on(table.districtId, table.role, table.createdAt.desc(), table.id)
+      .where(sql`${table.status} = 'open'`),
   ],
 );
 

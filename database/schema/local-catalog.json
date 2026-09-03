@@ -725,6 +725,12 @@
     },
     {
       "table": "blocks",
+      "name": "blocks_no_self_check",
+      "type": "c",
+      "definition": "CHECK (blocker_id <> blocked_user_id)"
+    },
+    {
+      "table": "blocks",
       "name": "blocks_pkey",
       "type": "p",
       "definition": "PRIMARY KEY (id)"
@@ -776,6 +782,12 @@
       "name": "districts_pkey",
       "type": "p",
       "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_canonical_pair_check",
+      "type": "c",
+      "definition": "CHECK (user_a_id < user_b_id)"
     },
     {
       "table": "dm_conversations",
@@ -836,6 +848,12 @@
       "name": "questions_student_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "reports",
+      "name": "reports_no_self_check",
+      "type": "c",
+      "definition": "CHECK (reporter_id <> reported_user_id)"
     },
     {
       "table": "reports",
@@ -1097,6 +1115,11 @@
     },
     {
       "table": "requests",
+      "name": "idx_requests_open_matching_lookup",
+      "definition": "CREATE INDEX idx_requests_open_matching_lookup ON public.requests USING btree (district_id, role, created_at DESC, id) WHERE (status = 'open'::text)"
+    },
+    {
+      "table": "requests",
       "name": "idx_requests_preferred_times",
       "definition": "CREATE INDEX idx_requests_preferred_times ON public.requests USING gin (preferred_times)"
     },
@@ -1134,6 +1157,11 @@
       "table": "users",
       "name": "idx_users_district",
       "definition": "CREATE INDEX idx_users_district ON public.users USING btree (district_id)"
+    },
+    {
+      "table": "users",
+      "name": "idx_users_matching_lookup",
+      "definition": "CREATE INDEX idx_users_matching_lookup ON public.users USING btree (district_id, role, is_verified, id)"
     },
     {
       "table": "users",
