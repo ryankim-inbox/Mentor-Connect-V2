@@ -1,26 +1,30 @@
 # Local mock/test database — `mentor_connect_mock`
 
-`mentor_connect_mock_1000.sql` is a self-contained, deterministic PostgreSQL seed
-for local development, website testing, and the student Python practice files in
-`Python/`. It creates **every table the app and the student code expect** and
-fills them with 1000 well-formed fake users plus related records.
+`mentor_connect_mock_1000.sql` is a self-contained, deterministic, destructive
+legacy PostgreSQL fixture for local teaching and compatibility exercises. It is
+explicitly versioned `mentor-connect-mock-1000-v1` / `legacy-pre-0002`; it is
+**not compatible with the current 0002 schema** and must never be used as a
+deployment or current-schema fixture.
 
 The checksum-pinned migration chain in `database/migrations/ledger.json` is the
 deployment schema source of truth. `database/schema/canonical.sql` is its
 deterministically verified current materialization. The schema section in this
-seed is a local compatibility fixture only; keep it aligned with that current
-schema, but never deploy from the seed.
+fixture is intentionally legacy and non-authoritative.
+`database/fixtures/legacy-fixtures.json` pins its checksum and incompatibility;
+`pnpm --filter @workspace/db fixture:check` enforces that it cannot claim current
+schema compatibility.
 
 Version `0002` integrity preflight, quarantine evidence, deletion policies,
 constraint verification, representative EXPLAIN checks, and roll-forward
 recovery are documented in
 `docs/runbooks/database-integrity-preflight.md`.
 
-> **WARNING** — the seed DROPs and recreates its tables. Only ever run it
-> against a local test database (e.g. `mentor_connect_mock`). Never point it at
-> production or at a database whose data you care about.
+> **WARNING** — the fixture DROPs and recreates its tables and produces a
+> legacy-pre-0002 schema. Only run it against a disposable local teaching
+> database (e.g. `mentor_connect_mock`). Never point it at production, shared
+> development, or a database whose data you care about.
 
-## 1. Install
+## 1. Legacy local fixture install
 
 ```bash
 dropdb --if-exists mentor_connect_mock
@@ -34,7 +38,14 @@ URL form (equivalent):
 psql "postgresql://$(whoami)@localhost:5432/mentor_connect_mock" -f database/mentor_connect_mock_1000.sql
 ```
 
-The file is repeatable: running it again fully resets the mock data.
+The file is repeatable: running it again fully resets the legacy database. For
+current-schema development or migration testing, use the canonical migrations
+and disposable PostgreSQL suite instead:
+
+```bash
+pnpm --filter @workspace/db schema:check
+pnpm --filter @workspace/db test
+```
 
 ## 2. Point the Python backend at it
 
@@ -211,6 +222,6 @@ psql mentor_connect_mock -c "SELECT schedules FROM schedules_db LIMIT 5;" -- tim
 ## 9. Regenerating
 
 The file was generated deterministically (hash-of-id based, no wall-clock
-randomness) — the same generator always produces a byte-identical file. Treat
-`mentor_connect_mock_1000.sql` as the source of truth for mock data only and
-edit/regenerate it as one unit; don't hand-edit individual rows.
+randomness). Treat it as one checksum-pinned legacy fixture, not as a current
+schema or data-only seed. Any intentional regeneration must update the versioned
+fixture manifest and its checksum in the same reviewed change.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -21,13 +21,13 @@ export default function Login() {
       {
         onSuccess: () => {
           refetch();
-          navigate("/dashboard");
+          navigate("/profile");
         },
         onError: (err: unknown) => {
           const e = err as { data?: { error?: string } };
           setError(e?.data?.error ?? "Login failed. Please try again.");
         },
-      }
+      },
     );
   };
 
@@ -36,13 +36,17 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
-          <p className="text-muted-foreground mt-1">Sign in to your PeerBridge account</p>
+          <p className="text-muted-foreground mt-1">
+            Sign in to your PeerBridge account
+          </p>
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-8 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">School email</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                School email
+              </label>
               <input
                 type="email"
                 value={email}
@@ -54,7 +58,9 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
@@ -66,7 +72,9 @@ export default function Login() {
             </div>
 
             {error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                {error}
+              </p>
             )}
 
             <button
@@ -76,37 +84,10 @@ export default function Login() {
             >
               {loginMutation.isPending ? "Signing in..." : "Sign in"}
             </button>
-
-            <button
-              type="button"
-              disabled={loginMutation.isPending}
-              onClick={() => {
-                setError("");
-                loginMutation.mutate(
-                  { data: { email: "demo@berkeley.edu", password: "password123" } },
-                  {
-                    onSuccess: () => {
-                      refetch();
-                      navigate("/dashboard");
-                    },
-                    onError: (err: unknown) => {
-                      const e = err as { data?: { error?: string } };
-                      setError(e?.data?.error ?? "Login failed. Please try again.");
-                    },
-                  }
-                );
-              }}
-              className="w-full py-2.5 border border-primary text-primary rounded-lg font-semibold hover:bg-primary/10 transition-colors disabled:opacity-50"
-            >
-              테스트 계정으로 로그인
-            </button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
-            Don't have an account?{" "}
-            <Link href="/register">
-              <span className="text-primary font-medium hover:underline">Sign up</span>
-            </Link>
+            Account creation is unavailable in this reduced release.
           </p>
         </div>
       </div>

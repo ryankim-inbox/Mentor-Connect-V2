@@ -1,24 +1,24 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, Router as WouterRouter, useLocation, useSearch } from "wouter";
+import {
+  Switch,
+  Route,
+  Router as WouterRouter,
+  useLocation,
+  useSearch,
+} from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
-import { FeatureGate, FeatureUnavailable } from "@/components/FeatureUnavailable";
+import {
+  FeatureGate,
+  FeatureUnavailable,
+} from "@/components/FeatureUnavailable";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import Dashboard from "@/pages/Dashboard";
-import Districts from "@/pages/Districts";
-import DistrictDetail from "@/pages/DistrictDetail";
-import Requests from "@/pages/Requests";
-import NewRequest from "@/pages/NewRequest";
-import RequestDetail from "@/pages/RequestDetail";
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
-import Analytics from "@/pages/Analytics";
-import Scheduling from "@/pages/Scheduling";
 import NotFound from "@/pages/not-found";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
@@ -36,7 +36,38 @@ const DevelopmentPracticeLab = import.meta.env.DEV
   ? lazy(() => import("@/pages/PracticeLab"))
   : null;
 const DevelopmentChatWidget = import.meta.env.DEV
-  ? lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })))
+  ? lazy(() =>
+      import("@/components/ChatWidget").then((module) => ({
+        default: module.ChatWidget,
+      })),
+    )
+  : null;
+const DevelopmentRegister = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Register"))
+  : null;
+const DevelopmentDashboard = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Dashboard"))
+  : null;
+const DevelopmentDistricts = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Districts"))
+  : null;
+const DevelopmentDistrictDetail = import.meta.env.DEV
+  ? lazy(() => import("@/pages/DistrictDetail"))
+  : null;
+const DevelopmentRequests = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Requests"))
+  : null;
+const DevelopmentNewRequest = import.meta.env.DEV
+  ? lazy(() => import("@/pages/NewRequest"))
+  : null;
+const DevelopmentRequestDetail = import.meta.env.DEV
+  ? lazy(() => import("@/pages/RequestDetail"))
+  : null;
+const DevelopmentAnalytics = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Analytics"))
+  : null;
+const DevelopmentScheduling = import.meta.env.DEV
+  ? lazy(() => import("@/pages/Scheduling"))
   : null;
 
 const queryClient = new QueryClient({
@@ -50,17 +81,25 @@ const queryClient = new QueryClient({
 
 function DevelopmentFeatureLoading() {
   return (
-    <div className="max-w-2xl mx-auto px-4 py-20 text-center text-muted-foreground" role="status">
+    <div
+      className="max-w-2xl mx-auto px-4 py-20 text-center text-muted-foreground"
+      role="status"
+    >
       Loading feature…
     </div>
   );
 }
 
-function DashboardRoute({ initialTab }: { initialTab?: "overview" | "practice-lab" }) {
+function DashboardRoute({
+  initialTab,
+}: {
+  initialTab?: "overview" | "practice-lab";
+}) {
+  if (!DevelopmentDashboard) return <FeatureUnavailable feature="core" />;
   return (
     <RequireAuth>
       <Suspense fallback={<DevelopmentFeatureLoading />}>
-        <Dashboard
+        <DevelopmentDashboard
           initialTab={initialTab}
           PracticeLab={DevelopmentPracticeLab ?? undefined}
         />
@@ -77,37 +116,87 @@ function Router() {
         <Switch>
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
-          <Route path="/register" component={Register} />
+          <Route path={releaseSurface.appRoutes.register}>
+            {DevelopmentRegister ? (
+              <FeatureGate feature="core">
+                <Suspense fallback={<DevelopmentFeatureLoading />}>
+                  <DevelopmentRegister />
+                </Suspense>
+              </FeatureGate>
+            ) : (
+              <FeatureUnavailable feature="core" />
+            )}
+          </Route>
           <Route path={releaseSurface.appRoutes.dashboardPractice}>
             {DevelopmentPracticeLab ? (
               <FeatureGate feature="practice">
                 <DashboardRoute initialTab="practice-lab" />
               </FeatureGate>
-            ) : <FeatureUnavailable feature="practice" />}
+            ) : (
+              <FeatureUnavailable feature="practice" />
+            )}
           </Route>
           <Route path="/dashboard">
             <DashboardRoute />
           </Route>
           <Route path="/districts">
-            <RequireAuth><Districts /></RequireAuth>
+            {DevelopmentDistricts ? (
+              <RequireAuth>
+                <DevelopmentDistricts />
+              </RequireAuth>
+            ) : (
+              <FeatureUnavailable feature="core" />
+            )}
           </Route>
           <Route path="/districts/:id">
-            {(params) => <RequireAuth><DistrictDetail id={params.id ?? ""} /></RequireAuth>}
+            {(params) =>
+              DevelopmentDistrictDetail ? (
+                <RequireAuth>
+                  <DevelopmentDistrictDetail id={params.id ?? ""} />
+                </RequireAuth>
+              ) : (
+                <FeatureUnavailable feature="core" />
+              )
+            }
           </Route>
           <Route path="/requests/new">
-            <RequireAuth><NewRequest /></RequireAuth>
+            {DevelopmentNewRequest ? (
+              <RequireAuth>
+                <DevelopmentNewRequest />
+              </RequireAuth>
+            ) : (
+              <FeatureUnavailable feature="core" />
+            )}
           </Route>
           <Route path="/requests/:id">
-            {(params) => <RequireAuth><RequestDetail id={params.id ?? ""} /></RequireAuth>}
+            {(params) =>
+              DevelopmentRequestDetail ? (
+                <RequireAuth>
+                  <DevelopmentRequestDetail id={params.id ?? ""} />
+                </RequireAuth>
+              ) : (
+                <FeatureUnavailable feature="core" />
+              )
+            }
           </Route>
           <Route path="/requests">
-            <RequireAuth><Requests /></RequireAuth>
+            {DevelopmentRequests ? (
+              <RequireAuth>
+                <DevelopmentRequests />
+              </RequireAuth>
+            ) : (
+              <FeatureUnavailable feature="core" />
+            )}
           </Route>
           <Route path="/profile">
-            <RequireAuth><Profile /></RequireAuth>
+            <RequireAuth>
+              <Profile />
+            </RequireAuth>
           </Route>
           <Route path="/settings">
-            <RequireAuth><Settings /></RequireAuth>
+            <RequireAuth>
+              <Settings />
+            </RequireAuth>
           </Route>
           <Route path={releaseSurface.appRoutes.matching}>
             {DevelopmentRecommendations ? (
@@ -118,7 +207,9 @@ function Router() {
                   </Suspense>
                 </RequireAuth>
               </FeatureGate>
-            ) : <FeatureUnavailable feature="matching" />}
+            ) : (
+              <FeatureUnavailable feature="matching" />
+            )}
           </Route>
           <Route path={releaseSurface.appRoutes.practice}>
             {DevelopmentPracticeLab ? (
@@ -129,17 +220,31 @@ function Router() {
                   </Suspense>
                 </RequireAuth>
               </FeatureGate>
-            ) : <FeatureUnavailable feature="practice" />}
+            ) : (
+              <FeatureUnavailable feature="practice" />
+            )}
           </Route>
           <Route path={releaseSurface.appRoutes.analytics}>
-            <FeatureGate feature="analytics">
-              <RequireAuth><Analytics /></RequireAuth>
-            </FeatureGate>
+            {DevelopmentAnalytics ? (
+              <FeatureGate feature="analytics">
+                <RequireAuth>
+                  <DevelopmentAnalytics />
+                </RequireAuth>
+              </FeatureGate>
+            ) : (
+              <FeatureUnavailable feature="analytics" />
+            )}
           </Route>
           <Route path={releaseSurface.appRoutes.scheduling}>
-            <FeatureGate feature="scheduling">
-              <RequireAuth><Scheduling /></RequireAuth>
-            </FeatureGate>
+            {DevelopmentScheduling ? (
+              <FeatureGate feature="scheduling">
+                <RequireAuth>
+                  <DevelopmentScheduling />
+                </RequireAuth>
+              </FeatureGate>
+            ) : (
+              <FeatureUnavailable feature="scheduling" />
+            )}
           </Route>
           <Route component={NotFound} />
         </Switch>

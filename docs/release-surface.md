@@ -4,7 +4,11 @@ Status: Slice 03 admin/report quarantine, Slice 04 self-only profile policy,
 Slice 05 matching/practice/Connect kill switch, and Slice 06 chat/DM/WebSocket
 kill switch implemented (2026-09-02)
 
-This document fixes the intended reduced release surface. The client flags
+This document fixes the intended reduced release surface. The production
+product currently supports sign-in, sign-out, session lookup, and self-profile
+view/update for existing accounts. Account creation, landing statistics,
+Dashboard, Districts, Requests, New Request, matching, practice, analytics,
+scheduling, and messaging are unavailable. The client flags
 reduce UI exposure; the TypeScript API Shield is the server-side boundary. A
 staging deployment still needs to prove that the Python backend has no public
 route before release approval.
@@ -14,19 +18,20 @@ route before release approval.
 The single source of truth is
 `artifacts/peerbridge/src/lib/release-flags.ts`.
 
-All seven risky client features default to `false`. An explicit `true` value is
+All eight quarantined client features default to `false`. An explicit `true` value is
 honored only by a Vite development server. Production builds ignore every
 `VITE_FEATURE_*` value and remain closed.
 
-| Feature | Development opt-in | Production default | Client exposure | Data sensitivity | Server control | Owner | Re-enable condition |
-|---|---|---:|---|---|---|---|---|
-| Admin tools | Not supported; source and route removed | false | Disabled `/admin/reports` deep link only | Moderation and PII | Gateway quarantines every route-family variant with a fixed 404 before auth or upstream | Release manager — assignment required | Server-side admin identity, least privilege, audit log, and role E2E pass |
-| Mentor matching | `VITE_FEATURE_MATCHING=true` | false | `/recommendations` | Student profile and eligibility data | Gateway quarantines `/api/matches/**` before auth or upstream | Matching owner — assignment required | Bidirectional block exclusion, report policy, verified-mentor filter, self-match prevention, atomic state transitions, concurrency, and tie-break tests pass |
-| Practice lab | `VITE_FEATURE_PRACTICE=true` | false | `/practice-lab`, `/dashboard/practice-lab` | Matching, location, and block test data | Gateway quarantines `/api/practice/**` before auth or upstream | Learning-platform owner — assignment required | The matching safety checklist and quarantine-removal review pass |
-| Connect | `VITE_FEATURE_CONNECT=true` | false | Request-detail match action | Match state and contact information | Gateway quarantines `/api/requests/*/match` before auth or upstream | Matching owner — assignment required | Safe match authorization, state-transition, concurrency, and rollback E2E pass |
-| Chat | `VITE_FEATURE_CHAT=true` | false | No production widget, navigation, or background work | Messages, participants, and presence | Gateway quarantines `/api/chat/**`, `/api/dms/**`, and `/ws/**` before upstream; upgrades receive 403 | Messaging owner — assignment required | Authenticated room creation, participant-only reads, WS session verification, persistence, XSS, spam, rate-limit, and E2E pass |
-| Analytics | `VITE_FEATURE_ANALYTICS=true` | false | `/analytics` | Aggregate and mentor response data | None yet; Slice 02 required | Analytics owner — assignment required | Approved aggregate schema, access policy, and response redaction pass |
-| Scheduling | `VITE_FEATURE_SCHEDULING=true` | false | `/scheduling` | Student availability data | None yet; Slice 02 required | Scheduling owner — assignment required | Self-only / approved matching access policy and response schema pass |
+| Feature                    | Development opt-in                      | Production default | Client exposure                                            | Data sensitivity                               | Server control                                                                                                                                | Owner                                         | Re-enable condition                                                                                                                                          |
+| -------------------------- | --------------------------------------- | -----------------: | ---------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| District/request workspace | `VITE_FEATURE_CORE=true`                |              false | `/register`, `/dashboard`, `/districts/**`, `/requests/**` | Student identity, districts, and help requests | Only registration itself is allowlisted; required district/stats/request endpoints are denied, so the dependent UI is quarantined as one unit | Product API owner — assignment required       | Review and allowlist every required endpoint with authentication, authorization, response-schema, and data-sensitivity tests                                 |
+| Admin tools                | Not supported; source and route removed |              false | Disabled `/admin/reports` deep link only                   | Moderation and PII                             | Gateway quarantines every route-family variant with a fixed 404 before auth or upstream                                                       | Release manager — assignment required         | Server-side admin identity, least privilege, audit log, and role E2E pass                                                                                    |
+| Mentor matching            | `VITE_FEATURE_MATCHING=true`            |              false | `/recommendations`                                         | Student profile and eligibility data           | Gateway quarantines `/api/matches/**` before auth or upstream                                                                                 | Matching owner — assignment required          | Bidirectional block exclusion, report policy, verified-mentor filter, self-match prevention, atomic state transitions, concurrency, and tie-break tests pass |
+| Practice lab               | `VITE_FEATURE_PRACTICE=true`            |              false | `/practice-lab`, `/dashboard/practice-lab`                 | Matching, location, and block test data        | Gateway quarantines `/api/practice/**` before auth or upstream                                                                                | Learning-platform owner — assignment required | The matching safety checklist and quarantine-removal review pass                                                                                             |
+| Connect                    | `VITE_FEATURE_CONNECT=true`             |              false | Request-detail match action                                | Match state and contact information            | Gateway quarantines `/api/requests/*/match` before auth or upstream                                                                           | Matching owner — assignment required          | Safe match authorization, state-transition, concurrency, and rollback E2E pass                                                                               |
+| Chat                       | `VITE_FEATURE_CHAT=true`                |              false | No production widget, navigation, or background work       | Messages, participants, and presence           | Gateway quarantines `/api/chat/**`, `/api/dms/**`, and `/ws/**` before upstream; upgrades receive 403                                         | Messaging owner — assignment required         | Authenticated room creation, participant-only reads, WS session verification, persistence, XSS, spam, rate-limit, and E2E pass                               |
+| Analytics                  | `VITE_FEATURE_ANALYTICS=true`           |              false | `/analytics`                                               | Aggregate and mentor response data             | None yet; Slice 02 required                                                                                                                   | Analytics owner — assignment required         | Approved aggregate schema, access policy, and response redaction pass                                                                                        |
+| Scheduling                 | `VITE_FEATURE_SCHEDULING=true`          |              false | `/scheduling`                                              | Student availability data                      | None yet; Slice 02 required                                                                                                                   | Scheduling owner — assignment required        | Self-only / approved matching access policy and response schema pass                                                                                         |
 
 An unassigned owner is a release blocker for re-enabling that feature.
 
@@ -37,13 +42,19 @@ allowlist and quarantine live in `artifacts/api-gateway/src/gateway.ts` and
 `route-policy.ts`, so endpoint names for quarantined data are not emitted in
 the production browser bundle.
 
-### Allowlist candidates
+### Enforced allowlist
 
+- `GET /livez` (gateway local response)
 - `GET /api/healthz`
-- `GET /livez`
-- Gateway-validated minimum authentication paths
-- `GET/PATCH /api/users/{self}`
-- Explicitly approved non-sensitive reference data
+- `POST /api/auth/register` (the dependent production registration UI remains quarantined)
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `GET/PATCH /api/users/{self}` after gateway session/identity validation
+
+Authentication-dependent GET outcomes are gateway-forced to
+`Cache-Control: no-store` and a de-duplicated `Vary` containing `Cookie`,
+independent of upstream cache headers.
 
 ### Denylist
 
@@ -193,9 +204,8 @@ Verification:
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
 pnpm --filter @workspace/peerbridge typecheck
-pnpm --filter @workspace/peerbridge build
+pnpm run test:peerbridge-release
 pnpm --filter @workspace/api-gateway exec tsx --test ../peerbridge/test/release-surface.test.ts
-if rg -n "/api/(chat|dms)|/ws/" artifacts/peerbridge/dist; then exit 1; fi
 ```
 
 ## Client behavior while a feature is disabled
@@ -203,9 +213,9 @@ if rg -n "/api/(chat|dms)|/ws/" artifacts/peerbridge/dist; then exit 1; fi
 - Risky routes are classified before the global authentication provider mounts.
   They show a "being prepared" message with a return-to-home link; neither the
   feature page nor the global `/api/auth/me` query mounts for a direct visit.
-- The navigation hides disabled feature links, the dashboard omits the practice
-  tab and successful-match metric, and the landing page omits the
-  successful-match metric.
+- The navigation hides disabled feature links. The development-only dashboard
+  omits the practice tab and successful-match metric unless those features are
+  explicitly enabled; production does not load Dashboard at all.
 - The former admin page is not in the router or production build. Its disabled
   deep link is classified before `AuthProvider` mounts, so it cannot create an
   admin/report query.
@@ -217,6 +227,19 @@ if rg -n "/api/(chat|dms)|/ws/" artifacts/peerbridge/dist; then exit 1; fi
   polling, reconnecting, navigating, or storing a draft in browser storage.
 - The Connect action and recommendation match-request entry point are absent
   from production.
+- Core district/request/registration pages and analytics/scheduling pages use
+  development-only imports, so their denied endpoint strings are absent from
+  the production artifact. Dashboard, Districts, Requests, New Request, and
+  registration direct links show the same pre-auth unavailable state.
+- The landing page makes no stats/district/request call and describes only the
+  usable reduced product. Successful login and authenticated home navigation
+  go to `/profile`; production navigation exposes only profile, settings, and
+  logout for a signed-in account.
+
+The repeatable `pnpm run test:peerbridge-release` gate rebuilds production and
+scans the emitted artifact for every endpoint outside this reduced client
+surface. `.github/workflows/release-surface.yml` runs the same gate for pull
+requests and pushes to main.
 
 ## Release constraints and rollback
 

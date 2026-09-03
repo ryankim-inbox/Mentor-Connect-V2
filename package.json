@@ -9,7 +9,7 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test:gateway": "pnpm --filter @workspace/api-gateway run test && pnpm --filter @workspace/api-gateway run test:shield",
     "gateway:verify-boundary": "node scripts/verify-api-boundary.mjs",
-    "migration:dry-run": "node scripts/migration-entrypoint.mjs",
+    "test:peerbridge-release": "pnpm --filter @workspace/peerbridge run release:verify",
     "test:migrations": "sh scripts/test-migration-entrypoint.sh && sh scripts/test-post-merge.sh",
     "secrets:scan": "sh scripts/check-secrets.sh",
     "secrets:scan:self-test": "sh scripts/check-secrets.sh --self-test",
