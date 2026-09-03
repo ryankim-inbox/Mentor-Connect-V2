@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useGetRequest,
-  useMatchRequest,
   useDeleteRequest,
   getGetRequestQueryKey,
   getListRequestsQueryKey,
@@ -17,6 +16,13 @@ import ReportModal from "@/components/ReportModal";
 interface Props {
   id: string;
 }
+
+// This import must remain behind Vite's compile-time DEV constant. It gives
+// developers an explicit opt-in path without emitting the match mutation in a
+// production bundle.
+const DevelopmentConnectAction = import.meta.env.DEV
+  ? lazy(() => import("@/components/DevelopmentConnectAction"))
+  : null;
 
 export default function RequestDetail({ id }: Props) {
   const requestId = Number(id);
@@ -35,20 +41,11 @@ export default function RequestDetail({ id }: Props) {
   const isMatched = user?.id === request?.matchedUserId;
   const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched || justMatched);
 
-  const matchMutation = useMatchRequest();
   const deleteMutation = useDeleteRequest();
 
-  const handleMatch = () => {
-    if (!connectEnabled) {
-      return;
-    }
-
-    matchMutation.mutate({ id: requestId }, {
-      onSuccess: () => {
-        setJustMatched(true);
-        queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
-      },
-    });
+  const handleMatched = () => {
+    setJustMatched(true);
+    queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
   };
 
   const handleDelete = () => {
@@ -78,7 +75,13 @@ export default function RequestDetail({ id }: Props) {
     );
   }
 
-  const canMatch = connectEnabled && user && !isAuthor && request.status === "open";
+  const canMatch =
+    DevelopmentConnectAction !== null &&
+    connectEnabled &&
+    user !== null &&
+    user !== undefined &&
+    !isAuthor &&
+    request.status === "open";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -175,18 +178,24 @@ export default function RequestDetail({ id }: Props) {
           </div>
 
           <div className="flex gap-2">
-            {canMatch && (
-              <button
-                onClick={handleMatch}
-                disabled={matchMutation.isPending}
-                className="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+            {canMatch && DevelopmentConnectAction && (
+              <Suspense
+                fallback={(
+                  <button
+                    type="button"
+                    disabled
+                    className="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold opacity-50"
+                  >
+                    Loading…
+                  </button>
+                )}
               >
-                {matchMutation.isPending ? "Connecting..." : "Connect"}
-              </button>
+                <DevelopmentConnectAction requestId={requestId} onMatched={handleMatched} />
+              </Suspense>
             )}
             {!connectEnabled && user && !isAuthor && request.status === "open" && (
               <p className="self-center text-xs text-muted-foreground" role="status">
-                Matching is being prepared for a future release.
+                Connect is temporarily unavailable in this release.
               </p>
             )}
             {!isAuthor && user && (
