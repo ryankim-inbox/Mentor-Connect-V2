@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { getTableName } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import {
   blocksTable,
@@ -34,6 +37,25 @@ const tables = [
   tagsTable,
   usersTable,
 ];
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
+const frozenCatalog = JSON.parse(
+  readFileSync(
+    path.join(rootDir, "database/schema/local-catalog.json"),
+    "utf8",
+  ),
+) as {
+  constraints: Array<{
+    table: string;
+    name: string;
+    type: "p" | "u" | "f" | "c";
+    definition: string;
+  }>;
+  indexes: Array<{ table: string; name: string }>;
+};
+const dialect = new PgDialect();
 
 const expectedColumnCounts = new Map([
   ["blocks", 4],
@@ -103,29 +125,97 @@ test("Drizzle represents every canonical table and column", () => {
   );
 });
 
-test("Drizzle exposes the canonical checks, foreign keys, unique rules, and indexes", () => {
-  const configs = tables.map(getTableConfig);
-  assert.equal(
-    configs.reduce((sum, config) => sum + config.indexes.length, 0),
-    18,
-  );
-  assert.equal(
-    configs.reduce((sum, config) => sum + config.checks.length, 0),
-    5,
-  );
+function normalizedCheck(definition: string) {
+  const anyArray = /^CHECK \((\w+) = ANY \(ARRAY\[(.*)\]\)\)$/.exec(definition);
+  if (anyArray) {
+    return `CHECK (${anyArray[1]} IN (${anyArray[2].replaceAll("::text", "")}))`;
+  }
+  return definition;
+}
 
-  const requestTags = getTableConfig(requestTagsTable);
-  assert.equal(requestTags.foreignKeys.length, 2);
-  assert.equal(requestTags.uniqueConstraints.length, 1);
+function canonicalConstraintSignatures(tableName: string) {
+  return frozenCatalog.constraints
+    .filter((constraint) => constraint.table === tableName)
+    .map(
+      (constraint) =>
+        `${constraint.type}:${
+          constraint.type === "c"
+            ? normalizedCheck(constraint.definition)
+            : constraint.definition
+        }`,
+    )
+    .sort();
+}
 
-  const chatRooms = getTableConfig(chatRoomsTable);
-  assert.ok(
-    chatRooms.indexes.some(
-      (index) => index.config.name === "uq_chat_rooms_single_global",
-    ),
+function drizzleConstraintSignatures(table: (typeof tables)[number]) {
+  const config = getTableConfig(table);
+  const signatures: string[] = [];
+  for (const column of config.columns) {
+    if (column.primary) signatures.push(`p:PRIMARY KEY (${column.name})`);
+    if (column.isUnique) signatures.push(`u:UNIQUE (${column.name})`);
+  }
+  for (const primaryKey of config.primaryKeys) {
+    signatures.push(
+      `p:PRIMARY KEY (${primaryKey.columns.map((column) => column.name).join(", ")})`,
+    );
+  }
+  for (const uniqueConstraint of config.uniqueConstraints) {
+    signatures.push(
+      `u:UNIQUE (${uniqueConstraint.columns.map((column) => column.name).join(", ")})`,
+    );
+  }
+  for (const foreignKey of config.foreignKeys) {
+    const reference = foreignKey.reference();
+    const onUpdate =
+      foreignKey.onUpdate === "no action"
+        ? ""
+        : ` ON UPDATE ${foreignKey.onUpdate.toUpperCase()}`;
+    const onDelete =
+      foreignKey.onDelete === "no action"
+        ? ""
+        : ` ON DELETE ${foreignKey.onDelete.toUpperCase()}`;
+    signatures.push(
+      `f:FOREIGN KEY (${reference.columns.map((column) => column.name).join(", ")}) REFERENCES ${getTableName(reference.foreignTable)}(${reference.foreignColumns.map((column) => column.name).join(", ")})${onUpdate}${onDelete}`,
+    );
+  }
+  for (const check of config.checks) {
+    const expression = dialect
+      .sqlToQuery(check.value)
+      .sql.replace(/"[^"]+"\./g, "")
+      .replace(/"([^"]+)"/g, "$1");
+    signatures.push(`c:CHECK (${expression})`);
+  }
+  return signatures.sort();
+}
+
+test("Drizzle constraints and indexes match every frozen catalog table", () => {
+  const constraintBackedIndexes = new Set(
+    frozenCatalog.constraints
+      .filter(
+        (constraint) => constraint.type === "p" || constraint.type === "u",
+      )
+      .map((constraint) => constraint.name),
   );
-
-  const dmConversations = getTableConfig(dmConversationsTable);
-  assert.equal(dmConversations.foreignKeys.length, 2);
-  assert.equal(dmConversations.uniqueConstraints.length, 1);
+  for (const table of tables) {
+    const tableName = getTableName(table);
+    assert.deepEqual(
+      drizzleConstraintSignatures(table),
+      canonicalConstraintSignatures(tableName),
+      `${tableName} constraint signatures`,
+    );
+    assert.deepEqual(
+      getTableConfig(table)
+        .indexes.map((index) => index.config.name)
+        .sort(),
+      frozenCatalog.indexes
+        .filter(
+          (index) =>
+            index.table === tableName &&
+            !constraintBackedIndexes.has(index.name),
+        )
+        .map((index) => index.name)
+        .sort(),
+      `${tableName} non-constraint indexes`,
+    );
+  }
 });

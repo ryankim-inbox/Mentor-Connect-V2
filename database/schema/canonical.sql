@@ -1,6 +1,6 @@
--- Mentor Connect canonical application schema, version 0001.
--- Authority: frozen from read-only introspection of the local 13-table catalog.
--- Forward-only: never edit this baseline after release; add a new migration.
+-- Mentor Connect migration-chain materialization, schema version 0001.
+-- Version 0001 was frozen from read-only introspection of the local 13-table catalog.
+-- These bytes are migration 0001; future canonical materializations append only.
 
 CREATE TABLE districts (
     id SERIAL PRIMARY KEY,

@@ -2,19 +2,25 @@
 
 ## Authority and current evidence
 
-The deployment schema source of truth is
-`database/schema/canonical.sql`. Version `0001` is pinned by
-`database/schema/version.json` with SHA-256
-`72a5171f3224c0c6a122ba511525fa1e83c43e8c2d1eab5bc9aba788d87446f4`.
-The SQL was frozen from a read-only introspection of the local
+The ordered, checksum-pinned migration files listed in
+`database/migrations/ledger.json` are the deployment schema source of truth.
+`database/schema/canonical.sql` is the current empty-database materialization:
+the exact byte concatenation of every migration in ledger order. It is not an
+independently editable baseline. `database/schema/version.json` pins the
+materialization checksum and identifies the current ledger tail by both
+`schemaVersion` and `currentMigrationId`.
+
+Version `0001` was frozen from a read-only introspection of the local
 `mentor_connect_mock` catalog on 2026-09-02: 13 tables, 86 columns, 43
-constraints, and 37 indexes. The normalized evidence is
+constraints, and 37 indexes. The normalized current-schema evidence is
 `database/schema/local-catalog.json`.
 
-The Drizzle definitions in `lib/db/src/schema/` represent this canonical
-schema for application queries and types. They are not an independent schema
-authority. Do not use `drizzle-kit push`, `db push`, or a package lifecycle
-hook to reconcile a database. Those entrypoints are deliberately absent.
+The Drizzle definitions in `lib/db/src/schema/` represent the current
+materialized schema for application queries and types. They are not an
+independent schema authority. Tests compare every table's primary, unique,
+foreign-key, and check constraints plus non-constraint indexes with the frozen
+catalog. Do not use `drizzle-kit push`, `db push`, or a package lifecycle hook
+to reconcile a database. Those entrypoints are deliberately absent.
 
 The production schema is **[UNKNOWN]**. No production introspection was
 performed for this slice. The local catalog, canonical SQL, and mock seed are
@@ -24,8 +30,9 @@ and every difference is covered by an approved migration plan.
 
 ## Read-only checks
 
-Validate repository checksums, counts, schema version, migration ordering, and
-the canonical-baseline reference without connecting to a database:
+Validate repository checksums, counts, schema version, migration ordering, the
+current ledger tail, and exact deterministic materialization without connecting
+to a database:
 
 ```sh
 pnpm --filter db schema:check
@@ -57,23 +64,30 @@ consistency.
 `database/migrations/ledger.json` is append-only and ordered by the numeric
 prefix of each migration ID. Migration IDs and paths must be unique, numeric
 prefixes must strictly increase, and each SHA-256 must match the referenced
-file. The `0001_canonical_baseline` entry references the canonical SQL directly
-so there is no second copy of the baseline.
+file. `0001_canonical_baseline.sql` is immutable history. The current canonical
+file is mechanically derived from that history; after migration `0002` is
+appended, it is the exact bytes of `0001` followed by the exact bytes of `0002`.
 
 The library-only `runMigrationTransaction({ client, ledger, appSha })` in
 `lib/db/tools/migration-runner.mjs` defines the contract consumed by the next
 release slice. It:
 
-1. begins one transaction;
-2. obtains `pg_advisory_xact_lock(774301992604150)` before schema or ledger
+1. rejects transaction-boundary commands before issuing any client query; the
+   SQL-aware scanner ignores comments, quoted strings/identifiers, and
+   dollar-quoted bodies but rejects `BEGIN`, `START TRANSACTION`,
+   `COMMIT`/`END`, `ROLLBACK`/`ABORT`, savepoint boundaries, and prepared
+   transaction boundaries;
+2. begins one transaction and sets transaction-local `search_path` to
+   `public, pg_catalog` plus standard-conforming string parsing;
+3. obtains `pg_advisory_xact_lock(774301992604150)` before schema or ledger
    writes;
-3. creates the operational `mentor_connect_schema_migrations` ledger if
+4. creates the operational `mentor_connect_schema_migrations` ledger if
    absent;
-4. rejects applied history that is not an exact prefix of the repository
+5. rejects applied history that is not an exact prefix of the repository
    ledger and rejects any checksum mismatch;
-5. applies pending SQL and records `ordinal`, `migration_id`, `checksum`,
+6. applies pending SQL and records `ordinal`, `migration_id`, `checksum`,
    `applied_at`, and `app_sha`; and
-6. commits everything together or rolls back everything on any failure.
+7. commits everything together or rolls back everything on any failure.
 
 There is intentionally no mutating CLI or package script for this function.
 The Slice 08 `scripts/migration-entrypoint.mjs` remains dry-run-only and still
@@ -119,9 +133,12 @@ seed and legacy compatibility fixture. Its schema section is not authoritative.
 
 ## Forward-only corrections and recovery
 
-Never edit or delete a released migration or the canonical version `0001`
-baseline. Correct schema mistakes by adding a new, higher-numbered forward
-migration, its checksum, verification query, and rollback or roll-forward
-strategy. A failed runner transaction rolls back schema and ledger writes.
-After a committed migration, use a reviewed forward migration for recovery;
-do not rewrite ledger history.
+Never edit or delete a released migration. Correct schema mistakes by adding a
+new, higher-numbered forward migration, its checksum, verification query, and
+rollback or roll-forward strategy. Then regenerate `canonical.sql` by exact
+ordered concatenation, refresh the current catalog from a disposable
+empty-database reproduction, and update `version.json` to the new ledger tail,
+materialization/catalog checksums, and counts. `schema:check` rejects an
+independently edited or incomplete materialization. A failed runner transaction
+rolls back schema and ledger writes. After a committed migration, use a reviewed
+forward migration for recovery; do not rewrite ledger history.
