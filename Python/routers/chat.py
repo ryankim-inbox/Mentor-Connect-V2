@@ -472,34 +472,114 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
 @router.get("/dms")
 def list_dm_conversations(request: Request):
     """Mission 5 — this user's DM conversation list."""
-    # TODO(student):
     # 1. Read the current user from the session; 401 if not logged in.
-    # 2. Query dm_conversations where the user is user_a_id OR user_b_id.
-    # 3. For each row, figure out who the *other* user is and JOIN users for
-    #    their name (a CASE WHEN works, or do it in Python).
-    # 4. Return a list of dicts shaped like:
-    #      [{"id": 1, "otherUserId": 501, "otherUserName": "Sophia Lee",
-    #        "createdAt": "..."}]
-    # 5. Test: the seed gives user 1 two conversations (with users 501 and
-    #    951) — log in as student001@test.edu and check both appear.
-    return _todo(5, "implement listing this user's conversations from dm_conversations.")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # 2 & 3. Query dm_conversations where the user is user_a_id OR user_b_id.
+    query = """
+            SELECT
+                c.id,
+                c.created_at,
+                u.id AS other_user_id,
+                CONCAT(u.first_name, ' ', u.last_name) AS other_user_name
+            FROM dm_conversations c
+                     JOIN users u ON u.id = CASE
+                                                WHEN c.user_a_id = %s THEN c.user_b_id
+                                                ELSE c.user_a_id
+                END
+            WHERE c.user_a_id = %s OR c.user_b_id = %s
+            ORDER BY c.created_at DESC; \
+            """
+
+    conversations = []
+
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (user_id, user_id, user_id))
+            rows = cur.fetchall()
+
+            for row in rows:
+                # 4. Return a list of dicts matching the requested shape
+                conversations.append({
+                    "id": row["id"],
+                    "otherUserId": row["other_user_id"],
+                    "otherUserName": row["other_user_name"],
+                    "createdAt": row["created_at"].isoformat()
+                })
+
+    return conversations
+
 
 
 @router.post("/dms/start")
 def start_dm_conversation(body: StartDmBody, request: Request):
     """Mission 6 — start (or reuse) a conversation with another user."""
-    # TODO(student):
     # 1. Read the current user from the session; 401 if not logged in.
-    # 2. Validate body.toUserId: it must exist in users (404) and must not be
-    #    yourself (400).
-    # 3. Look for an existing conversation BETWEEN BOTH USERS — remember
-    #    (me, them) and (them, me) are different rows to Postgres! If one
-    #    exists, return it instead of inserting a duplicate.
-    # 4. Otherwise INSERT INTO dm_conversations ... RETURNING *, and return it
-    #    shaped like Mission 5's rows.
-    # 5. Stretch goal: refuse to start a DM with someone who blocked you (or
-    #    whom you blocked) — see the blocks table used by routers/reports.py.
-    return _todo(6, "implement starting or reusing a DM conversation in dm_conversations.")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    target_id = body.toUserId
+
+    # 2. Validate body.toUserId: must not be yourself (400)
+    if user_id == target_id:
+        raise HTTPException(status_code=400, detail="You cannot start a DM conversation with yourself")
+
+    with db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, first_name, last_name FROM users WHERE id = %s", (target_id,))
+            target_user = cur.fetchone()
+            if not target_user:
+                raise HTTPException(status_code=404, detail="Target user not found")
+
+            # 5. Stretch goal: refuse to start a DM if either user has blocked the other
+            cur.execute("""
+                        SELECT 1 FROM blocks
+                        WHERE (blocker_id = %s AND blocked_id = %s)
+                           OR (blocker_id = %s AND blocked_id = %s)
+                            LIMIT 1
+                        """, (user_id, target_id, target_id, user_id))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="Cannot start a conversation due to a block restriction")
+
+            # 3. Look for an existing conversation BETWEEN BOTH USERS
+            # Checks both (me, them) and (them, me) variations
+            cur.execute("""
+                        SELECT id, created_at FROM dm_conversations
+                        WHERE (user_a_id = %s AND user_b_id = %s)
+                           OR (user_a_id = %s AND user_b_id = %s)
+                            LIMIT 1
+                        """, (user_id, target_id, target_id, user_id))
+            existing_conv = cur.fetchone()
+
+            if existing_conv:
+                return {
+                    "id": existing_conv["id"],
+                    "otherUserId": target_id,
+                    "otherUserName": f"{target_user['first_name']} {target_user['last_name']}",
+                    "createdAt": existing_conv["created_at"].isoformat()
+                }
+
+            # 4. Otherwise INSERT INTO dm_conversations ... RETURNING *
+            # Enforce lowest ID value as user_a_id to standardize table rows if preferred,
+            # but direct assignment works perfectly here.
+            cur.execute("""
+                        INSERT INTO dm_conversations (user_a_id, user_b_id, created_at)
+                        VALUES (%s, %s, NOW())
+                            RETURNING id, created_at
+                        """, (user_id, target_id))
+            new_conv = cur.fetchone()
+            conn.commit()
+
+            return {
+                "id": new_conv["id"],
+                "otherUserId": target_id,
+                "otherUserName": f"{target_user['first_name']} {target_user['last_name']}",
+                "createdAt": new_conv["created_at"].isoformat()
+            }
+
 
 
 @router.get("/dms/{conversation_id}/messages")
