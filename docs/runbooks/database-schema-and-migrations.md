@@ -73,8 +73,10 @@ The library-only `runMigrationTransaction({ client, ledger, appSha })` in
 release slice. It:
 
 1. rejects transaction-boundary commands before issuing any client query; the
-   SQL-aware scanner ignores comments, quoted strings/identifiers, and
-   dollar-quoted bodies but rejects `BEGIN`, `START TRANSACTION`,
+   SQL-aware scanner recognizes LF, CR, and CRLF line-comment endings and
+   ignores comments, quoted strings/identifiers, and dollar-quoted bodies
+   (including non-ASCII identifier tags) but rejects malformed or unterminated
+   lexical regions and executable `BEGIN`, `START TRANSACTION`,
    `COMMIT`/`END`, `ROLLBACK`/`ABORT`, savepoint boundaries, and prepared
    transaction boundaries;
 2. begins one transaction and sets transaction-local `search_path` to
