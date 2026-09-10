@@ -266,6 +266,46 @@ test("forwards one valid request from every REST family with exact method, targe
   }
 });
 
+test("forwards every allowed raw practice module once after session validation", async (context) => {
+  const calls: UpstreamCall[] = [];
+  const upstream = createServer(async (request, response) => {
+    calls.push({
+      body: await readBody(request),
+      cookie: request.headers.cookie,
+      method: request.method ?? "GET",
+      path: request.url ?? "/",
+    });
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      request.url === "/api/auth/me" ? '{"id":1}' : '{"ok":true}',
+    );
+  });
+  const upstreamPort = await listen(upstream);
+  const gateway = createGatewayServer({
+    upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    logger: { info() {} },
+  });
+  const gatewayPort = await listen(gateway);
+  context.after(async () => Promise.all([close(gateway), close(upstream)]));
+
+  for (const moduleName of ["find_matches", "locations", "get_blocks"]) {
+    calls.length = 0;
+    const path = `/api/practice/raw/${moduleName}`;
+    const result = await rawRequest(gatewayPort, path, "GET", {
+      cookie: "session=user-a",
+    });
+
+    assert.equal(result.status, 200, moduleName);
+    assert.deepEqual(
+      calls.map((call) => call.path),
+      ["/api/auth/me", path],
+      moduleName,
+    );
+    assert.equal(calls[1]?.method, "GET", moduleName);
+    assert.equal(calls[1]?.cookie, "session=user-a", moduleName);
+  }
+});
+
 test("limits the practice location test body to 16 KiB before its upstream route", async (context) => {
   const calls: string[] = [];
   const upstream = createServer(async (request, response) => {
@@ -327,6 +367,7 @@ test("rejects invalid paths, methods, and queries before any upstream request", 
     ["GET", "/api/chat%2Frooms"],
     ["GET", "/api/dms//1/messages"],
     ["GET", "/api/not-a-route"],
+    ["GET", "/api/practice/raw/not_a_module"],
     ["POST", "/api/healthz"],
     ["GET", "/ws/chat/1"],
   ] as const;
