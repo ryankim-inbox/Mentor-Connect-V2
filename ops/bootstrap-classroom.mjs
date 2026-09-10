@@ -47,6 +47,11 @@ export function validateClassroomTarget({
   if (target.hash) {
     throw new Error("CLASSROOM_DATABASE_URL must not contain a fragment");
   }
+  if (/%(?![0-9a-f]{2})/i.test(target.href)) {
+    throw new Error(
+      "CLASSROOM_DATABASE_URL contains a malformed percent escape",
+    );
+  }
   const seenOptions = new Set();
   for (const [option] of target.searchParams) {
     if (!TLS_OPTIONS.has(option)) {
