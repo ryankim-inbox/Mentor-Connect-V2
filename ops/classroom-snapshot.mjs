@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { userInfo } from "node:os";
 import { validateClassroomTarget } from "./bootstrap-classroom.mjs";
@@ -47,30 +47,35 @@ export function classroomConnection(options, environment = process.env) {
     }
     env.PGSSLMODE = ["true", "1"].includes(ssl) ? "verify-full" : "disable";
   }
-  if (certificates && !env.PGSSLMODE) env.PGSSLMODE = "verify-full";
-  if (
-    env.PGSSLMODE &&
-    ![
-      "disable",
-      "allow",
-      "prefer",
-      "require",
-      "verify-ca",
-      "verify-full",
-    ].includes(env.PGSSLMODE)
-  ) {
-    throw new Error("invalid classroom TLS mode");
+  env.PGSSLMODE ??= certificates ? "verify-full" : "disable";
+  if (!["disable", "verify-full"].includes(env.PGSSLMODE)) {
+    throw new Error("classroom TLS mode must be disable or verify-full");
+  }
+  if (certificates && env.PGSSLMODE === "disable") {
+    throw new Error("ambiguous classroom TLS options");
   }
   return {
     target,
     env,
     createClient() {
-      const explicit = new URL(target.databaseUrl);
-      explicit.username = env.PGUSER;
-      explicit.port = env.PGPORT;
+      const tls =
+        env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: true };
+      if (tls) {
+        for (const [field, variable] of [
+          ["ca", "PGSSLROOTCERT"],
+          ["cert", "PGSSLCERT"],
+          ["key", "PGSSLKEY"],
+        ]) {
+          if (env[variable]) tls[field] = readFileSync(env[variable]);
+        }
+      }
       const client = new Client({
-        connectionString: explicit.href,
-        ssl: false,
+        host: env.PGHOST,
+        port: Number(env.PGPORT),
+        database: env.PGDATABASE,
+        user: env.PGUSER,
+        password: env.PGPASSWORD,
+        ssl: tls,
       });
       // pg uses process.env for absent/empty values; enforce the validated fields.
       client.connectionParameters.password = env.PGPASSWORD;
