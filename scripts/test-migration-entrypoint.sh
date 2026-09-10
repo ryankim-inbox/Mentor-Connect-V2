@@ -9,7 +9,7 @@ AUDIT_FILE="$TMP/migration-audit.jsonl"
 touch "$AUDIT_FILE"
 
 run_unreachable_entrypoint() {
-  DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+  DATABASE_URL='postgresql://staging-db.internal/classroom' \
   MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
   MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
   MIGRATION_AUDIT_FD=3 \
@@ -25,7 +25,7 @@ run_unreachable_entrypoint() {
 }
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_AUDIT_FD=3 \
 MIGRATION_AUDIT_APPEND_ONLY=1 \
@@ -65,13 +65,13 @@ node -e '
   if (entry.migrationId !== "0002_integrity_constraints_indexes") throw new Error("wrong migration id");
   if (entry.targetEnvironment !== "staging") throw new Error("wrong environment");
   if (entry.targetHost !== "staging-db.internal") throw new Error("wrong target host");
-  if (entry.targetPort !== "5432" || entry.targetDatabase !== "mentor_connect") throw new Error("target identity is incomplete");
+  if (entry.targetPort !== "5432" || entry.targetDatabase !== "classroom") throw new Error("target identity is incomplete");
   if (entry.dryRun !== true || entry.result !== "dry-run-failed") throw new Error("failed dry-run was not recorded");
   if (entry.failureCode !== "database_connection_failed") throw new Error("connection failure code is ambiguous");
 ' "$AUDIT_FILE"
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
 MIGRATION_AUDIT_APPEND_ONLY=1 \
@@ -85,7 +85,7 @@ set -e
 grep -F 'MIGRATION_AUDIT_FD is required' "$TMP/missing-fd-stderr" > /dev/null
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
 MIGRATION_AUDIT_FD=not-a-fd \
@@ -100,7 +100,7 @@ set -e
 grep -F 'MIGRATION_AUDIT_FD must be a non-negative integer' "$TMP/invalid-fd-stderr" > /dev/null
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
 MIGRATION_AUDIT_FD=3 \
@@ -115,7 +115,7 @@ set -e
 grep -F 'MIGRATION_AUDIT_APPEND_ONLY=1 is required' "$TMP/missing-append-stderr" > /dev/null
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
 MIGRATION_AUDIT_FD=3 \
@@ -131,7 +131,7 @@ set -e
 grep -F 'MIGRATION_AUDIT_FD must reference a regular file' "$TMP/device-stderr" > /dev/null
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@production-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://production-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS='staging-db.internal,production-db.internal' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
@@ -148,7 +148,7 @@ set -e
 grep -F 'not allowlisted for environment staging' "$TMP/rejected-stderr" > /dev/null
 
 set +e
-DATABASE_URL='postgresql://migration-user:secret@staging-db.internal:5432/mentor_connect' \
+DATABASE_URL='postgresql://staging-db.internal/classroom' \
 MIGRATION_ALLOWED_HOSTS_STAGING='staging-db.internal' \
 MIGRATION_ALLOWED_HOSTS_PRODUCTION='production-db.internal' \
 MIGRATION_AUDIT_FD=3 \
