@@ -144,10 +144,25 @@ and refuses any target containing user schemas, relations, functions, types or
 non-default extensions before spawning `pg_restore`. Database names must match
 `[A-Za-z_][A-Za-z0-9_-]*` because native `--dbname` also accepts connection strings.
 Connection credentials travel through child environment fields, never command
-arguments. Inherited `PG*` target/options are removed. Explicit URL TLS modes
-and certificate paths are retained; certificate options without a mode use
-`verify-full`. Ambiguous `ssl`/`sslmode` combinations are rejected. Use explicit
-provider-required `sslmode` and CA settings. No raw native stderr is logged.
+arguments. Inherited `PG*` target/options are removed. Backup/restore supports
+`sslmode=disable` and `sslmode=verify-full`, using the same explicit connection
+fields and TLS policy in JavaScript and native tools. `ssl=false`/`ssl=0` means
+`disable`; `ssl=true`/`ssl=1` means `verify-full`. Certificate options without a
+mode use `verify-full`; no TLS options means `disable` for both clients. The
+modes `allow`, `prefer`, `require` and `verify-ca` are rejected before either
+client connects because their JavaScript/native behavior differs. Combining
+`ssl` with `sslmode`, or certificates with disabled TLS, is also rejected.
+Use `verify-full` and the provider CA file for hosted databases; optional client
+certificate/key paths are retained. URL user/password are decoded once and
+passed as explicit fields, preserving literal percent sequences in role names.
+No raw native stderr is logged.
+
+Provider URLs that currently use `require`, `prefer` or `verify-ca` must be
+configured with supported `verify-full` verification and the applicable CA
+before backup/restore can run. These modes are not silently translated. A URL
+without TLS options explicitly disables TLS in these wrappers, so operators
+must add the provider's verification settings for hosted databases. This is a
+restricted, equivalent-client policy rather than support for every libpq mode.
 
 Restore uses `--exit-on-error --single-transaction --no-owner --no-acl`. It never
 uses `--clean` or drops/resets a target. See the native
@@ -162,15 +177,15 @@ Aim to complete restore within 30 minutes. Record each rehearsal in the
 operator's change record with the following fields; do not substitute local
 fixture evidence for a provider rehearsal:
 
-| Field | Required evidence |
-| --- | --- |
-| Snapshot capture | Manifest `capturedAt`, schema version, SHA-256 |
-| Backup reference | Encrypted provider object/version reference for dump and manifest |
-| Target | Non-secret host/database, isolated from writers |
-| Validation | `verified`, counts, ledger checksum, catalog match |
-| Restore duration | Observed `elapsedMs`, compared with 1,800,000 ms target |
-| Reviewer | Named operator/reviewer and rehearsal time |
-| Retention | Latest seven verified provider references; expiration confirmation |
+| Field            | Required evidence                                                  |
+| ---------------- | ------------------------------------------------------------------ |
+| Snapshot capture | Manifest `capturedAt`, schema version, SHA-256                     |
+| Backup reference | Encrypted provider object/version reference for dump and manifest  |
+| Target           | Non-secret host/database, isolated from writers                    |
+| Validation       | `verified`, counts, ledger checksum, catalog match                 |
+| Restore duration | Observed `elapsedMs`, compared with 1,800,000 ms target            |
+| Reviewer         | Named operator/reviewer and rehearsal time                         |
+| Retention        | Latest seven verified provider references; expiration confirmation |
 
 For a disposable local check, run `sh lib/db/test/classroom-restore-disposable.sh`.
 It creates and removes its own local cluster and tests checksum/target refusal,
