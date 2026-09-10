@@ -41,6 +41,9 @@ export function validateClassroomTarget({
   if (target.protocol !== "postgresql:" && target.protocol !== "postgres:") {
     throw new Error("CLASSROOM_DATABASE_URL must use the postgresql protocol");
   }
+  if (!target.hostname) {
+    throw new Error("CLASSROOM_DATABASE_URL must include a host");
+  }
   if (target.hash) {
     throw new Error("CLASSROOM_DATABASE_URL must not contain a fragment");
   }
@@ -54,14 +57,20 @@ export function validateClassroomTarget({
     }
     seenOptions.add(option);
   }
-  let targetDatabase;
+  let connectionParameters;
   try {
-    targetDatabase = decodeURI(target.pathname.slice(1));
+    const targetProbe = new URL(target.href);
+    targetProbe.search = "";
+    connectionParameters = new Client({
+      connectionString: targetProbe.href,
+    }).connectionParameters;
   } catch {
-    throw new Error("CLASSROOM_DATABASE_URL database name is invalid");
+    throw new Error("CLASSROOM_DATABASE_URL is not supported by pg");
   }
+  const targetHostname = connectionParameters.host;
+  const targetDatabase = connectionParameters.database;
   if (
-    target.hostname.toLowerCase() !== allowedHost.toLowerCase() ||
+    targetHostname.toLowerCase() !== allowedHost.toLowerCase() ||
     targetDatabase !== databaseName
   ) {
     throw new Error("classroom database target mismatch");
@@ -72,8 +81,8 @@ export function validateClassroomTarget({
     );
   }
   return {
-    databaseUrl,
-    hostname: target.hostname,
+    databaseUrl: target.href,
+    hostname: targetHostname,
     databaseName: targetDatabase,
   };
 }
