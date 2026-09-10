@@ -8,8 +8,13 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "schema:check": "node tools/schema-cli.mjs schema:check",
+    "fixture:check": "node tools/schema-cli.mjs fixture:check",
+    "migration:status": "node tools/schema-cli.mjs migration:status",
+    "schema:diff": "node tools/schema-cli.mjs schema:diff",
+    "constraints:verify": "node tools/schema-cli.mjs constraints:verify",
+    "explain:verify": "node tools/schema-cli.mjs explain:verify",
+    "test": "node --test test/schema-tool.test.mjs test/schema-version.test.mjs test/sql-safety.test.mjs test/integrity-tool.test.mjs test/legacy-fixture.test.mjs && tsx --test test/drizzle-schema.test.ts && sh test/disposable-postgres.sh && sh test/operator-commands-disposable.sh"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
@@ -20,6 +25,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "^8.18.0",
-    "drizzle-kit": "^0.31.9"
+    "drizzle-kit": "^0.31.9",
+    "tsx": "catalog:"
   }
 }

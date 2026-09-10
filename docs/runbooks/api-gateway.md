@@ -7,10 +7,10 @@
 
 공개 API 및 WebSocket 진입점은 artifacts/api-gateway 하나다.
 
-| 서비스 | 바인딩 | 공개 경로 | 역할 |
-|---|---|---|---|
-| API Shield | 0.0.0.0:8080 | /api, /livez, /ws | 유일한 외부 API 경계 |
-| Python backend | 127.0.0.1:8181 | 없음 | API Shield의 private upstream |
+| 서비스         | 바인딩         | 공개 경로         | 역할                          |
+| -------------- | -------------- | ----------------- | ----------------------------- |
+| API Shield     | 0.0.0.0:8080   | /api, /livez, /ws | 유일한 외부 API 경계          |
+| Python backend | 127.0.0.1:8181 | 없음              | API Shield의 private upstream |
 
 .replit은 8080만 externalPort 80으로 노출한다. 8181은 externalPort가 없고
 exposeLocalhost = false다. artifacts/api-server의 paths는 빈 배열이어야 한다.
@@ -24,21 +24,22 @@ Replit platform UI나 별도 ingress 규칙으로 8181을 다시 노출하면 �
 query string, trailing slash, double slash, dot segment, percent encoding, 대소문자
 변형은 승인된 경로가 아니다.
 
-| Method | Path | 인증 정책 |
-|---|---|---|
-| GET | /api/healthz | 없음 |
-| POST | /api/auth/register | JSON body |
-| POST | /api/auth/login | JSON body |
-| GET | /api/auth/me | Cookie 필요 |
-| POST | /api/auth/logout | Cookie를 /api/auth/me에 확인한 뒤 전달 |
-| GET | /api/users/{self} | Cookie를 /api/auth/me에 확인하고 id가 일치할 때만 전달 |
-| PATCH | /api/users/{self} | 위 소유권 확인 및 name, bio, subjects allowlist |
+| Method | Path               | 인증 정책                                              |
+| ------ | ------------------ | ------------------------------------------------------ |
+| GET    | /api/healthz       | 없음                                                   |
+| POST   | /api/auth/register | JSON body                                              |
+| POST   | /api/auth/login    | JSON body                                              |
+| GET    | /api/auth/me       | Cookie 필요                                            |
+| POST   | /api/auth/logout   | Cookie를 /api/auth/me에 확인한 뒤 전달                 |
+| GET    | /api/users/{self}  | Cookie를 /api/auth/me에 확인하고 id가 일치할 때만 전달 |
+| PATCH  | /api/users/{self}  | 위 소유권 확인 및 name, bio, subjects allowlist        |
 
 GET /livez는 gateway 자체 liveness endpoint이며 upstream을 호출하지 않는다.
 
 그 밖의 모든 API 경로와 method는 404로 닫힌다. 특히 admin, python-reports,
-matches, practice, request match, chat, dms, 다른 사용자의 users 경로, 그리고 모든 WebSocket upgrade는
-upstream 연결 전에 차단된다. WebSocket upgrade의 응답은 403이다.
+matches, practice, request match, chat, dms, `/ws/**`, 다른 사용자의 users 경로, 그리고 모든 WebSocket upgrade는
+upstream 연결 전에 차단된다. `/api/chat/**`, `/api/dms/**`, `/ws/**`의 일반 HTTP 요청은
+quarantine 404이며, HTTP WebSocket upgrade는 경로나 인증 상태와 관계없이 upstream 연결 전에 403이다.
 
 새 API를 열려면 gatewayAllowlist에 method, canonical path, body 정책, 인증 정책을
 명시하고, 허용되지 않은 경로가 upstream에 도달하지 않는 회귀 테스트를 추가해야 한다.
@@ -50,6 +51,8 @@ upstream 연결 전에 차단된다. WebSocket upgrade의 응답은 403이다.
   확인한 뒤에만 전달한다.
 - upstream의 status, body, Set-Cookie는 의도적으로 전달한다. Hop-by-hop, Server,
   Location, CORS, 압축 길이 관련 헤더는 전달하지 않는다.
+- `/api/auth/me`와 self-profile GET의 성공 및 오류 응답은 upstream 헤더와 무관하게
+  `Cache-Control: no-store`를 사용하고, 중복 없이 병합된 `Vary: Cookie`를 포함한다.
 - request body 기본 제한은 1 MiB, upstream response 기본 제한은 2 MiB다.
 - request body timeout 기본값은 10초, upstream timeout 기본값은 5초다.
 - duplicate header, Transfer-Encoding, Expect, malformed URL, encoding 우회는 upstream
@@ -73,7 +76,7 @@ loopback HTTP origin만 허용한다.
 다음 명령은 gateway의 unit/integration test와 정적 배포 경계를 검사한다.
 
     pnpm test:gateway
-    pnpm --filter @workspace/peerbridge build
+    pnpm run test:peerbridge-release
     pnpm gateway:verify-boundary
 
 verify-boundary는 .replit, 두 artifact 설정, 그리고 빌드된 프론트 bundle에 private

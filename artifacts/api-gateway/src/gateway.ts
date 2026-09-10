@@ -209,9 +209,13 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
   return server;
 }
 
-export function resolveGatewayConfig(options: GatewayOptions = {}): GatewayConfig {
+export function resolveGatewayConfig(
+  options: GatewayOptions = {},
+): GatewayConfig {
   const upstreamOrigin = new URL(
-    options.upstreamOrigin ?? process.env.GATEWAY_UPSTREAM_ORIGIN ?? DEFAULT_UPSTREAM_ORIGIN,
+    options.upstreamOrigin ??
+      process.env.GATEWAY_UPSTREAM_ORIGIN ??
+      DEFAULT_UPSTREAM_ORIGIN,
   );
 
   assertPrivateUpstream(upstreamOrigin);
@@ -243,7 +247,8 @@ export function resolveGatewayConfig(options: GatewayOptions = {}): GatewayConfi
       "GATEWAY_BODY_TIMEOUT_MS",
     ),
     maintenanceMode:
-      options.maintenanceMode ?? process.env.GATEWAY_MAINTENANCE_MODE === "true",
+      options.maintenanceMode ??
+      process.env.GATEWAY_MAINTENANCE_MODE === "true",
     logger: options.logger ?? defaultLogger,
   };
 }
@@ -335,6 +340,15 @@ async function handleRequest(
       return;
     }
 
+    const authenticationDependentGet =
+      method === "GET" && policy.authentication !== "none";
+    if (authenticationDependentGet) {
+      response.setHeader(
+        "vary",
+        mergeVaryHeader(response.getHeader("vary"), "Cookie"),
+      );
+    }
+
     if (config.maintenanceMode) {
       drainRequest(request);
       sendGatewayError(response, 503, "maintenance", requestId);
@@ -393,7 +407,13 @@ async function handleRequest(
       return;
     }
 
-    sendUpstreamResponse(response, upstream, requestId, sessionVerification?.setCookies);
+    sendUpstreamResponse(
+      response,
+      upstream,
+      requestId,
+      sessionVerification?.setCookies,
+      authenticationDependentGet,
+    );
     log(config, "gateway.proxied", {
       method,
       path: target.pathname,
@@ -452,43 +472,31 @@ function rejectUpgrade(
   config: GatewayConfig,
 ): void {
   const requestId = randomUUID();
-  const quarantinedRoute = classifyQuarantinedRoute(request.url ?? "");
-
-  if (quarantinedRoute) {
-    const body = Buffer.from(JSON.stringify({ error: "not_found" }));
-    socket.write(
-      "HTTP/1.1 404 Not Found\r\n" +
-        "Content-Type: application/json; charset=utf-8\r\n" +
-        "Cache-Control: no-store\r\n" +
-        "Connection: close\r\n" +
-        "Content-Length: " + body.length + "\r\n" +
-        "X-Request-Id: " + requestId + "\r\n\r\n",
-    );
-    socket.end(body);
-    log(config, "gateway.quarantine_denied", {
-      correlationId: requestId,
-      outcome: "denied",
-      routeFamily: quarantinedRoute,
-      status: 404,
-    });
-    return;
-  }
-
-  const body = Buffer.from(JSON.stringify({ error: "websocket_unavailable", requestId }));
+  // Upgrades never join an upstream connection. Keep their external response
+  // distinct from ordinary HTTP quarantine requests: the WebSocket handshake
+  // must always terminate with 403 before an upgrade can be established.
+  const body = Buffer.from(
+    JSON.stringify({ error: "websocket_unavailable", requestId }),
+  );
 
   socket.write(
     "HTTP/1.1 403 Forbidden\r\n" +
       "Content-Type: application/json; charset=utf-8\r\n" +
       "Cache-Control: no-store\r\n" +
       "Connection: close\r\n" +
-      "Content-Length: " + body.length + "\r\n" +
-      "X-Request-Id: " + requestId + "\r\n\r\n",
+      "Content-Length: " +
+      body.length +
+      "\r\n" +
+      "X-Request-Id: " +
+      requestId +
+      "\r\n\r\n",
   );
   socket.end(body);
 
   log(config, "gateway.upgrade_denied", {
     method: request.method?.toUpperCase() ?? "GET",
     requestId,
+    routeFamily: "websocket",
     status: 403,
   });
 }
@@ -520,7 +528,9 @@ function resolvePositiveInteger(
   fallback: number,
   name: string,
 ): number {
-  const candidate = explicitValue ?? (environmentValue === undefined ? fallback : Number(environmentValue));
+  const candidate =
+    explicitValue ??
+    (environmentValue === undefined ? fallback : Number(environmentValue));
 
   if (!Number.isSafeInteger(candidate) || candidate <= 0) {
     throw new Error(name + " must be a positive integer.");
@@ -545,7 +555,8 @@ function parseRequestTarget(rawTarget: string | undefined): RequestTarget {
   }
 
   const queryIndex = rawTarget.indexOf("?");
-  const rawPath = queryIndex === -1 ? rawTarget : rawTarget.slice(0, queryIndex);
+  const rawPath =
+    queryIndex === -1 ? rawTarget : rawTarget.slice(0, queryIndex);
 
   // No approved API path contains percent encoding, dot segments, repeated
   // slashes, or uppercase letters. Refuse alternate spellings before matching
@@ -675,7 +686,10 @@ function isJsonContentType(contentType: string): boolean {
   return mediaType?.trim().toLowerCase() === "application/json";
 }
 
-function findRoutePolicy(method: string, target: RequestTarget): RoutePolicy | undefined {
+function findRoutePolicy(
+  method: string,
+  target: RequestTarget,
+): RoutePolicy | undefined {
   return gatewayAllowlist.find(
     (policy) =>
       policy.method === method &&
@@ -698,6 +712,12 @@ async function handleSelfProfileRequest(
   requestedUserId: number,
   clientSignal: AbortSignal,
 ): Promise<void> {
+  if (method === "GET") {
+    response.setHeader(
+      "vary",
+      mergeVaryHeader(response.getHeader("vary"), "Cookie"),
+    );
+  }
   if (config.maintenanceMode) {
     drainRequest(request);
     sendGatewayError(response, 503, "maintenance", requestId);
@@ -736,7 +756,10 @@ async function handleSelfProfileRequest(
   if (method === "PATCH") {
     body = await readRequestBody(
       request,
-      Math.min(config.requestBodyLimitBytes, SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES),
+      Math.min(
+        config.requestBodyLimitBytes,
+        SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES,
+      ),
       true,
       config.requestBodyTimeoutMs,
       clientSignal,
@@ -821,7 +844,9 @@ function parseCanonicalSelfProfileUserId(pathname: string): number | undefined {
   }
 
   const id = Number(match[1]);
-  return Number.isSafeInteger(id) && id > 0 && String(id) === match[1] ? id : undefined;
+  return Number.isSafeInteger(id) && id > 0 && String(id) === match[1]
+    ? id
+    : undefined;
 }
 
 function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
@@ -860,7 +885,10 @@ function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
     if (payload.bio !== null && typeof payload.bio !== "string") {
       throw new GatewayHttpError(400, "invalid_profile_update");
     }
-    if (typeof payload.bio === "string" && Buffer.byteLength(payload.bio, "utf8") > 2_000) {
+    if (
+      typeof payload.bio === "string" &&
+      Buffer.byteLength(payload.bio, "utf8") > 2_000
+    ) {
       throw new GatewayHttpError(400, "invalid_profile_update");
     }
     sanitized.bio = payload.bio;
@@ -909,7 +937,10 @@ function sendSelfProfileResponse(
     throw new UpstreamFailureError();
   }
 
-  const setCookies = [...sessionSetCookies, ...getSetCookies(upstream.response.headers)];
+  const setCookies = [
+    ...sessionSetCookies,
+    ...getSetCookies(upstream.response.headers),
+  ];
   if (setCookies.length > 0) {
     response.setHeader("set-cookie", setCookies);
   }
@@ -964,8 +995,14 @@ function sanitizeSubjects(value: unknown): string[] | undefined {
   return subjects;
 }
 
-function readBoundedString(value: unknown, maxBytes: number): string | undefined {
-  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > maxBytes) {
+function readBoundedString(
+  value: unknown,
+  maxBytes: number,
+): string | undefined {
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") > maxBytes
+  ) {
     return undefined;
   }
 
@@ -1030,7 +1067,9 @@ function getSessionUserId(payload: unknown): number | undefined {
   }
 
   const id = (payload as Record<string, unknown>).id;
-  return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : undefined;
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0
+    ? id
+    : undefined;
 }
 
 async function readRequestBody(
@@ -1115,7 +1154,9 @@ async function fetchUpstream(
   const timeoutAbortController = new AbortController();
   let timedOut = false;
   const abortForClientDisconnect = () => timeoutAbortController.abort();
-  clientSignal.addEventListener("abort", abortForClientDisconnect, { once: true });
+  clientSignal.addEventListener("abort", abortForClientDisconnect, {
+    once: true,
+  });
   const timeout = setTimeout(() => {
     timedOut = true;
     timeoutAbortController.abort();
@@ -1158,7 +1199,10 @@ async function fetchUpstream(
   }
 }
 
-function buildUpstreamHeaders(request: IncomingMessage, requestId: string): Headers {
+function buildUpstreamHeaders(
+  request: IncomingMessage,
+  requestId: string,
+): Headers {
   const headers = new Headers();
 
   for (const name of FORWARDED_REQUEST_HEADERS) {
@@ -1219,6 +1263,7 @@ function sendUpstreamResponse(
   upstream: UpstreamResponse,
   requestId: string,
   additionalSetCookies: readonly string[] | undefined,
+  authenticationDependentGet: boolean,
 ): void {
   if (response.writableEnded || response.destroyed) {
     return;
@@ -1245,11 +1290,39 @@ function sendUpstreamResponse(
     response.setHeader("set-cookie", setCookies);
   }
 
+  if (authenticationDependentGet) {
+    response.setHeader("cache-control", "no-store");
+    response.setHeader(
+      "vary",
+      mergeVaryHeader(response.getHeader("vary"), "Cookie"),
+    );
+  }
+
   response.statusCode = upstream.response.status;
   response.setHeader("content-length", upstream.body.length);
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("x-request-id", requestId);
   response.end(upstream.body);
+}
+
+function mergeVaryHeader(
+  existing: number | string | readonly string[] | undefined,
+  requiredValue: string,
+): string {
+  const values = (Array.isArray(existing) ? existing : [existing])
+    .flatMap((value) => String(value ?? "").split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const merged = [];
+  for (const value of [...values, requiredValue]) {
+    const normalized = value.toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      merged.push(value);
+    }
+  }
+  return merged.join(", ");
 }
 
 function getSetCookies(headers: Headers): readonly string[] {

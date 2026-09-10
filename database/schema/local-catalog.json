@@ -1,0 +1,1182 @@
+{
+  "tables": [
+    "blocks",
+    "chat_messages",
+    "chat_rooms",
+    "districts",
+    "dm_conversations",
+    "dm_messages",
+    "questions",
+    "reports",
+    "request_tags",
+    "requests",
+    "schedules",
+    "tags",
+    "users"
+  ],
+  "columns": [
+    {
+      "table": "blocks",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "blocks",
+      "position": 2,
+      "name": "blocker_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "blocks",
+      "position": 3,
+      "name": "blocked_user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "blocks",
+      "position": 4,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "chat_messages",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "chat_messages",
+      "position": 2,
+      "name": "room_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "chat_messages",
+      "position": 3,
+      "name": "sender_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "chat_messages",
+      "position": 4,
+      "name": "body",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "chat_messages",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "chat_messages",
+      "position": 6,
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "chat_rooms",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "chat_rooms",
+      "position": 2,
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "chat_rooms",
+      "position": 3,
+      "name": "district_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "chat_rooms",
+      "position": 4,
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "chat_rooms",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "districts",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "districts",
+      "position": 2,
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "districts",
+      "position": 3,
+      "name": "county",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "districts",
+      "position": 4,
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "default": "'unified'::text"
+    },
+    {
+      "table": "districts",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "dm_conversations",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "dm_conversations",
+      "position": 2,
+      "name": "user_a_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "dm_conversations",
+      "position": 3,
+      "name": "user_b_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "dm_conversations",
+      "position": 4,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "dm_messages",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "dm_messages",
+      "position": 2,
+      "name": "conversation_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "dm_messages",
+      "position": 3,
+      "name": "sender_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "dm_messages",
+      "position": 4,
+      "name": "body",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "dm_messages",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "dm_messages",
+      "position": 6,
+      "name": "read_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "dm_messages",
+      "position": 7,
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "questions",
+      "position": 2,
+      "name": "student_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 3,
+      "name": "subject",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 4,
+      "name": "topic",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 5,
+      "name": "preferred_time",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 6,
+      "name": "preferred_times",
+      "type": "text[]",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "table": "questions",
+      "position": 7,
+      "name": "preferred_language",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 8,
+      "name": "preferred_teaching_style",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 9,
+      "name": "message",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "questions",
+      "position": 10,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "reports",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "reports",
+      "position": 2,
+      "name": "reporter_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 3,
+      "name": "reported_user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 4,
+      "name": "reason",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 5,
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 6,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "request_tags",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "request_tags",
+      "position": 2,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_tags",
+      "position": 3,
+      "name": "tag_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "requests",
+      "position": 2,
+      "name": "author_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 3,
+      "name": "district_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 4,
+      "name": "title",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 5,
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 6,
+      "name": "role",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 7,
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'open'::text"
+    },
+    {
+      "table": "requests",
+      "position": 8,
+      "name": "matched_user_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 9,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "requests",
+      "position": 10,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "requests",
+      "position": 11,
+      "name": "request",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 12,
+      "name": "preferred_times",
+      "type": "text[]",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "table": "schedules",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "schedules",
+      "position": 2,
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "schedules",
+      "position": 3,
+      "name": "slot",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "schedules",
+      "position": 4,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "tags",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "tags",
+      "position": 2,
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "tags",
+      "position": 3,
+      "name": "color",
+      "type": "text",
+      "nullable": false,
+      "default": "'#6366f1'::text"
+    },
+    {
+      "table": "tags",
+      "position": 4,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "users",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "users",
+      "position": 2,
+      "name": "email",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 3,
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 4,
+      "name": "password_hash",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 5,
+      "name": "role",
+      "type": "text",
+      "nullable": false,
+      "default": "'mentee'::text"
+    },
+    {
+      "table": "users",
+      "position": 6,
+      "name": "district_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 7,
+      "name": "bio",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 8,
+      "name": "subjects",
+      "type": "text[]",
+      "nullable": false,
+      "default": "'{}'::text[]"
+    },
+    {
+      "table": "users",
+      "position": 9,
+      "name": "is_verified",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+    },
+    {
+      "table": "users",
+      "position": 10,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "users",
+      "position": 11,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "users",
+      "position": 12,
+      "name": "location",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 13,
+      "name": "available_times",
+      "type": "text[]",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 14,
+      "name": "languages",
+      "type": "text[]",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 15,
+      "name": "grade_level",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 16,
+      "name": "teaching_style",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "constraints": [
+    {
+      "table": "blocks",
+      "name": "blocks_blocked_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (blocked_user_id) REFERENCES users(id)"
+    },
+    {
+      "table": "blocks",
+      "name": "blocks_blocker_id_blocked_user_id_key",
+      "type": "u",
+      "definition": "UNIQUE (blocker_id, blocked_user_id)"
+    },
+    {
+      "table": "blocks",
+      "name": "blocks_blocker_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (blocker_id) REFERENCES users(id)"
+    },
+    {
+      "table": "blocks",
+      "name": "blocks_no_self_check",
+      "type": "c",
+      "definition": "CHECK (blocker_id <> blocked_user_id)"
+    },
+    {
+      "table": "blocks",
+      "name": "blocks_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "chat_messages",
+      "name": "chat_messages_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "chat_messages",
+      "name": "chat_messages_room_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "chat_messages",
+      "name": "chat_messages_sender_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_district_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (district_id) REFERENCES districts(id)"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_type_check",
+      "type": "c",
+      "definition": "CHECK (type = ANY (ARRAY['global'::text, 'district'::text]))"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_type_district_id_key",
+      "type": "u",
+      "definition": "UNIQUE (type, district_id)"
+    },
+    {
+      "table": "districts",
+      "name": "districts_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_canonical_pair_check",
+      "type": "c",
+      "definition": "CHECK (user_a_id < user_b_id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_check",
+      "type": "c",
+      "definition": "CHECK (user_a_id <> user_b_id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_user_a_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_a_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_user_a_id_user_b_id_key",
+      "type": "u",
+      "definition": "UNIQUE (user_a_id, user_b_id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_user_b_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_b_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_conversation_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES dm_conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_sender_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "questions",
+      "name": "questions_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "questions",
+      "name": "questions_student_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "reports",
+      "name": "reports_no_self_check",
+      "type": "c",
+      "definition": "CHECK (reporter_id <> reported_user_id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_reported_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (reported_user_id) REFERENCES users(id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_reporter_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (reporter_id) REFERENCES users(id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_request_id_tag_id_key",
+      "type": "u",
+      "definition": "UNIQUE (request_id, tag_id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_tag_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (tag_id) REFERENCES tags(id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_author_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES users(id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_district_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (district_id) REFERENCES districts(id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_matched_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (matched_user_id) REFERENCES users(id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_role_check",
+      "type": "c",
+      "definition": "CHECK (role = ANY (ARRAY['mentee'::text, 'mentor'::text]))"
+    },
+    {
+      "table": "requests",
+      "name": "requests_status_check",
+      "type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['open'::text, 'matched'::text, 'closed'::text]))"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_user_id_slot_key",
+      "type": "u",
+      "definition": "UNIQUE (user_id, slot)"
+    },
+    {
+      "table": "tags",
+      "name": "tags_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "users",
+      "name": "users_district_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (district_id) REFERENCES districts(id)"
+    },
+    {
+      "table": "users",
+      "name": "users_email_key",
+      "type": "u",
+      "definition": "UNIQUE (email)"
+    },
+    {
+      "table": "users",
+      "name": "users_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "users",
+      "name": "users_role_check",
+      "type": "c",
+      "definition": "CHECK (role = ANY (ARRAY['mentee'::text, 'mentor'::text, 'both'::text]))"
+    }
+  ],
+  "indexes": [
+    {
+      "table": "blocks",
+      "name": "blocks_blocker_id_blocked_user_id_key",
+      "definition": "CREATE UNIQUE INDEX blocks_blocker_id_blocked_user_id_key ON public.blocks USING btree (blocker_id, blocked_user_id)"
+    },
+    {
+      "table": "blocks",
+      "name": "blocks_pkey",
+      "definition": "CREATE UNIQUE INDEX blocks_pkey ON public.blocks USING btree (id)"
+    },
+    {
+      "table": "blocks",
+      "name": "idx_blocks_blocker",
+      "definition": "CREATE INDEX idx_blocks_blocker ON public.blocks USING btree (blocker_id)"
+    },
+    {
+      "table": "chat_messages",
+      "name": "chat_messages_pkey",
+      "definition": "CREATE UNIQUE INDEX chat_messages_pkey ON public.chat_messages USING btree (id)"
+    },
+    {
+      "table": "chat_messages",
+      "name": "idx_chat_messages_room_created",
+      "definition": "CREATE INDEX idx_chat_messages_room_created ON public.chat_messages USING btree (room_id, created_at)"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_pkey",
+      "definition": "CREATE UNIQUE INDEX chat_rooms_pkey ON public.chat_rooms USING btree (id)"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "chat_rooms_type_district_id_key",
+      "definition": "CREATE UNIQUE INDEX chat_rooms_type_district_id_key ON public.chat_rooms USING btree (type, district_id)"
+    },
+    {
+      "table": "chat_rooms",
+      "name": "uq_chat_rooms_single_global",
+      "definition": "CREATE UNIQUE INDEX uq_chat_rooms_single_global ON public.chat_rooms USING btree (type) WHERE (district_id IS NULL)"
+    },
+    {
+      "table": "districts",
+      "name": "districts_pkey",
+      "definition": "CREATE UNIQUE INDEX districts_pkey ON public.districts USING btree (id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_pkey",
+      "definition": "CREATE UNIQUE INDEX dm_conversations_pkey ON public.dm_conversations USING btree (id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "dm_conversations_user_a_id_user_b_id_key",
+      "definition": "CREATE UNIQUE INDEX dm_conversations_user_a_id_user_b_id_key ON public.dm_conversations USING btree (user_a_id, user_b_id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "idx_dm_conversations_user_a",
+      "definition": "CREATE INDEX idx_dm_conversations_user_a ON public.dm_conversations USING btree (user_a_id)"
+    },
+    {
+      "table": "dm_conversations",
+      "name": "idx_dm_conversations_user_b",
+      "definition": "CREATE INDEX idx_dm_conversations_user_b ON public.dm_conversations USING btree (user_b_id)"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_pkey",
+      "definition": "CREATE UNIQUE INDEX dm_messages_pkey ON public.dm_messages USING btree (id)"
+    },
+    {
+      "table": "dm_messages",
+      "name": "idx_dm_messages_conversation_created",
+      "definition": "CREATE INDEX idx_dm_messages_conversation_created ON public.dm_messages USING btree (conversation_id, created_at)"
+    },
+    {
+      "table": "questions",
+      "name": "idx_questions_preferred_times",
+      "definition": "CREATE INDEX idx_questions_preferred_times ON public.questions USING gin (preferred_times)"
+    },
+    {
+      "table": "questions",
+      "name": "idx_questions_student",
+      "definition": "CREATE INDEX idx_questions_student ON public.questions USING btree (student_id)"
+    },
+    {
+      "table": "questions",
+      "name": "questions_pkey",
+      "definition": "CREATE UNIQUE INDEX questions_pkey ON public.questions USING btree (id)"
+    },
+    {
+      "table": "reports",
+      "name": "idx_reports_reported",
+      "definition": "CREATE INDEX idx_reports_reported ON public.reports USING btree (reported_user_id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_pkey",
+      "definition": "CREATE UNIQUE INDEX reports_pkey ON public.reports USING btree (id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "idx_request_tags_request",
+      "definition": "CREATE INDEX idx_request_tags_request ON public.request_tags USING btree (request_id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "idx_request_tags_tag",
+      "definition": "CREATE INDEX idx_request_tags_tag ON public.request_tags USING btree (tag_id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_pkey",
+      "definition": "CREATE UNIQUE INDEX request_tags_pkey ON public.request_tags USING btree (id)"
+    },
+    {
+      "table": "request_tags",
+      "name": "request_tags_request_id_tag_id_key",
+      "definition": "CREATE UNIQUE INDEX request_tags_request_id_tag_id_key ON public.request_tags USING btree (request_id, tag_id)"
+    },
+    {
+      "table": "requests",
+      "name": "idx_requests_author",
+      "definition": "CREATE INDEX idx_requests_author ON public.requests USING btree (author_id)"
+    },
+    {
+      "table": "requests",
+      "name": "idx_requests_district",
+      "definition": "CREATE INDEX idx_requests_district ON public.requests USING btree (district_id)"
+    },
+    {
+      "table": "requests",
+      "name": "idx_requests_open_matching_lookup",
+      "definition": "CREATE INDEX idx_requests_open_matching_lookup ON public.requests USING btree (district_id, role, created_at DESC, id) WHERE (status = 'open'::text)"
+    },
+    {
+      "table": "requests",
+      "name": "idx_requests_preferred_times",
+      "definition": "CREATE INDEX idx_requests_preferred_times ON public.requests USING gin (preferred_times)"
+    },
+    {
+      "table": "requests",
+      "name": "idx_requests_status",
+      "definition": "CREATE INDEX idx_requests_status ON public.requests USING btree (status)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_pkey",
+      "definition": "CREATE UNIQUE INDEX requests_pkey ON public.requests USING btree (id)"
+    },
+    {
+      "table": "schedules",
+      "name": "idx_schedules_slot",
+      "definition": "CREATE INDEX idx_schedules_slot ON public.schedules USING btree (slot)"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_pkey",
+      "definition": "CREATE UNIQUE INDEX schedules_pkey ON public.schedules USING btree (id)"
+    },
+    {
+      "table": "schedules",
+      "name": "schedules_user_id_slot_key",
+      "definition": "CREATE UNIQUE INDEX schedules_user_id_slot_key ON public.schedules USING btree (user_id, slot)"
+    },
+    {
+      "table": "tags",
+      "name": "tags_pkey",
+      "definition": "CREATE UNIQUE INDEX tags_pkey ON public.tags USING btree (id)"
+    },
+    {
+      "table": "users",
+      "name": "idx_users_district",
+      "definition": "CREATE INDEX idx_users_district ON public.users USING btree (district_id)"
+    },
+    {
+      "table": "users",
+      "name": "idx_users_matching_lookup",
+      "definition": "CREATE INDEX idx_users_matching_lookup ON public.users USING btree (district_id, role, is_verified, id)"
+    },
+    {
+      "table": "users",
+      "name": "idx_users_role",
+      "definition": "CREATE INDEX idx_users_role ON public.users USING btree (role)"
+    },
+    {
+      "table": "users",
+      "name": "users_email_key",
+      "definition": "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)"
+    },
+    {
+      "table": "users",
+      "name": "users_pkey",
+      "definition": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+    }
+  ]
+}
