@@ -27,10 +27,12 @@ case "$RELEASE_RUNTIME_DIR" in
   "$repository_root/.release-runtime") ;;
   "$repository_root"|"$repository_root/"*) exit 2 ;;
 esac
+if [ -L "$RELEASE_RUNTIME_DIR/venv" ]; then exit 2; fi
 test ! -e "$RELEASE_RUNTIME_DIR/venv"
+if [ -L "$RELEASE_RUNTIME_DIR/build-record.txt" ]; then exit 2; fi
 
 uv_version=$(uv --version)
-case "$uv_version" in "uv 0.11.16"*) ;; *) echo "uv 0.11.16 is required" >&2; exit 2 ;; esac
+case "$uv_version" in "uv 0.11.16"|"uv 0.11.16 "*) ;; *) echo "uv 0.11.16 is required" >&2; exit 2 ;; esac
 
 mkdir -p "$RELEASE_RUNTIME_DIR"
 
@@ -63,8 +65,14 @@ uv pip sync --python "$RELEASE_RUNTIME_DIR/venv/bin/python" --require-hashes \
 PYTHONDONTWRITEBYTECODE=1 "$RELEASE_RUNTIME_DIR/venv/bin/python" -B -c \
   'import fastapi, uvicorn, bcrypt, itsdangerous, psycopg, psycopg2'
 
+record_tmp=$(mktemp "$RELEASE_RUNTIME_DIR/.build-record.txt.XXXXXX")
+test -f "$record_tmp"
+test ! -L "$record_tmp"
+trap 'test -z "${record_tmp:-}" || rm -f "$record_tmp"' 0 1 2 15
 {
   printf 'uv=%s\n' "$uv_version"
   printf 'python=%s\n' "$("$RELEASE_RUNTIME_DIR/venv/bin/python" --version)"
   printf 'requirements_sha256=%s\n' "$(cat "$RELEASE_RUNTIME_DIR/runtime.sha256")"
-} > "$RELEASE_RUNTIME_DIR/build-record.txt"
+} > "$record_tmp"
+mv "$record_tmp" "$RELEASE_RUNTIME_DIR/build-record.txt"
+record_tmp=
