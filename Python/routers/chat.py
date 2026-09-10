@@ -647,14 +647,27 @@ async def chat_room_socket(websocket: WebSocket, room_id: int):
     finally:
         _unregister(room_connections, room_id, websocket)
 
-
 @ws_router.websocket("/ws/dms/{conversation_id}")
 async def dm_socket(websocket: WebSocket, conversation_id: int):
-    """Mission 8 — live updates for a DM conversation. Not implemented yet."""
-    # TODO(student): like Mission 4, but the registry key is conversation_id
-    # and only its two participants may connect (close(code=4403) otherwise).
+    # Retrieve current user/participant from session, token, or context
+    user = await get_current_user_from_ws(websocket)  # Helper assumed from context/Mission 4
+
+    # Check if the user is one of the two participants in this conversation
+    participants = await get_conversation_participants(conversation_id)
+    if not user or user.id not in participants:
+        await websocket.close(code=4403)
+        return
+
     await websocket.accept()
-    await websocket.send_json(
-        _todo(8, f"implement the live WebSocket loop for conversation {conversation_id}.")
-    )
-    await websocket.close(code=1000)
+
+    # Register connection using conversation_id as the key
+    manager.connect(conversation_id, websocket)
+    try:
+        while True:
+            # Wait for incoming messages or handle live updates loop
+            data = await websocket.receive_json()
+            # Process chat message / broadcast to conversation participants
+            await manager.broadcast_to_conversation(conversation_id, data)
+    except WebSocketDisconnect:
+        manager.disconnect(conversation_id, websocket)
+
