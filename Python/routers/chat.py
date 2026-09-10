@@ -582,37 +582,107 @@ def start_dm_conversation(body: StartDmBody, request: Request):
 
 
 
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+
+# Assumes `get_db` and your models/database setup are imported
+# from .database import get_db
+# from .models import Conversation, DMMessage, User
+
 @router.get("/dms/{conversation_id}/messages")
-def list_dm_messages(conversation_id: int, request: Request):
-    """Mission 7a — message history for one conversation."""
-    # TODO(student):
+def list_dm_messages(conversation_id: int, request: Request, db: Session = Depends(get_db)):
     # 1. Read the current user from the session; 401 if not logged in.
-    # 2. Load the conversation (404 if missing) and check the current user is
-    #    one of its two participants (403 if not) — DMs are private!
-    # 3. Query dm_messages for the conversation, skipping deleted rows,
-    #    ordered by created_at.
-    # 4. Return a list of dicts shaped like:
-    #      [{"id": 1, "conversationId": 1, "senderId": 1, "body": "...",
-    #        "createdAt": "...", "readAt": null}]
-    # 5. Stretch goal: set read_at = now() on the other user's unread rows,
-    #    since fetching the thread means this user has now seen them.
-    return _todo(7, f"implement loading messages for conversation {conversation_id} from dm_messages.")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    # 2. Load the conversation (404 if missing) and check if the current user is a participant (403 if not)
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if conversation.user1_id != user_id and conversation.user2_id != user_id:
+        raise HTTPException(status_code=403, detail="Not a participant of this conversation")
+
+    # 5. Stretch goal: set read_at = now() on the other user's unread rows
+    now = datetime.utcnow()
+    db.query(DMMessage).filter(
+        DMMessage.conversation_id == conversation_id,
+        DMMessage.sender_id != user_id,
+        DMMessage.read_at.is_(None),
+        DMMessage.deleted_at.is_(None)
+    ).update({"read_at": now})
+    db.commit()
+
+    # 3. Query dm_messages for the conversation, skipping deleted rows, ordered by created_at
+    messages = db.query(DMMessage).filter(
+        DMMessage.conversation_id == conversation_id,
+        DMMessage.deleted_at.is_(None)
+    ).order_by(DMMessage.created_at.asc()).all()
+
+    # 4. Return a list of dicts shaped with camelCase keys
+    return [
+        {
+            "id": msg.id,
+            "conversationId": msg.conversation_id,
+            "senderId": msg.sender_id,
+            "body": msg.body,
+            "createdAt": msg.created_at,
+            "readAt": msg.read_at
+        }
+        for msg in messages
+    ]
 
 
-@router.post("/dms/{conversation_id}/messages")
-def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request):
-    """Mission 7b — send a private message."""
-    # TODO(student):
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+# Assumes `get_db` and models are imported
+# from .database import get_db
+# from .models import Conversation, DMMessage
+# from .schemas import SendMessageBody
+
+@router.post("/dms/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
+def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request, db: Session = Depends(get_db)):
     # 1. Read the current user from the session; 401 if not logged in.
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
     # 2. Same participant check as Mission 7a — never let a third user post
-    #    into someone else's conversation.
-    # 3. Validate body.body like Mission 3.
-    # 4. INSERT INTO dm_messages ... RETURNING *, and return the new message
-    #    (status code 201) shaped like Mission 7a's rows.
-    # 5. Test: message yourself between two browser profiles (user 1 and
-    #    user 501) and check both sides see the thread grow.
-    return _todo(7, f"implement saving a new message to conversation {conversation_id} in dm_messages.")
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
+    if conversation.user1_id != user_id and conversation.user2_id != user_id:
+        raise HTTPException(status_code=403, detail="Not a participant of this conversation")
+
+    # 3. Validate body.body like Mission 3.
+    # Assumes validation checks for non-empty text, stripping, or maximum lengths
+    message_text = body.body.strip() if body.body else ""
+    if not message_text:
+        raise HTTPException(status_code=400, detail="Message body cannot be empty")
+
+    # 4. INSERT INTO dm_messages ... RETURNING *, and return the new message
+    new_message = DMMessage(
+        conversation_id=conversation_id,
+        sender_id=user_id,
+        body=message_text
+    )
+
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+
+    # Return shaped like Mission 7a's rows
+    return {
+        "id": new_message.id,
+        "conversationId": new_message.conversation_id,
+        "senderId": new_message.sender_id,
+        "body": new_message.body,
+        "createdAt": new_message.created_at,
+        "readAt": new_message.read_at
+    }
 
 # ---------------------------------------------------------------------------
 # WebSockets — the "real-time" part (Missions 4 and 8)
