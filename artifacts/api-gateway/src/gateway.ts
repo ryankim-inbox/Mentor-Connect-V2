@@ -482,7 +482,7 @@ function parseRequestTarget(rawTarget: string | undefined): RequestTarget {
     rawPath.includes("%") ||
     rawPath.includes("//") ||
     rawPath.split("/").some((segment) => segment === "." || segment === "..") ||
-    !/^\/[a-z0-9/-]*$/.test(rawPath)
+    !/^\/[a-z0-9_/-]*$/.test(rawPath)
   ) {
     throw new GatewayHttpError(400, "malformed_url");
   }
