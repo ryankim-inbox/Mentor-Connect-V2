@@ -7,6 +7,10 @@
  * boundary, not a substitute for the server-side gateway in Slice 02.
  */
 export const releaseFeatureDefinitions = {
+  core: {
+    label: "District and request workspace",
+    environmentVariable: "VITE_FEATURE_CORE",
+  },
   admin: {
     label: "Admin tools",
     environmentVariable: "VITE_FEATURE_ADMIN",
@@ -40,18 +44,39 @@ export const releaseFeatureDefinitions = {
 export type ReleaseFeature = keyof typeof releaseFeatureDefinitions;
 
 function isDevelopmentOptIn(environmentVariable: string): boolean {
-  return import.meta.env.DEV && import.meta.env[environmentVariable] === "true";
+  const environment = import.meta.env;
+  return (
+    environment?.DEV === true && environment[environmentVariable] === "true"
+  );
 }
 
-export const featureFlags: Readonly<Record<ReleaseFeature, boolean>> = Object.freeze({
-  admin: isDevelopmentOptIn(releaseFeatureDefinitions.admin.environmentVariable),
-  matching: isDevelopmentOptIn(releaseFeatureDefinitions.matching.environmentVariable),
-  practice: isDevelopmentOptIn(releaseFeatureDefinitions.practice.environmentVariable),
-  connect: isDevelopmentOptIn(releaseFeatureDefinitions.connect.environmentVariable),
-  chat: isDevelopmentOptIn(releaseFeatureDefinitions.chat.environmentVariable),
-  analytics: isDevelopmentOptIn(releaseFeatureDefinitions.analytics.environmentVariable),
-  scheduling: isDevelopmentOptIn(releaseFeatureDefinitions.scheduling.environmentVariable),
-});
+export const featureFlags: Readonly<Record<ReleaseFeature, boolean>> =
+  Object.freeze({
+    core: isDevelopmentOptIn(
+      releaseFeatureDefinitions.core.environmentVariable,
+    ),
+    admin: isDevelopmentOptIn(
+      releaseFeatureDefinitions.admin.environmentVariable,
+    ),
+    matching: isDevelopmentOptIn(
+      releaseFeatureDefinitions.matching.environmentVariable,
+    ),
+    practice: isDevelopmentOptIn(
+      releaseFeatureDefinitions.practice.environmentVariable,
+    ),
+    connect: isDevelopmentOptIn(
+      releaseFeatureDefinitions.connect.environmentVariable,
+    ),
+    chat: isDevelopmentOptIn(
+      releaseFeatureDefinitions.chat.environmentVariable,
+    ),
+    analytics: isDevelopmentOptIn(
+      releaseFeatureDefinitions.analytics.environmentVariable,
+    ),
+    scheduling: isDevelopmentOptIn(
+      releaseFeatureDefinitions.scheduling.environmentVariable,
+    ),
+  });
 
 export function isFeatureEnabled(feature: ReleaseFeature): boolean {
   return featureFlags[feature];
@@ -69,6 +94,10 @@ export function getFeatureLabel(feature: ReleaseFeature): string {
 export const releaseSurface = Object.freeze({
   safeReturnPath: "/",
   appRoutes: {
+    register: "/register",
+    dashboard: "/dashboard",
+    districts: "/districts",
+    requests: "/requests",
     admin: "/admin/reports",
     matching: "/recommendations",
     practice: "/practice-lab",
@@ -78,7 +107,12 @@ export const releaseSurface = Object.freeze({
   },
 });
 
-const featureRouteMap: ReadonlyArray<{ path: string; feature: ReleaseFeature }> = [
+const featureRouteMap: ReadonlyArray<{
+  path: string;
+  feature: ReleaseFeature;
+}> = [
+  { path: releaseSurface.appRoutes.register, feature: "core" },
+  { path: releaseSurface.appRoutes.dashboard, feature: "core" },
   { path: releaseSurface.appRoutes.admin, feature: "admin" },
   { path: releaseSurface.appRoutes.matching, feature: "matching" },
   { path: releaseSurface.appRoutes.practice, feature: "practice" },
@@ -92,15 +126,30 @@ const featureRouteMap: ReadonlyArray<{ path: string; feature: ReleaseFeature }> 
  * keeps a direct visit to a disabled feature from even making the global
  * /api/auth/me request.
  */
-export function getFeatureForAppLocation(location: string): ReleaseFeature | undefined {
+export function getFeatureForAppLocation(
+  location: string,
+): ReleaseFeature | undefined {
   const [pathWithOptionalHash, query = ""] = location.split("?");
   const pathWithoutHash = pathWithOptionalHash.split("#", 1)[0] || "/";
-  const pathname = pathWithoutHash.length > 1 && pathWithoutHash.endsWith("/")
-    ? pathWithoutHash.slice(0, -1)
-    : pathWithoutHash;
+  const pathname =
+    pathWithoutHash.length > 1 && pathWithoutHash.endsWith("/")
+      ? pathWithoutHash.slice(0, -1)
+      : pathWithoutHash;
 
-  if (pathname === "/dashboard" && new URLSearchParams(query).get("tab") === "practice-lab") {
+  if (
+    pathname === "/dashboard" &&
+    new URLSearchParams(query).get("tab") === "practice-lab"
+  ) {
     return "practice";
+  }
+
+  if (
+    pathname === releaseSurface.appRoutes.districts ||
+    pathname.startsWith(`${releaseSurface.appRoutes.districts}/`) ||
+    pathname === releaseSurface.appRoutes.requests ||
+    pathname.startsWith(`${releaseSurface.appRoutes.requests}/`)
+  ) {
+    return "core";
   }
 
   return featureRouteMap.find((route) => route.path === pathname)?.feature;

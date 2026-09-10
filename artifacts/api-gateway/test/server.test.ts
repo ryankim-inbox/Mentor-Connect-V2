@@ -58,7 +58,7 @@ async function rawRequest(
   });
 }
 
-test("quarantines admin, report, and matching variants before an upstream request", async (context) => {
+test("quarantines risky route variants before an upstream request", async (context) => {
   const upstreamRequests: Array<{ url: string | undefined }> = [];
   const securityEvents: Array<{
     event: string;
@@ -99,6 +99,12 @@ test("quarantines admin, report, and matching variants before an upstream reques
     rawRequest(gatewayPort, "/api/practice%2Fmatching%2F1", "DELETE"),
     rawRequest(gatewayPort, "/api/requests/1/match", "POST"),
     rawRequest(gatewayPort, "/api/requests%2Fblocked-mentor-42%2Fmatch", "PATCH"),
+    rawRequest(gatewayPort, "/api/chat/rooms"),
+    rawRequest(gatewayPort, "/api/chat%2Frooms", "POST", { Cookie: "session=authenticated" }),
+    rawRequest(gatewayPort, "/api/dms/1"),
+    rawRequest(gatewayPort, "/api/dms%2F1", "POST", { Cookie: "session=authenticated" }),
+    rawRequest(gatewayPort, "/ws/chat/1"),
+    rawRequest(gatewayPort, "/ws%2Fchat%2F1", "POST", { Cookie: "session=authenticated" }),
   ]);
 
   assert.equal(upstreamRequests.length, 0);
@@ -117,7 +123,7 @@ test("quarantines admin, report, and matching variants before an upstream reques
     assert.equal(metric.fields.status, 404);
     assert.doesNotMatch(
       JSON.stringify(metric),
-      /session=invalid|flagged-users|summary|blocked-mentor-42|mentor_id/,
+      /session=invalid|session=authenticated|flagged-users|summary|blocked-mentor-42|mentor_id/,
     );
   }
 

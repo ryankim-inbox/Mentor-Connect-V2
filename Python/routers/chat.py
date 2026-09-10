@@ -1,8 +1,8 @@
 # chat.py — LEARNING SCAFFOLD (intentionally incomplete!)
 #
 # This router is the student's project: a messenger-style chat with a global
-# room, one room per district, and private DMs. Every endpoint below returns
-# a {"status": "todo"} placeholder until you implement it.
+# room, one room per district, and private DMs. Missions 1-6 are implemented;
+# Missions 7-8 deliberately remain as {"status": "todo"} practice endpoints.
 #
 # Start here:
 #   * The full mission list lives in docs/STUDENT_CHAT_BACKEND_GUIDE.md.
@@ -15,10 +15,10 @@
 #       - reject anonymous calls:  raise HTTPException(status_code=401, ...)
 #
 # The frontend chat popup (artifacts/peerbridge/src/components/ChatWidget.tsx)
-# already calls these endpoints. While they return {"status": "todo"} it shows
-# a practice-task notice; as soon as you return real data, the tabs come alive.
+# already calls these endpoints. The remaining TODO responses keep the private
+# message thread in practice mode until Missions 7-8 are implemented.
 
-from fastapi import APIRouter, Request, WebSocket, HTTPException
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 
 from db import db  # imported for you — every mission's queries will use it
@@ -339,130 +339,43 @@ def list_chat_rooms(request: Request):
 
 
 @router.get("/chat/rooms/{room_id}/messages")
-from datetime import datetime, timezone
-from flask import jsonify, g, request, abort
-def list_room_messages(room_id):
-    # 1. Session check (401)
-    current_user = getattr(g, "user", None)
-    if not current_user:
-        return jsonify({"error": "Unauthorized"}), 401
-    db = g.db
-    cursor = db.cursor()
-
-    # 2. Load the room to check permissions
-    cursor.execute(
-        "SELECT id, type, district_id FROM chat_rooms WHERE id = %s",
-        (room_id,)
-    )
-    room = cursor.fetchone()
-    if not room:
-        return jsonify({"error": "Room not found"}), 404
-
-    room_type = room["type"]
-    room_district_id = room["district_id"]
-
-    if room_type == "district" and room_district_id != current_user.get("district_id"):
-        return jsonify({"error": "Forbidden: You cannot access other district chats"}), 403
-
-    # 3. Query messages + sender names (with soft-delete filter and ASC order)
-    query = """
-            SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name, m.body, m.created_at
-            FROM chat_messages m
-                     JOIN users u ON u.id = m.sender_id
-            WHERE m.room_id = %s
-              AND m.deleted_at IS NULL
-            ORDER BY m.created_at ASC
-                LIMIT 50 \
-            """
-    cursor.execute(query, (room_id,))
-    rows = cursor.fetchall()
-
-    # 4. Format the result list to camelCase and convert timestamps to ISO strings
-    messages_payload = []
-    for row in rows:
-        dt = row["created_at"]
-        if isinstance(dt, datetime):
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            iso_timestamp = dt.isoformat()
-        else:
-            iso_timestamp = str(dt)
-
-        messages_payload.append({
-            "id": row["id"],
-            "roomId": row["room_id"],
-            "senderId": row["sender_id"],
-            "senderName": row["sender_name"],
-            "body": row["body"],
-            "createdAt": iso_timestamp
-        })
-
-    return jsonify(messages_payload), 200
+def list_room_messages(room_id: int, request: Request):
+    """Mission 2 — message history for one room, oldest -> newest."""
+    user_id = _require_user(request)
+    with db() as conn:
+        cur = conn.cursor()
+        _load_room_for_user(cur, room_id, user_id)
+        cur.execute(
+            """SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name,
+                      m.body, m.created_at
+               FROM chat_messages m
+               JOIN users u ON u.id = m.sender_id
+               WHERE m.room_id = %s
+                 AND m.deleted_at IS NULL
+               ORDER BY m.created_at
+               LIMIT 50""",
+            (room_id,),
+        )
+        messages = cur.fetchall()
+    return [_format_chat_message(message) for message in messages]
 
 
-
-from fastapi import APIRouter, Request, HTTPException, status
-from pydantic import BaseModel, Field
-
-
-class SendMessageBody(BaseModel):
-    body: str = Field(..., max_length=2000)
-
-@router.post(
-    "/chat/rooms/{room_id}/messages",
-    status_code=status.HTTP_201_CREATED
-)
+@router.post("/chat/rooms/{room_id}/messages", status_code=201)
 def send_room_message(room_id: int, body: SendMessageBody, request: Request):
-    """Mission 3 — post a message into a room."""
-
-    # 1. Read the current user from the session; 401 if not logged in
-    user_id = request.session.get("user_id")
-    user_district_id = request.session.get("district_id")
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+    """Mission 3 — post a message into a room, return the saved row (201)."""
+    user_id = _require_user(request)
+    text = _clean_body(body.body)
+    with db() as conn:
+        cur = conn.cursor()
+        _load_room_for_user(cur, room_id, user_id)
+        cur.execute(
+            """INSERT INTO chat_messages (room_id, sender_id, body)
+               VALUES (%s, %s, %s) RETURNING id""",
+            (room_id, user_id, text),
         )
-
-
- .
-    cleaned_body = body.body.strip()
-    if not cleaned_body:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Message body cannot be empty"
-        )
-
-    # 2. Validate the room like in Mission 2 (404 unknown, 403 wrong district).
-    room = db.execute(
-        "SELECT district_id FROM chat_rooms WHERE id = :room_id",
-        {"room_id": room_id}
-    ).fetchone()
-
-    if not room:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Room not found"
-        )
-
-    if room["district_id"] != user_district_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this district's room"
-        )
-
-    # 4. INSERT INTO chat_messages ... RETURNING *, and return the new message
-    new_message = db.execute(
-        """
-        INSERT INTO chat_messages (room_id, user_id, body, created_at)
-        VALUES (:room_id, :user_id, :body, NOW())
-            RETURNING *
-        """,
-        {"room_id": room_id, "user_id": user_id, "body": cleaned_body}
-    ).fetchone()
-    return dict(new_message)
-.")dp
+        new_id = cur.fetchone()["id"]
+        message = _fetch_chat_message(cur, new_id)
+    return message
 
 
 # ---------------------------------------------------------------------------
@@ -471,115 +384,69 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
 
 @router.get("/dms")
 def list_dm_conversations(request: Request):
-    """Mission 5 — this user's DM conversation list."""
-    # 1. Read the current user from the session; 401 if not logged in.
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    # 2 & 3. Query dm_conversations where the user is user_a_id OR user_b_id.
-    query = """
-            SELECT
-                c.id,
-                c.created_at,
-                u.id AS other_user_id,
-                CONCAT(u.first_name, ' ', u.last_name) AS other_user_name
-            FROM dm_conversations c
-                     JOIN users u ON u.id = CASE
-                                                WHEN c.user_a_id = %s THEN c.user_b_id
-                                                ELSE c.user_a_id
-                END
-            WHERE c.user_a_id = %s OR c.user_b_id = %s
-            ORDER BY c.created_at DESC; \
-            """
-
-    conversations = []
-
+    """Mission 5 — this user's DM conversation list, newest first."""
+    user_id = _require_user(request)
     with db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, (user_id, user_id, user_id))
-            rows = cur.fetchall()
-
-            for row in rows:
-                # 4. Return a list of dicts matching the requested shape
-                conversations.append({
-                    "id": row["id"],
-                    "otherUserId": row["other_user_id"],
-                    "otherUserName": row["other_user_name"],
-                    "createdAt": row["created_at"].isoformat()
-                })
-
-    return conversations
-
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT c.id, u.id AS other_user_id, u.name AS other_user_name, c.created_at
+               FROM dm_conversations c
+               JOIN users u
+                 ON u.id = CASE WHEN c.user_a_id = %s THEN c.user_b_id ELSE c.user_a_id END
+               WHERE c.user_a_id = %s OR c.user_b_id = %s
+               ORDER BY c.created_at DESC""",
+            (user_id, user_id, user_id),
+        )
+        conversations = cur.fetchall()
+    return [_format_conversation(conversation) for conversation in conversations]
 
 
 @router.post("/dms/start")
 def start_dm_conversation(body: StartDmBody, request: Request):
     """Mission 6 — start (or reuse) a conversation with another user."""
-    # 1. Read the current user from the session; 401 if not logged in.
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    target_id = body.toUserId
-
-    # 2. Validate body.toUserId: must not be yourself (400)
-    if user_id == target_id:
-        raise HTTPException(status_code=400, detail="You cannot start a DM conversation with yourself")
+    user_id = _require_user(request)
+    if body.toUserId == user_id:
+        raise HTTPException(status_code=400, detail="Cannot start a DM with yourself")
 
     with db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id, first_name, last_name FROM users WHERE id = %s", (target_id,))
-            target_user = cur.fetchone()
-            if not target_user:
-                raise HTTPException(status_code=404, detail="Target user not found")
+        cur = conn.cursor()
 
-            # 5. Stretch goal: refuse to start a DM if either user has blocked the other
-            cur.execute("""
-                        SELECT 1 FROM blocks
-                        WHERE (blocker_id = %s AND blocked_id = %s)
-                           OR (blocker_id = %s AND blocked_id = %s)
-                            LIMIT 1
-                        """, (user_id, target_id, target_id, user_id))
-            if cur.fetchone():
-                raise HTTPException(status_code=400, detail="Cannot start a conversation due to a block restriction")
+        cur.execute("SELECT id FROM users WHERE id = %s", (body.toUserId,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
 
-            # 3. Look for an existing conversation BETWEEN BOTH USERS
-            # Checks both (me, them) and (them, me) variations
-            cur.execute("""
-                        SELECT id, created_at FROM dm_conversations
-                        WHERE (user_a_id = %s AND user_b_id = %s)
-                           OR (user_a_id = %s AND user_b_id = %s)
-                            LIMIT 1
-                        """, (user_id, target_id, target_id, user_id))
-            existing_conv = cur.fetchone()
+        cur.execute(
+            """SELECT 1 FROM blocks
+               WHERE (blocker_id = %s AND blocked_user_id = %s)
+                  OR (blocker_id = %s AND blocked_user_id = %s)
+               LIMIT 1""",
+            (user_id, body.toUserId, body.toUserId, user_id),
+        )
+        if cur.fetchone():
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot start a conversation with this user",
+            )
 
-            if existing_conv:
-                return {
-                    "id": existing_conv["id"],
-                    "otherUserId": target_id,
-                    "otherUserName": f"{target_user['first_name']} {target_user['last_name']}",
-                    "createdAt": existing_conv["created_at"].isoformat()
-                }
+        cur.execute(
+            """SELECT id FROM dm_conversations
+               WHERE (user_a_id = %s AND user_b_id = %s)
+                  OR (user_a_id = %s AND user_b_id = %s)""",
+            (user_id, body.toUserId, body.toUserId, user_id),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return _fetch_conversation(cur, existing["id"], user_id)
 
-            # 4. Otherwise INSERT INTO dm_conversations ... RETURNING *
-            # Enforce lowest ID value as user_a_id to standardize table rows if preferred,
-            # but direct assignment works perfectly here.
-            cur.execute("""
-                        INSERT INTO dm_conversations (user_a_id, user_b_id, created_at)
-                        VALUES (%s, %s, NOW())
-                            RETURNING id, created_at
-                        """, (user_id, target_id))
-            new_conv = cur.fetchone()
-            conn.commit()
-
-            return {
-                "id": new_conv["id"],
-                "otherUserId": target_id,
-                "otherUserName": f"{target_user['first_name']} {target_user['last_name']}",
-                "createdAt": new_conv["created_at"].isoformat()
-            }
-
+        user_a_id = min(user_id, body.toUserId)
+        user_b_id = max(user_id, body.toUserId)
+        cur.execute(
+            """INSERT INTO dm_conversations (user_a_id, user_b_id)
+               VALUES (%s, %s) RETURNING id""",
+            (user_a_id, user_b_id),
+        )
+        new_id = cur.fetchone()["id"]
+        return _fetch_conversation(cur, new_id, user_id)
 
 
 @router.get("/dms/{conversation_id}/messages")
@@ -622,8 +489,8 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
 # server pushes every new message to everyone in the room the moment it
 # arrives — no polling.
 #
-# For now each socket accepts, sends one TODO notice, and closes politely so
-# nothing crashes. Your eventual implementation will need:
+# Mission 4 implements the room socket. Mission 8 still accepts, sends one TODO
+# notice, and closes politely. The live room implementation uses:
 #   * auth: SessionMiddleware runs for WebSockets too, so
 #     websocket.session.get("user_id") works just like request.session
 #   * a connection registry, e.g. {room_id: [connected sockets]}
@@ -635,64 +502,80 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
 # ---------------------------------------------------------------------------
 
 
+room_connections: dict[int, list[WebSocket]] = {}
+
+
+async def _broadcast(sockets: list[WebSocket], message: dict) -> None:
+    """Broadcast JSON to all live sockets and discard stale connections."""
+    dead: list[WebSocket] = []
+    for socket in list(sockets):
+        try:
+            await socket.send_json(message)
+        except Exception:
+            dead.append(socket)
+    for socket in dead:
+        if socket in sockets:
+            sockets.remove(socket)
+
+
+def _register(
+    registry: dict[int, list[WebSocket]],
+    key: int,
+    websocket: WebSocket,
+) -> None:
+    registry.setdefault(key, []).append(websocket)
+
+
+def _unregister(
+    registry: dict[int, list[WebSocket]],
+    key: int,
+    websocket: WebSocket,
+) -> None:
+    sockets = registry.get(key)
+    if sockets and websocket in sockets:
+        sockets.remove(websocket)
+    if sockets is not None and not sockets:
+        registry.pop(key, None)
+
+
 @ws_router.websocket("/ws/chat/rooms/{room_id}")
 async def chat_room_socket(websocket: WebSocket, room_id: int):
-    """Mission 4 — live updates for a chat room. Not implemented yet."""
-import json
-from collections import defaultdict
-from fastapi import WebSocket, WebSocketDisconnect
-
-# 1. Registry of open sockets per room at module level
-room_connections: dict[int, list[WebSocket]] = defaultdict(list)
-
-async def chat_room_socket(websocket: WebSocket, room_id: int):
-    # 2. Check the session for user authentication
+    """Mission 4 — live updates for a chat room."""
     user_id = websocket.session.get("user_id")
     if not user_id:
         await websocket.close(code=4401)
         return
 
-    # 3. Accept connection and add to the registry
-    await websocket.accept()
-    room_connections[room_id].append(websocket)
-
-    # 5. Wrap loop in try/finally to handle cleanup on disconnect
     try:
-        # 4. Loop over incoming text
+        with db() as conn:
+            _load_room_for_user(conn.cursor(), room_id, user_id)
+    except HTTPException:
+        await websocket.close(code=4403)
+        return
+
+    await websocket.accept()
+    _register(room_connections, room_id, websocket)
+    try:
         async for text in websocket.iter_text():
-            # TODO: Validate + save exactly like Mission 3
-            # Assuming you extract content and save it to your DB here:
-            # message_data = await save_message_to_db(user_id=user_id, room_id=room_id, content=text)
+            try:
+                clean = _clean_body(text)
+            except HTTPException:
+                continue
 
-            # Format the payload to send as JSON
-            payload = {
-                "room_id": room_id,
-                "user_id": user_id,
-                "content": text,
-            }
-            payload_json = json.dumps(payload)
+            with db() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO chat_messages (room_id, sender_id, body)
+                       VALUES (%s, %s, %s) RETURNING id""",
+                    (room_id, user_id, clean),
+                )
+                message = _fetch_chat_message(cur, cur.fetchone()["id"])
 
-            # Broadcast the saved message to EVERY socket in that room's list
-            # We iterate over a copy of the list to prevent modification errors during iteration
-            for connection in list(room_connections[room_id]):
-                try:
-                    await connection.send_text(payload_json)
-                except Exception:
-                    # Catch-allfor stale connections that haven't triggered disconnect yet
-                    if connection in room_connections[room_id]:
-                        room_connections[room_id].remove(connection)
-
+            await _broadcast(room_connections.get(room_id, []), message)
     except WebSocketDisconnect:
-        # Expected exception when a client leaves
         pass
     finally:
-        # Clean up registry when connection breaks or closes
-        if websocket in room_connections[room_id]:
-            room_connections[room_id].remove(websocket)
-
-        # Optional: Remove the room key entirely if empty
-        if not room_connections[room_id]:
-            room_connections.pop(room_id, None)
+        _unregister(room_connections, room_id, websocket)
 
 
 @ws_router.websocket("/ws/dms/{conversation_id}")
