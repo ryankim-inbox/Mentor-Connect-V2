@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "advisoryLockKey": "774301992604150",
+  "ledgerTable": "mentor_connect_schema_migrations",
+  "migrations": [
+    {
+      "id": "0001_canonical_baseline",
+      "path": "0001_canonical_baseline.sql",
+      "sha256": "0b02984bba7f186a5a6f99b49695110c2b023b001cdd207f84d2ed82646a5dab"
+    },
+    {
+      "id": "0002_integrity_constraints_indexes",
+      "path": "0002_integrity_constraints_indexes.sql",
+      "sha256": "53adbe10adee136e6217515201288a7c992234a19cc8b82368ea662364443e24"
+    }
+  ]
+}
