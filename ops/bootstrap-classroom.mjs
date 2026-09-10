@@ -56,7 +56,7 @@ export function validateClassroomTarget({
   }
   let targetDatabase;
   try {
-    targetDatabase = decodeURIComponent(target.pathname.slice(1));
+    targetDatabase = decodeURI(target.pathname.slice(1));
   } catch {
     throw new Error("CLASSROOM_DATABASE_URL database name is invalid");
   }
@@ -84,9 +84,36 @@ export async function bootstrapClassroom({ client, ledger, appSha }) {
     ledger,
     appSha,
     async beforeApply(lockedClient) {
-      const { rows } = await lockedClient.query(
-        "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE schemaname = 'public') AS populated",
-      );
+      const { rows } = await lockedClient.query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_catalog.pg_namespace
+          WHERE nspname !~ '^pg_'
+            AND nspname NOT IN ('public', 'information_schema')
+          UNION ALL
+          SELECT 1
+          FROM pg_catalog.pg_class AS relation
+          JOIN pg_catalog.pg_namespace AS namespace
+            ON namespace.oid = relation.relnamespace
+          WHERE namespace.nspname = 'public'
+          UNION ALL
+          SELECT 1
+          FROM pg_catalog.pg_proc AS function
+          JOIN pg_catalog.pg_namespace AS namespace
+            ON namespace.oid = function.pronamespace
+          WHERE namespace.nspname = 'public'
+          UNION ALL
+          SELECT 1
+          FROM pg_catalog.pg_type AS type
+          JOIN pg_catalog.pg_namespace AS namespace
+            ON namespace.oid = type.typnamespace
+          WHERE namespace.nspname = 'public'
+          UNION ALL
+          SELECT 1
+          FROM pg_catalog.pg_extension
+          WHERE extname <> 'plpgsql'
+        ) AS populated
+      `);
       if (rows[0]?.populated) {
         throw new Error("classroom bootstrap requires an empty database");
       }
