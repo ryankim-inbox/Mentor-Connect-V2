@@ -7,7 +7,11 @@ import {
 } from "node:http";
 import type { Duplex } from "node:stream";
 
-import { classifyQuarantinedRoute } from "./route-policy.js";
+import {
+  resolvePublicRoute,
+  type PublicRoute,
+  type PublicRouteMatch,
+} from "./route-policy.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
 const DEFAULT_REQUEST_BODY_LIMIT_BYTES = 1_048_576;
@@ -16,6 +20,7 @@ const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
 const DEFAULT_REQUEST_BODY_TIMEOUT_MS = 10_000;
 const MAX_REQUEST_TARGET_LENGTH = 8_192;
 const SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES = 16 * 1024;
+const PRACTICE_LOCATION_TEST_BODY_LIMIT_BYTES = 16 * 1024;
 
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   "connection",
@@ -46,74 +51,6 @@ const FORWARDED_REQUEST_HEADERS = [
   "cookie",
   "user-agent",
 ] as const;
-
-type AuthenticationRequirement = "none" | "cookie" | "session";
-
-interface RoutePolicy {
-  readonly method: "GET" | "POST" | "PATCH";
-  readonly path: string;
-  readonly authentication: AuthenticationRequirement;
-  readonly allowsBody: boolean;
-  readonly requiresJson?: boolean;
-  readonly allowsQuery?: boolean;
-}
-
-/**
- * This list is intentionally small. New endpoints must be reviewed and added
- * here with their method, canonical path, authentication policy, and body
- * policy before the gateway can reach the Python service.
- */
-export const gatewayAllowlist: readonly RoutePolicy[] = Object.freeze([
-  {
-    method: "GET",
-    path: "/api/healthz",
-    authentication: "none",
-    allowsBody: false,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/register",
-    authentication: "none",
-    allowsBody: true,
-    requiresJson: true,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/login",
-    authentication: "none",
-    allowsBody: true,
-    requiresJson: true,
-  },
-  {
-    method: "GET",
-    path: "/api/auth/me",
-    authentication: "cookie",
-    allowsBody: false,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/logout",
-    authentication: "session",
-    allowsBody: false,
-  },
-]);
-
-// These dynamic paths are intentionally kept out of the literal route array:
-// both the canonical path id and the session id must be evaluated together.
-const selfProfileGetPolicy: RoutePolicy = {
-  method: "GET",
-  path: "/api/users/{self}",
-  authentication: "session",
-  allowsBody: false,
-};
-
-const selfProfilePatchPolicy: RoutePolicy = {
-  method: "PATCH",
-  path: "/api/users/{self}",
-  authentication: "session",
-  allowsBody: true,
-  requiresJson: true,
-};
 
 export interface GatewayLogger {
   info(
@@ -259,23 +196,6 @@ async function handleRequest(
   config: GatewayConfig,
 ): Promise<void> {
   const requestId = randomUUID();
-  const quarantinedRoute = classifyQuarantinedRoute(request.url ?? "");
-
-  // This check stays ahead of URL parsing, header validation, authentication,
-  // and all upstream work. It catches encoded separators, trailing slashes,
-  // matrix parameters, and dot-segment spellings of the quarantined families.
-  if (quarantinedRoute) {
-    drainRequest(request);
-    sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.quarantine_denied", {
-      correlationId: requestId,
-      outcome: "denied",
-      routeFamily: quarantinedRoute,
-      status: 404,
-    });
-    return;
-  }
-
   const clientAbortController = new AbortController();
   let clientDisconnected = false;
 
@@ -311,23 +231,7 @@ async function handleRequest(
       return;
     }
 
-    const selfProfileUserId = target.hasQuery
-      ? undefined
-      : parseCanonicalSelfProfileUserId(target.pathname);
-    if (selfProfileUserId !== undefined) {
-      await handleSelfProfileRequest(
-        request,
-        response,
-        config,
-        requestId,
-        method,
-        selfProfileUserId,
-        clientAbortController.signal,
-      );
-      return;
-    }
-
-    const policy = findRoutePolicy(method, target);
+    const policy = resolveGatewayRoute(method, request.url ?? "");
     if (!policy) {
       drainRequest(request);
       sendGatewayError(response, 404, "not_found", requestId);
@@ -337,6 +241,18 @@ async function handleRequest(
         requestId,
         status: 404,
       });
+      return;
+    }
+
+    if (policy.family === "users" && policy.resourceId !== undefined) {
+      await handleSelfProfileRequest(
+        request,
+        response,
+        config,
+        requestId,
+        policy,
+        clientAbortController.signal,
+      );
       return;
     }
 
@@ -361,7 +277,8 @@ async function handleRequest(
       return;
     }
 
-    validateRouteHeaders(request, policy, config);
+    const routeBodyLimit = getRouteBodyLimit(policy, config);
+    validateRouteHeaders(request, policy, routeBodyLimit);
 
     if (policy.authentication !== "none" && !hasCookie(request)) {
       drainRequest(request);
@@ -387,7 +304,7 @@ async function handleRequest(
 
     const body = await readRequestBody(
       request,
-      policy.allowsBody ? config.requestBodyLimitBytes : 0,
+      policy.allowsBody ? routeBodyLimit : 0,
       policy.allowsBody,
       config.requestBodyTimeoutMs,
       clientAbortController.signal,
@@ -396,7 +313,7 @@ async function handleRequest(
     const upstream = await fetchUpstream(
       request,
       method,
-      target.pathname,
+      policy.upstreamPath,
       body,
       config,
       requestId,
@@ -630,8 +547,8 @@ function validateGenericRequestHeaders(
 
 function validateRouteHeaders(
   request: IncomingMessage,
-  policy: RoutePolicy,
-  config: GatewayConfig,
+  policy: PublicRoute,
+  bodyLimitBytes: number,
 ): void {
   const contentLength = getHeader(request, "content-length");
   const bytes = contentLength === undefined ? 0 : Number(contentLength);
@@ -640,7 +557,7 @@ function validateRouteHeaders(
     throw new GatewayHttpError(400, "request_body_not_allowed");
   }
 
-  if (bytes > config.requestBodyLimitBytes) {
+  if (bytes > bodyLimitBytes) {
     throw new GatewayHttpError(413, "request_body_too_large");
   }
 
@@ -650,6 +567,15 @@ function validateRouteHeaders(
       throw new GatewayHttpError(415, "json_content_type_required");
     }
   }
+}
+
+function getRouteBodyLimit(policy: PublicRoute, config: GatewayConfig): number {
+  return policy.template === "/api/practice/locations/test"
+    ? Math.min(
+        config.requestBodyLimitBytes,
+        PRACTICE_LOCATION_TEST_BODY_LIMIT_BYTES,
+      )
+    : config.requestBodyLimitBytes;
 }
 
 function hasDuplicateHeaders(rawHeaders: readonly string[]): boolean {
@@ -686,16 +612,18 @@ function isJsonContentType(contentType: string): boolean {
   return mediaType?.trim().toLowerCase() === "application/json";
 }
 
-function findRoutePolicy(
+function resolveGatewayRoute(
   method: string,
-  target: RequestTarget,
-): RoutePolicy | undefined {
-  return gatewayAllowlist.find(
-    (policy) =>
-      policy.method === method &&
-      policy.path === target.pathname &&
-      (policy.allowsQuery === true || !target.hasQuery),
-  );
+  target: string,
+): PublicRouteMatch | undefined {
+  try {
+    return resolvePublicRoute(method, target);
+  } catch (error) {
+    if (error instanceof TypeError && error.message === "invalid_query") {
+      throw new GatewayHttpError(400, "invalid_query");
+    }
+    throw error;
+  }
 }
 
 function hasCookie(request: IncomingMessage): boolean {
@@ -708,10 +636,13 @@ async function handleSelfProfileRequest(
   response: ServerResponse,
   config: GatewayConfig,
   requestId: string,
-  method: string,
-  requestedUserId: number,
+  policy: PublicRouteMatch,
   clientSignal: AbortSignal,
 ): Promise<void> {
+  const { method, resourceId: requestedUserId } = policy;
+  if (requestedUserId === undefined) {
+    throw new GatewayHttpError(404, "not_found");
+  }
   if (method === "GET") {
     response.setHeader(
       "vary",
@@ -730,27 +661,7 @@ async function handleSelfProfileRequest(
     return;
   }
 
-  const policy =
-    method === "GET"
-      ? selfProfileGetPolicy
-      : method === "PATCH"
-        ? selfProfilePatchPolicy
-        : undefined;
-
-  if (!policy) {
-    drainRequest(request);
-    sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.self_profile_denied", {
-      method,
-      outcome: "method_not_allowed",
-      requestId,
-      routeFamily: "self-profile",
-      status: 404,
-    });
-    return;
-  }
-
-  validateRouteHeaders(request, policy, config);
+  validateRouteHeaders(request, policy, config.requestBodyLimitBytes);
 
   let body: Buffer | undefined;
   if (method === "PATCH") {
@@ -799,7 +710,7 @@ async function handleSelfProfileRequest(
   }
 
   const session = await verifySession(request, config, requestId, clientSignal);
-  if (session.userId !== requestedUserId) {
+  if (method === "PATCH" && session.userId !== requestedUserId) {
     sendGatewayError(response, 404, "not_found", requestId);
     log(config, "gateway.self_profile_denied", {
       method,
@@ -814,7 +725,7 @@ async function handleSelfProfileRequest(
   const upstream = await fetchUpstream(
     request,
     method,
-    "/api/users/" + String(requestedUserId),
+    policy.upstreamPath,
     body,
     config,
     requestId,
@@ -835,18 +746,6 @@ async function handleSelfProfileRequest(
     routeFamily: "self-profile",
     status: upstream.response.status,
   });
-}
-
-function parseCanonicalSelfProfileUserId(pathname: string): number | undefined {
-  const match = /^\/api\/users\/([1-9]\d*)$/.exec(pathname);
-  if (!match) {
-    return undefined;
-  }
-
-  const id = Number(match[1]);
-  return Number.isSafeInteger(id) && id > 0 && String(id) === match[1]
-    ? id
-    : undefined;
 }
 
 function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
