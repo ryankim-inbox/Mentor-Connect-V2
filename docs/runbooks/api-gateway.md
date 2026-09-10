@@ -42,12 +42,12 @@ Gateway parses allowed query values with `URLSearchParams`, rejects malformed pe
 duplicate keys, unknown keys, and invalid values, then forwards the validated serialized query.
 It never inserts an omitted optional value, so Python defaults remain authoritative.
 
-| Route                                                                         | Allowed query                                        |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------- | ------- |
-| `GET /api/districts`                                                          | `type=high_school                                    | unified`; `search` at most 200 UTF-8 bytes |
-| `GET /api/requests`                                                           | positive safe `districtId` and `tagId`; `role=mentor | mentee`; `status=open                      | matched | closed` |
-| `GET /api/matches/{questionId}` and `GET /api/practice/matching/{questionId}` | `limit` from 1 through 20                            |
-| `GET /api/scheduling/suggest`                                                 | positive safe `user_a` and `user_b`; both required   |
+| Route                                                                         | Allowed query                                                                                                             |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/districts`                                                          | `type` is `high_school` or `unified`; `search` is at most 200 UTF-8 bytes                                                  |
+| `GET /api/requests`                                                           | positive safe `districtId` and `tagId`; `role` is `mentor` or `mentee`; `status` is `open`, `matched`, or `closed`          |
+| `GET /api/matches/{questionId}` and `GET /api/practice/matching/{questionId}` | `limit` from 1 through 20                                                                                                 |
+| `GET /api/scheduling/suggest`                                                 | positive safe `user_a` and `user_b`; both required                                                                         |
 
 POST/PATCH operations with a body require `application/json`. `POST /api/auth/logout`,
 `POST /api/requests/{id}/match`, and every DELETE are bodyless. The default request limit is

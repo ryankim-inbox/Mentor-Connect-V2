@@ -49,12 +49,12 @@ dot segments, uppercase variants, and trailing slashes are rejected before forwa
 
 Only these query keys are accepted:
 
-| Route                         | Contract                                                       |
-| ----------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------- | ------- | ------- |
-| `GET /api/districts`          | optional `type=high_school                                     | unified`; optional `search` no longer than 200 UTF-8 bytes |
-| `GET /api/requests`           | optional positive `districtId`, positive `tagId`, `role=mentor | mentee`, `status=open                                      | matched | closed` |
-| matching GET routes           | optional `limit` from 1 through 20                             |
-| `GET /api/scheduling/suggest` | required positive `user_a` and `user_b`                        |
+| Route                         | Contract                                                                                                              |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/districts`          | optional `type` is `high_school` or `unified`; optional `search` is no longer than 200 UTF-8 bytes                     |
+| `GET /api/requests`           | optional positive `districtId` and `tagId`; optional `role` is `mentor` or `mentee`; optional `status` is `open`, `matched`, or `closed` |
+| matching GET routes           | optional `limit` from 1 through 20                                                                                   |
+| `GET /api/scheduling/suggest` | required positive `user_a` and `user_b`                                                                              |
 
 Malformed encoding, duplicates, unknown keys, empty numbers, zero, noncanonical integers, unsafe
 integers, and out-of-range values return 400. Accepted queries are serialized and forwarded; omitted
