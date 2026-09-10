@@ -17,9 +17,12 @@ export default function Register() {
   const [emailError, setEmailError] = useState("");
   const [districtSearch, setDistrictSearch] = useState("");
 
-  const { data: districts } = useListDistricts({ type: "high_school", search: districtSearch || undefined }, {
-    query: { queryKey: ["listDistricts", "high_school", districtSearch] }
-  });
+  const { data: districts } = useListDistricts(
+    { type: "high_school", search: districtSearch || undefined },
+    {
+      query: { queryKey: ["listDistricts", "high_school", districtSearch] },
+    },
+  );
 
   const registerMutation = useRegister();
 
@@ -52,13 +55,13 @@ export default function Register() {
       {
         onSuccess: () => {
           refetch();
-          navigate("/dashboard");
+          navigate("/profile");
         },
         onError: (err: unknown) => {
           const e = err as { data?: { error?: string } };
           setError(e?.data?.error ?? "Registration failed. Please try again.");
         },
-      }
+      },
     );
   };
 
@@ -66,18 +69,26 @@ export default function Register() {
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Create your account</h1>
-          <p className="text-muted-foreground mt-1">Join PeerBridge with your school email</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            Create your account
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Join PeerBridge with your school email
+          </p>
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-8 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Full name</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Full name
+              </label>
               <input
                 type="text"
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 placeholder="Your name"
                 required
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
@@ -86,7 +97,10 @@ export default function Register() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                School email <span className="text-muted-foreground font-normal">(must be .edu)</span>
+                School email{" "}
+                <span className="text-muted-foreground font-normal">
+                  (must be .edu)
+                </span>
               </label>
               <input
                 type="email"
@@ -96,15 +110,21 @@ export default function Register() {
                 required
                 className={`w-full px-3 py-2.5 border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition ${emailError ? "border-destructive" : "border-input"}`}
               />
-              {emailError && <p className="text-xs text-destructive mt-1">{emailError}</p>}
+              {emailError && (
+                <p className="text-xs text-destructive mt-1">{emailError}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Password
+              </label>
               <input
                 type="password"
                 value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, password: e.target.value }))
+                }
                 placeholder="Create a password"
                 required
                 minLength={6}
@@ -113,7 +133,9 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">I want to be a...</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                I want to be a...
+              </label>
               <div className="grid grid-cols-3 gap-2">
                 {(["mentee", "mentor", "both"] as const).map((r) => (
                   <button
@@ -126,19 +148,28 @@ export default function Register() {
                         : "bg-background text-foreground border-input hover:bg-accent"
                     }`}
                   >
-                    {r === "both" ? "Both" : r === "mentor" ? "Mentor" : "Mentee"}
+                    {r === "both"
+                      ? "Both"
+                      : r === "mentor"
+                        ? "Mentor"
+                        : "Mentee"}
                   </button>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {form.role === "mentor" && "You'll offer guidance to other students"}
-                {form.role === "mentee" && "You'll receive guidance from other students"}
-                {form.role === "both" && "You'll both give and receive guidance"}
+                {form.role === "mentor" &&
+                  "You'll offer guidance to other students"}
+                {form.role === "mentee" &&
+                  "You'll receive guidance from other students"}
+                {form.role === "both" &&
+                  "You'll both give and receive guidance"}
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">School district</label>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                School district
+              </label>
               <input
                 type="text"
                 placeholder="Search districts..."
@@ -148,25 +179,34 @@ export default function Register() {
               />
               <select
                 value={form.districtId || ""}
-                onChange={(e) => setForm((f) => ({ ...f, districtId: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, districtId: Number(e.target.value) }))
+                }
                 required
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
                 size={4}
               >
-                <option value="" disabled>Select your district</option>
+                <option value="" disabled>
+                  Select your district
+                </option>
                 {districts?.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name} ({d.county} County)</option>
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({d.county} County)
+                  </option>
                 ))}
               </select>
               {form.districtId > 0 && (
                 <p className="text-xs text-primary mt-1">
-                  Selected: {districts?.find(d => d.id === form.districtId)?.name}
+                  Selected:{" "}
+                  {districts?.find((d) => d.id === form.districtId)?.name}
                 </p>
               )}
             </div>
 
             {error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                {error}
+              </p>
             )}
 
             <button
@@ -174,14 +214,18 @@ export default function Register() {
               disabled={registerMutation.isPending || !!emailError}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {registerMutation.isPending ? "Creating account..." : "Create account"}
+              {registerMutation.isPending
+                ? "Creating account..."
+                : "Create account"}
             </button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Already have an account?{" "}
             <Link href="/login">
-              <span className="text-primary font-medium hover:underline">Sign in</span>
+              <span className="text-primary font-medium hover:underline">
+                Sign in
+              </span>
             </Link>
           </p>
         </div>

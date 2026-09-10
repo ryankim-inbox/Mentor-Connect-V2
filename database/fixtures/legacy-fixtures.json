@@ -1,0 +1,14 @@
+{
+  "formatVersion": 1,
+  "fixtures": [
+    {
+      "id": "mentor-connect-mock-1000-v1",
+      "path": "../mentor_connect_mock_1000.sql",
+      "sha256": "9931be509fce00b7a938021dd8bb23cd0391c58f910a4e90518a819990f19be2",
+      "schemaCompatibility": "legacy-pre-0002",
+      "currentSchemaCompatible": false,
+      "destructiveLocalReset": true,
+      "deploymentUse": "forbidden"
+    }
+  ]
+}

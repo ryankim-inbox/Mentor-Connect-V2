@@ -1,0 +1,31 @@
+kind = "api"
+previewPath = "/api/healthz"
+title = "PeerBridge API Shield"
+version = "1.0.0"
+id = "artifacts/api-gateway"
+
+[[services]]
+localPort = 8080
+name = "API Shield"
+# These public families must be owned by the shield. /ws is listed explicitly
+# so upgrade requests cannot fall through to another artifact.
+paths = ["/api", "/livez", "/ws"]
+
+[services.development]
+run = "pnpm --filter @workspace/api-gateway run dev"
+
+[services.production]
+
+[services.production.build]
+args = ["pnpm", "--filter", "@workspace/api-gateway", "run", "build"]
+
+[services.production.run]
+args = ["node", "artifacts/api-gateway/dist/index.js"]
+
+[services.production.run.env]
+PORT = "8080"
+NODE_ENV = "production"
+GATEWAY_UPSTREAM_ORIGIN = "http://127.0.0.1:8181"
+
+[services.production.health.startup]
+path = "/livez"

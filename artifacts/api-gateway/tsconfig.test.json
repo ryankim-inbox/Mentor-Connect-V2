@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-test",
+    "rootDir": "src",
+    "noEmit": false
+  },
+  "include": [
+    "src/gateway.test.ts",
+    "src/gateway.ts",
+    "src/route-policy.ts"
+  ],
+  "exclude": []
+}

@@ -1,20 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { useGetStatsOverview, useListRequests, useListDistricts } from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
-import PracticeLab from "@/pages/PracticeLab";
 import { isFeatureEnabled, releaseSurface } from "@/lib/release-flags";
 
 type DashboardTab = "overview" | "practice-lab";
 
 interface DashboardProps {
   initialTab?: DashboardTab;
+  PracticeLab?: ComponentType;
 }
 
-function getDashboardTabFromUrl(): DashboardTab {
-  if (!isFeatureEnabled("practice") || typeof window === "undefined") {
+function getDashboardTabFromUrl(practiceAvailable: boolean): DashboardTab {
+  if (!practiceAvailable || typeof window === "undefined") {
     return "overview";
   }
 
@@ -24,11 +24,12 @@ function getDashboardTabFromUrl(): DashboardTab {
     : "overview";
 }
 
-export default function Dashboard({ initialTab }: DashboardProps = {}) {
+export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = {}) {
   const { user } = useAuth();
   const practiceEnabled = isFeatureEnabled("practice");
+  const practiceAvailable = practiceEnabled && PracticeLab !== undefined;
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
-    practiceEnabled ? initialTab ?? getDashboardTabFromUrl() : "overview",
+    practiceAvailable ? initialTab ?? getDashboardTabFromUrl(practiceAvailable) : "overview",
   );
   const { data: stats } = useGetStatsOverview();
   const { data: recentRequests } = useListRequests({ status: "open" }, {
@@ -40,15 +41,15 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
 
   useEffect(() => {
     const handlePopState = () => {
-      setActiveTab(getDashboardTabFromUrl());
+      setActiveTab(getDashboardTabFromUrl(practiceAvailable));
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [practiceAvailable]);
 
   const selectTab = (tab: DashboardTab) => {
-    if (tab === "practice-lab" && !practiceEnabled) {
+    if (tab === "practice-lab" && !practiceAvailable) {
       return;
     }
 
@@ -80,7 +81,7 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
   const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
     { id: "overview", label: "Dashboard Overview" },
   ];
-  if (practiceEnabled) {
+  if (practiceAvailable) {
     dashboardTabs.push({ id: "practice-lab", label: "Python Practice Lab" });
   }
 
@@ -118,7 +119,7 @@ export default function Dashboard({ initialTab }: DashboardProps = {}) {
         ))}
       </div>
 
-      {practiceEnabled && activeTab === "practice-lab" ? (
+      {practiceAvailable && activeTab === "practice-lab" && PracticeLab ? (
         <PracticeLab />
       ) : (
         <>
