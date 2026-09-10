@@ -74,5 +74,6 @@ trap 'test -z "${record_tmp:-}" || rm -f "$record_tmp"' 0 1 2 15
   printf 'python=%s\n' "$("$RELEASE_RUNTIME_DIR/venv/bin/python" --version)"
   printf 'requirements_sha256=%s\n' "$(cat "$RELEASE_RUNTIME_DIR/runtime.sha256")"
 } > "$record_tmp"
-mv "$record_tmp" "$RELEASE_RUNTIME_DIR/build-record.txt"
+node -e 'require("node:fs").renameSync(process.argv[1], process.argv[2])' \
+  "$record_tmp" "$RELEASE_RUNTIME_DIR/build-record.txt"
 record_tmp=

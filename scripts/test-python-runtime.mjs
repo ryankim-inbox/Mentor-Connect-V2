@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -107,8 +107,9 @@ test("atomically replaces a build record symlink introduced during the build", a
   const tools = await fakeTools(temporary);
   const runtime = path.join(temporary, "runtime");
   const record = path.join(runtime, "build-record.txt");
-  const target = path.join(temporary, "outside-record");
+  const target = path.join(temporary, "outside-directory");
   await mkdir(runtime);
+  await mkdir(target);
   const lock = "frozen-lock-content\n";
   const digest = createHash("sha256").update(lock).digest("hex");
   await writeFile(path.join(runtime, "requirements.lock"), lock);
@@ -121,7 +122,7 @@ test("atomically replaces a build record symlink introduced during the build", a
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await lstat(record)).isFile(), true);
-  await assert.rejects(readFile(target), { code: "ENOENT" });
+  assert.deepEqual(await readdir(target), []);
 });
 
 test("rejects a symlink that resolves to the frozen Python source", async (t) => {
