@@ -1,5 +1,8 @@
 -- ============================================================================
 -- Mentor-Connect / PeerBridge — LOCAL MOCK/TEST DATABASE SEED (1000 users)
+-- Fixture version: mentor-connect-mock-1000-v1 / legacy-pre-0002.
+-- This is NOT the current 0002 schema; deployment use is forbidden.
+-- Verify the pinned contract with: pnpm --filter @workspace/db fixture:check
 --
 -- *** WARNING: This resets the local mock/test database. ***
 -- *** It DROPS and recreates all tables below. Do NOT run against production. ***
