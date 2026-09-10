@@ -28,6 +28,16 @@ const upstreamUser = {
   email: "student@example.edu",
 };
 
+const otherUpstreamUser = {
+  ...upstreamUser,
+  id: 2,
+  email: "other-private@example.edu",
+  name: "Student Two",
+  bio: "Other private bio",
+  subjects: ["Art"],
+  createdAt: "2026-08-27T00:00:00+00:00",
+};
+
 interface CallCounts {
   authMe: number;
   user: number;
@@ -54,12 +64,16 @@ async function createHarness(): Promise<Harness> {
       return;
     }
 
-    if (request.url === "/api/users/1") {
+    if (request.url === "/api/users/1" || request.url === "/api/users/2") {
       calls.user += 1;
       if (request.method === "PATCH") {
         calls.patchedBodies.push(await readJson(request));
       }
-      sendJson(response, 200, upstreamUser);
+      sendJson(
+        response,
+        200,
+        request.url.endsWith("/2") ? otherUpstreamUser : upstreamUser,
+      );
       return;
     }
 
@@ -109,7 +123,7 @@ test("an invalid session is rejected before the profile endpoint is called", asy
   assert.equal(harness.calls.user, 0);
 });
 
-test("a session cannot look up another user's profile", async (context) => {
+test("a session sees another user's four-field public profile", async (context) => {
   const harness = await createHarness();
   context.after(harness.close);
 
@@ -117,10 +131,35 @@ test("a session cannot look up another user's profile", async (context) => {
     headers: { cookie: "session=user-a" },
   });
 
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    id: 2,
+    name: "Student Two",
+    subjects: ["Art"],
+    createdAt: "2026-08-27T00:00:00+00:00",
+  });
+  assert.equal(harness.calls.authMe, 1);
+  assert.equal(harness.calls.user, 1);
+});
+
+test("a session cannot patch another user's profile", async (context) => {
+  const harness = await createHarness();
+  context.after(harness.close);
+
+  const response = await fetch(harness.origin + "/api/users/2", {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+      cookie: "session=user-a",
+    },
+    body: JSON.stringify({ name: "Changed" }),
+  });
+
   assert.equal(response.status, 404);
   assert.deepEqual(await response.json(), { error: "not_found" });
   assert.equal(harness.calls.authMe, 1);
   assert.equal(harness.calls.user, 0);
+  assert.deepEqual(harness.calls.patchedBodies, []);
 });
 
 test("a self profile response is an explicit minimum schema", async (context) => {

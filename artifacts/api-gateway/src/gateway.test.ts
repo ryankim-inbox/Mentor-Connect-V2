@@ -195,7 +195,7 @@ test("accepts only a literal loopback private upstream", () => {
   gateway.close();
 });
 
-test("proxies only the minimal allowlist and deliberately forwards response data", async () => {
+test("proxies registered public routes and deliberately forwards response data", async () => {
   const calls: UpstreamCall[] = [];
   const fixture = await startFixture({}, createFixtureUpstream(calls));
 
@@ -232,18 +232,24 @@ test("proxies only the minimal allowlist and deliberately forwards response data
   }
 });
 
-test("denies unregistered methods, paths, query strings, and path-normalization bypasses without upstream calls", async () => {
+test("denies unregistered methods, invalid queries, and path-normalization bypasses without upstream calls", async () => {
   const calls: UpstreamCall[] = [];
   const fixture = await startFixture({}, createFixtureUpstream(calls));
 
   try {
-    for (const path of [
-      "/api/admin/flagged-users",
-      "/api/districts",
-      "/api/healthz?debug=true",
-    ]) {
+    for (const path of ["/api/not-a-route", "/api/districts/0"]) {
       const response = await fetch(fixture.gatewayOrigin + path);
       assert.equal(response.status, 404, path);
+    }
+
+    for (const path of [
+      "/api/healthz?debug=true",
+      "/api/requests?status=open&status=closed",
+    ]) {
+      const response = await fetch(fixture.gatewayOrigin + path, {
+        headers: { cookie: "peerbridge_session=valid" },
+      });
+      assert.equal(response.status, 400, path);
     }
 
     const uppercase = await fetch(fixture.gatewayOrigin + "/API/healthz");

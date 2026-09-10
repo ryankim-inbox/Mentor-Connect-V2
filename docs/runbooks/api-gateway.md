@@ -1,114 +1,101 @@
-# Slice 02 API Shield 운영 절차
+# API gateway 운영 절차
 
-상태: 구현 완료, staging 외부망 반증은 배포 담당자가 실행해야 함  
-소유자: Release manager (배포 승인 및 증빙), Platform owner (네트워크 경계)
+상태: 전체 학습 REST 계약 구현 완료. WebSocket과 production UI는 후속 작업 전까지 닫혀 있다.
+소유자: Release manager(배포 승인과 증빙), Platform owner(네트워크 경계)
 
 ## 공개 경계
 
-공개 API 및 WebSocket 진입점은 artifacts/api-gateway 하나다.
+브라우저의 외부 API 진입점은 `artifacts/api-gateway` 하나다. Python backend는
+`127.0.0.1:8181`에서 기존 업무 로직과 데이터 접근을 담당하며 직접 공개하지 않는다.
+Gateway의 `GET /livez`는 upstream을 호출하지 않는 process liveness endpoint다.
 
-| 서비스         | 바인딩         | 공개 경로         | 역할                          |
-| -------------- | -------------- | ----------------- | ----------------------------- |
-| API Shield     | 0.0.0.0:8080   | /api, /livez, /ws | 유일한 외부 API 경계          |
-| Python backend | 127.0.0.1:8181 | 없음              | API Shield의 private upstream |
+REST 경로는 `src/route-policy.ts`의 48개 literal operation만 허용한다. 등록되지 않은
+경로와 method는 404, malformed canonical path와 잘못된 query는 400으로 거부한다.
+무제한 `/api/*` fallback은 없다. WebSocket upgrade는 계속 403
+`websocket_unavailable`로 종료되며 Python에 연결하지 않는다.
 
-.replit은 8080만 externalPort 80으로 노출한다. 8181은 externalPort가 없고
-exposeLocalhost = false다. artifacts/api-server의 paths는 빈 배열이어야 한다.
+## REST allowlist
 
-Replit platform UI나 별도 ingress 규칙으로 8181을 다시 노출하면 이 Slice는 실패다.
-그 경우 즉시 배포를 중단하고 gateway maintenance mode로 전환한다.
+`public`은 세션이 필요 없고 `session`은 요청 Cookie를 그대로 사용해 private
+`GET /api/auth/me`에서 양의 정수 사용자 id를 확인한다. `cookie`인
+`GET /api/auth/me`는 그 응답 자체가 검증 결과이므로 재귀 검증하지 않는다.
 
-## 현재 allowlist
+| 정책    | Operations                                                                                                                                                                                                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| public  | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/districts`, `GET /api/stats/overview`, `GET /api/healthz`                                                                                                    |
+| cookie  | `GET /api/auth/me`                                                                                                                                                                                                        |
+| session | `POST /api/auth/logout`, `GET/PATCH /api/users/{id}`, `GET /api/districts/{id}`, `GET /api/tags`                                                                                                                          |
+| session | `GET/POST /api/requests`, `GET/PATCH/DELETE /api/requests/{id}`, `POST /api/requests/{id}/match`, `POST /api/reports`                                                                                                     |
+| session | `GET/POST /api/blocks`, `DELETE /api/blocks/{id}`, `GET /api/stats/district/{id}`                                                                                                                                         |
+| session | `GET /api/matches/{questionId}`, `POST /api/matches`                                                                                                                                                                      |
+| session | `GET /api/chat/rooms`, `GET/POST /api/chat/rooms/{id}/messages`, `GET /api/dms`, `POST /api/dms/start`, `GET/POST /api/dms/{id}/messages`                                                                                 |
+| session | `GET /api/practice/status`, `GET /api/practice/matching/{questionId}`, `GET /api/practice/locations/status`, `POST /api/practice/locations/test`, `GET /api/practice/blocks/status`, `GET /api/practice/raw/{moduleName}` |
+| session | `GET /api/analysis/status`, four `GET /api/analytics/*` operations, `GET /api/python-reports/status`, `GET /api/python-reports/summary`                                                                                   |
+| session | `GET /api/scheduling/status`, `GET /api/scheduling/overview`, `GET /api/scheduling/suggest`, `GET /api/admin/flagged-users`                                                                                               |
 
-다음 method와 정확히 일치하는 canonical path만 Python backend로 전달된다.
-query string, trailing slash, double slash, dot segment, percent encoding, 대소문자
-변형은 승인된 경로가 아니다.
+Canonical ids match `[1-9][0-9]*` and must be JavaScript safe integers. Practice raw modules
+are limited to `find_matches`, `locations`, and `get_blocks`.
 
-| Method | Path               | 인증 정책                                              |
-| ------ | ------------------ | ------------------------------------------------------ |
-| GET    | /api/healthz       | 없음                                                   |
-| POST   | /api/auth/register | JSON body                                              |
-| POST   | /api/auth/login    | JSON body                                              |
-| GET    | /api/auth/me       | Cookie 필요                                            |
-| POST   | /api/auth/logout   | Cookie를 /api/auth/me에 확인한 뒤 전달                 |
-| GET    | /api/users/{self}  | Cookie를 /api/auth/me에 확인하고 id가 일치할 때만 전달 |
-| PATCH  | /api/users/{self}  | 위 소유권 확인 및 name, bio, subjects allowlist        |
+## Query와 body 정책
 
-GET /livez는 gateway 자체 liveness endpoint이며 upstream을 호출하지 않는다.
+Gateway parses allowed query values with `URLSearchParams`, rejects malformed percent encoding,
+duplicate keys, unknown keys, and invalid values, then forwards the validated serialized query.
+It never inserts an omitted optional value, so Python defaults remain authoritative.
 
-그 밖의 모든 API 경로와 method는 404로 닫힌다. 특히 admin, python-reports,
-matches, practice, request match, chat, dms, `/ws/**`, 다른 사용자의 users 경로, 그리고 모든 WebSocket upgrade는
-upstream 연결 전에 차단된다. `/api/chat/**`, `/api/dms/**`, `/ws/**`의 일반 HTTP 요청은
-quarantine 404이며, HTTP WebSocket upgrade는 경로나 인증 상태와 관계없이 upstream 연결 전에 403이다.
+| Route                                                                         | Allowed query                                        |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------- | ------- |
+| `GET /api/districts`                                                          | `type=high_school                                    | unified`; `search` at most 200 UTF-8 bytes |
+| `GET /api/requests`                                                           | positive safe `districtId` and `tagId`; `role=mentor | mentee`; `status=open                      | matched | closed` |
+| `GET /api/matches/{questionId}` and `GET /api/practice/matching/{questionId}` | `limit` from 1 through 20                            |
+| `GET /api/scheduling/suggest`                                                 | positive safe `user_a` and `user_b`; both required   |
 
-새 API를 열려면 gatewayAllowlist에 method, canonical path, body 정책, 인증 정책을
-명시하고, 허용되지 않은 경로가 upstream에 도달하지 않는 회귀 테스트를 추가해야 한다.
+POST/PATCH operations with a body require `application/json`. `POST /api/auth/logout`,
+`POST /api/requests/{id}/match`, and every DELETE are bodyless. The default request limit is
+1 MiB and the practice location test is capped at 16 KiB. Upstream response bodies default to
+2 MiB. Request-body and upstream-response timeouts default to 10 and 5 seconds.
+
+Profile GET is available to a signed-in user for another canonical user id, but gateway output is
+always projected to `id`, `name`, `subjects`, and `createdAt`. PATCH remains self-only and accepts
+only `name`, `bio`, and `subjects`; an id mismatch returns 404 without a profile write upstream.
+The account email returned by `/api/auth/me` belongs to the authenticated user and does not change
+the public profile projection.
 
 ## 보안 동작
 
-- Cookie와 Authorization은 allowlisted upstream 요청에만 전달한다.
-- 보호된 logout은 같은 Cookie를 사용해 private /api/auth/me에서 양의 정수 user id를
-  확인한 뒤에만 전달한다.
-- upstream의 status, body, Set-Cookie는 의도적으로 전달한다. Hop-by-hop, Server,
-  Location, CORS, 압축 길이 관련 헤더는 전달하지 않는다.
-- `/api/auth/me`와 self-profile GET의 성공 및 오류 응답은 upstream 헤더와 무관하게
-  `Cache-Control: no-store`를 사용하고, 중복 없이 병합된 `Vary: Cookie`를 포함한다.
-- request body 기본 제한은 1 MiB, upstream response 기본 제한은 2 MiB다.
-- request body timeout 기본값은 10초, upstream timeout 기본값은 5초다.
-- duplicate header, Transfer-Encoding, Expect, malformed URL, encoding 우회는 upstream
-  호출 전에 거부한다.
-- access log에는 correlation id, canonical path, method, status, 고정된 event만 남긴다.
-  Cookie, Authorization, 세션, 이메일, request body, upstream error detail을 기록하지 않는다.
+- Cookie and Authorization reach only an allowlisted upstream request.
+- Authentication-dependent GET responses are forced to `Cache-Control: no-store` with a
+  de-duplicated `Vary: Cookie`.
+- Duplicate headers, Transfer-Encoding, Expect, absolute targets, backslashes, percent-encoded
+  paths, dot segments, repeated slashes, uppercase route variants, and trailing slashes are rejected.
+- Hop-by-hop, Server, Location, CORS, compression, and upstream content-length headers are stripped.
+- Logs receive fixed event names, canonical paths, method, status, and correlation id, never Cookie,
+  Authorization, request bodies, or upstream error details.
 
-환경 변수는 GATEWAY_MAX_BODY_BYTES, GATEWAY_MAX_RESPONSE_BYTES,
-GATEWAY_BODY_TIMEOUT_MS, GATEWAY_UPSTREAM_TIMEOUT_MS로 조정할 수 있다. 값은
-양의 정수여야 한다. GATEWAY_UPSTREAM_ORIGIN은 http://127.0.0.1:8181 같은
-loopback HTTP origin만 허용한다.
+`GATEWAY_UPSTREAM_ORIGIN` must be a credential-free loopback HTTP origin. Limits can be reduced with
+`GATEWAY_MAX_BODY_BYTES`, `GATEWAY_MAX_RESPONSE_BYTES`, `GATEWAY_BODY_TIMEOUT_MS`, and
+`GATEWAY_UPSTREAM_TIMEOUT_MS`; each value must be a positive integer.
 
 ## 로컬 검증
 
-먼저 private backend와 Shield를 각각 실행한다.
+```sh
+cd Python && python -m uvicorn main:app --host 127.0.0.1 --port 8181
+PORT=8080 pnpm --filter @workspace/api-gateway run dev
+pnpm --filter @workspace/api-gateway test
+pnpm --filter @workspace/api-gateway test:shield
+pnpm --filter @workspace/api-gateway typecheck
+```
 
-    cd Python && python -m uvicorn main:app --host 127.0.0.1 --port 8181
-    PORT=8080 pnpm --filter @workspace/api-gateway run dev
-    PORT=21288 pnpm --filter @workspace/peerbridge run dev
+The package tests verify all 48 operations, every REST family's exact upstream method/path/query/body/
+Cookie, auth/me recursion prevention, bodyless operations, 204 handling, public profile projection,
+self-only PATCH, and retained negative HTTP boundaries.
 
-다음 명령은 gateway의 unit/integration test와 정적 배포 경계를 검사한다.
+## Staging 증빙과 rollback
 
-    pnpm test:gateway
-    pnpm run test:peerbridge-release
-    pnpm gateway:verify-boundary
+Record request time, deployment SHA, gateway correlation id, HTTP status, and observed upstream call
+count. Exercise public, authenticated, query-bearing, bodyless, 204, unknown-route, malformed-path,
+duplicate-header, and WebSocket upgrade cases. Verify separately that port 8181 is unreachable from
+the public network. Local tests cannot prove hosting ingress configuration.
 
-verify-boundary는 .replit, 두 artifact 설정, 그리고 빌드된 프론트 bundle에 private
-Python origin이 없는지 확인한다. 이 명령은 hosting provider의 실제 public port 또는
-DNS 설정을 관찰할 수 없으므로 staging 반증을 대체하지 않는다.
-
-## Staging 반증 및 승인 증빙
-
-배포 후 아래 명령을 실행하고 요청 시간, deployment SHA, gateway correlation id,
-HTTP status를 release record에 남긴다.
-
-    curl -i https://staging.example/livez
-    curl -i https://staging.example/api/healthz
-    curl -i https://staging.example/api/admin/flagged-users
-    curl -i https://staging.example/api/users/1
-    curl -i https://staging.example/api/unknown-route
-    curl -i https://staging.example:8081/api/healthz
-
-허용되지 않은 네 API 요청은 404 또는 403이어야 하고, gateway access log의 해당
-요청별 upstream 호출 수는 0이어야 한다. 마지막 요청은 연결 자체가 불가능해야 한다.
-인코딩, double slash, dot segment, 대소문자, query string, duplicate header, WebSocket
-upgrade도 같은 기준으로 별도 실행한다.
-
-이 증빙이 없으면 Python backend가 실제로 private이라는 결론을 내리지 않는다. Slice 02
-구현은 완료일 수 있어도 release approval은 No-Go 상태다.
-
-## 롤백
-
-gateway를 우회하거나 Python private port가 외부에서 응답하면 다음 환경 변수로 새
-gateway artifact를 배포한다.
-
-    GATEWAY_MAINTENANCE_MODE=true
-
-이 상태에서는 GET /livez만 200을 반환하고 allowlisted API는 503 maintenance로
-fail-closed 된다. 위험 API를 다시 Python에 직접 연결하는 방식으로 롤백하지 않는다.
+If the gateway is bypassed or the Python port is public, stop the release and deploy with
+`GATEWAY_MAINTENANCE_MODE=true`. Maintenance mode keeps only `/livez` available and returns 503 for
+registered REST routes.
