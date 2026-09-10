@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHON_FREEZE_BASE: 98e1b04c292302bd25365ed7db4c5675671df337
+
 jobs:
   peerbridge-release-surface:
     name: peerbridge-release-surface
@@ -16,12 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
       - name: Install pnpm
         run: |
+          test "$(node --version)" = "v$(cat .node-version)"
           corepack enable
           corepack prepare pnpm@10.33.0 --activate
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build and verify reduced production bundle
-        run: pnpm run test:peerbridge-release
+      - name: Verify Python freeze
+        run: |
+          node scripts/test-python-freeze.mjs
+          node scripts/check-python-unchanged.mjs "$PYTHON_FREEZE_BASE"
+      - name: Build and verify production bundle
+        run: |
+          pnpm run build:release
+          node scripts/verify-peerbridge-release-bundle.mjs
