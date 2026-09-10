@@ -27,7 +27,7 @@ initdb -D "$CLUSTER_DIR" --no-locale --encoding=UTF8 --auth=trust >/dev/null
 pg_ctl -D "$CLUSTER_DIR" -o "-F -h 127.0.0.1 -p $PORT -k $SOCKET_DIR" -w start >/dev/null
 STARTED=1
 
-for database in classroom_empty classroom_populated classroom_concurrent classroom_seed classroom_mismatch classroom_failure classroom_real; do
+for database in classroom_empty classroom_populated classroom_other_schema classroom_sequence classroom_materialized_view classroom_concurrent classroom_seed classroom_mismatch classroom_failure classroom_real; do
   createdb -h 127.0.0.1 -p "$PORT" "$database"
 done
 
@@ -59,6 +59,9 @@ fi
 env $REAL_TEST_ENV \
   TEST_CLASSROOM_EMPTY_URL="postgresql://127.0.0.1:$PORT/classroom_empty" \
   TEST_CLASSROOM_POPULATED_URL="postgresql://127.0.0.1:$PORT/classroom_populated" \
+  TEST_CLASSROOM_OTHER_SCHEMA_URL="postgresql://127.0.0.1:$PORT/classroom_other_schema" \
+  TEST_CLASSROOM_SEQUENCE_URL="postgresql://127.0.0.1:$PORT/classroom_sequence" \
+  TEST_CLASSROOM_MATERIALIZED_VIEW_URL="postgresql://127.0.0.1:$PORT/classroom_materialized_view" \
   TEST_CLASSROOM_CONCURRENT_URL="postgresql://127.0.0.1:$PORT/classroom_concurrent" \
   TEST_CLASSROOM_SEED_URL="postgresql://127.0.0.1:$PORT/classroom_seed" \
   TEST_CLASSROOM_MISMATCH_URL="postgresql://127.0.0.1:$PORT/classroom_mismatch" \
