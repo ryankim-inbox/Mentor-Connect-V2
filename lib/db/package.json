@@ -14,7 +14,7 @@
     "schema:diff": "node tools/schema-cli.mjs schema:diff",
     "constraints:verify": "node tools/schema-cli.mjs constraints:verify",
     "explain:verify": "node tools/schema-cli.mjs explain:verify",
-    "test": "node --test test/schema-tool.test.mjs test/schema-version.test.mjs test/sql-safety.test.mjs test/integrity-tool.test.mjs test/legacy-fixture.test.mjs && tsx --test test/drizzle-schema.test.ts && sh test/disposable-postgres.sh && sh test/operator-commands-disposable.sh && sh test/classroom-bootstrap-disposable.sh"
+    "test": "node --test test/schema-tool.test.mjs test/schema-version.test.mjs test/sql-safety.test.mjs test/integrity-tool.test.mjs test/legacy-fixture.test.mjs && tsx --test test/drizzle-schema.test.ts && sh test/disposable-postgres.sh && sh test/operator-commands-disposable.sh && sh test/classroom-bootstrap-disposable.sh && sh test/classroom-restore-disposable.sh"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
