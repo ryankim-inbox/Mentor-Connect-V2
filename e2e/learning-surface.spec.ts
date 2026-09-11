@@ -178,6 +178,7 @@ async function interceptApi(
   options: { anonymous?: boolean; failures?: Set<string> } = {},
 ) {
   const unknownRequests: string[] = [];
+  let currentRequest = request;
   await page.route("**/api/**", async (route: Route) => {
     const { pathname } = new URL(route.request().url());
     const method = route.request().method();
@@ -198,11 +199,13 @@ async function interceptApi(
       return;
     }
 
+    if (method === "POST" && pathname === "/api/requests/11/match") currentRequest = matchedRequest;
+
     const fixture =
       method === "POST" && pathname === "/api/requests/11/match"
         ? matchedRequest
         : method === "GET"
-          ? fixtures[pathname]
+          ? pathname === "/api/requests/11" ? currentRequest : fixtures[pathname]
           : undefined;
     if (fixture === undefined) {
       unknownRequests.push(`${method} ${pathname}`);
@@ -289,7 +292,7 @@ test("request detail Connect completes through the production control", async ({
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await connectRequest;
 
-  await expect(page.getByRole("heading", { name: "You're connected!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This request has been matched" })).toBeVisible();
   await expect(
     page.getByText("Minimum member profiles include names, subjects, and join dates.", {
       exact: true,
@@ -329,12 +332,12 @@ test("failed report fixtures keep the page and retryable learning states visible
   const signupSection = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Signup summary" }),
   });
-  await expect(signupSection.getByText("HTTP 503", { exact: true })).toBeVisible();
+  await expect(signupSection.getByText("We had a connection problem. Please try again.", { exact: true })).toBeVisible();
   await expect(signupSection.getByRole("button", { name: "Retry signup summary" })).toBeVisible();
   const flaggedSection = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Flagged users" }),
   });
-  await expect(flaggedSection.getByText("HTTP 503", { exact: true })).toBeVisible();
+  await expect(flaggedSection.getByText("We had a connection problem. Please try again.", { exact: true })).toBeVisible();
   await expect(flaggedSection.getByRole("button", { name: "Retry flagged users" })).toBeVisible();
   expect(unknownRequests).toEqual([]);
 });
