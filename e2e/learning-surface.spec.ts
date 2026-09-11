@@ -98,6 +98,7 @@ const fixtures: Record<string, unknown> = {
   "/api/practice/status": {
     success: true,
     status: "connected",
+    message: "Python practice API is running. Individual engine statuses are listed below.",
     engines: {},
   },
   "/api/practice/locations/status": {
@@ -251,6 +252,26 @@ test("all named learning routes render their real page", async ({ page }) => {
     });
   }
 
+  expect(unknownRequests).toEqual([]);
+});
+
+test("Practice renders successful statuses after all status responses complete", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  const responses = Promise.all([
+    "/api/practice/status", "/api/practice/locations/status", "/api/practice/blocks/status",
+  ].map(path => page.waitForResponse(response => new URL(response.url()).pathname === path)));
+  await page.goto("/practice-lab");
+  await responses;
+  for (const [heading, message] of [
+    ["Location Engine Test", "Location module loaded."],
+    ["Block / Report Engine Test", "Block module loaded."],
+  ]) {
+    const section = page.locator("section").filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
+    await expect(section.getByText("connected", { exact: true })).toBeVisible();
+    await expect(section.getByText(message, { exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expect(unknownRequests).toEqual([]);
 });
 

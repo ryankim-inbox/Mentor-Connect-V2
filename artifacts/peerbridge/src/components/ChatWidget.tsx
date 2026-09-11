@@ -203,7 +203,21 @@ function RoomPane({
     return <div className="py-8 text-center text-sm text-muted-foreground">{missingText}</div>;
   }
 
-  return <RoomThread room={room} currentUserId={currentUserId} />;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1">
+        <RoomThread room={room} currentUserId={currentUserId} />
+      </div>
+      {roomsQuery.error && (
+        <div className="border-t border-card-border p-3 text-xs text-destructive" role="alert">
+          <p>{apiErrorMessage(roomsQuery.error)}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => void roomsQuery.refetch()} disabled={roomsQuery.isFetching}>
+            Try again
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: number }) {
