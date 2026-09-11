@@ -64,6 +64,18 @@ export function classifyResponse(httpStatus, body) {
   return { status: positiveId(body.id) || positiveId(body.user?.id) ? 'pass' : 'transport-failure' };
 }
 
+// Chromium-only smoke guard: pause before requests and before redirects are followed.
+// Browser networking still owns TLS, cookies and the actual UI fetch/WebSocket flow.
+export async function restrictSmokeOrigin(page, origin) {
+  const session = await page.context().newCDPSession(page);
+  session.on('Fetch.requestPaused', ({ requestId, request, responseStatusCode }) => {
+    const blocked = new URL(request.url).origin !== origin || (responseStatusCode >= 300 && responseStatusCode < 400);
+    const method = blocked ? 'Fetch.failRequest' : responseStatusCode === undefined ? 'Fetch.continueRequest' : 'Fetch.continueResponse';
+    void session.send(method, { requestId, ...(blocked ? { errorReason: 'BlockedByClient' } : {}) }).catch(() => {});
+  });
+  await session.send('Fetch.enable', { patterns: [{ requestStage: 'Request' }, { requestStage: 'Response' }] });
+}
+
 // Browser injection is for the disposable TLS harness; the CLI always uses normal certificate verification.
 export async function runSmoke({ origin, credentials }, browser, emit = record => console.log(JSON.stringify(record))) {
   const records = [];
@@ -131,9 +143,8 @@ export async function runSmoke({ origin, credentials }, browser, emit = record =
       const start = performance.now();
       const context = await browser.newContext({ serviceWorkers: 'block' });
       contexts.push(context);
-      // Block redirects and cross-origin subrequests before they can carry login data.
-      await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
       const page = await context.newPage();
+      await restrictSmokeOrigin(page, origin);
       page.setDefaultTimeout(15000);
       let loginResponse;
       try {
