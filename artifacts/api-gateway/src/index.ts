@@ -19,6 +19,7 @@ server.listen(port, "0.0.0.0", () => {
 
 function shutdown(signal: string): void {
   console.info(JSON.stringify({ event: "gateway.shutdown", signal }));
+  server.closeWebSockets();
   server.close(() => process.exit(0));
 
   setTimeout(() => process.exit(1), 10_000).unref();

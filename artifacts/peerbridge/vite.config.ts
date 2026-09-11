@@ -41,8 +41,13 @@ function resolvePort(command: "build" | "serve"): number | undefined {
 // `credentials: "include"`, so it must be same-origin with the backend. In
 // deployment Replit's path router handles that: this app is mounted at "/" and
 // the API Shield artifact owns "/api". Locally there is no such router, so dev
-// and preview proxy /api to the Shield — never directly to the Python server.
+// and preview proxy /api and /ws to the Shield — never directly to Python.
 const apiProxy = {
+  "/ws": {
+    target: process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
+    changeOrigin: true,
+    ws: true,
+  },
   "/api": {
     target: process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
     changeOrigin: true,

@@ -1,6 +1,6 @@
 # API gateway 운영 절차
 
-상태: 전체 학습 REST 계약 구현 완료. WebSocket과 production UI는 후속 작업 전까지 닫혀 있다.
+상태: 전체 학습 REST 계약과 두 WebSocket tunnel이 구현되었고 production UI가 공개되어 있다. 실제 Python WebSocket과 provider ingress 검증은 Task 23에서 수행한다.
 소유자: Release manager(배포 승인과 증빙), Platform owner(네트워크 경계)
 
 ## 공개 경계
@@ -11,8 +11,7 @@ Gateway의 `GET /livez`는 upstream을 호출하지 않는 process liveness endp
 
 REST 경로는 `src/route-policy.ts`의 48개 literal operation만 허용한다. 등록되지 않은
 경로와 method는 404, malformed canonical path와 잘못된 query는 400으로 거부한다.
-무제한 `/api/*` fallback은 없다. WebSocket upgrade는 계속 403
-`websocket_unavailable`로 종료되며 Python에 연결하지 않는다.
+무제한 `/api/*` fallback은 없다. WebSocket은 아래 두 exact path만 session/Origin 검증 후 private Python으로 연결한다.
 
 ## REST allowlist
 
@@ -140,7 +139,7 @@ the public network. Local tests cannot prove hosting ingress configuration.
 
 If the gateway is bypassed or the Python port is public, stop the release and deploy with
 `GATEWAY_MAINTENANCE_MODE=true`. Maintenance mode keeps only `/livez` available and returns 503 for
-registered REST routes.
+registered REST routes and all WebSocket upgrades.
 
 ## Public response contract and generation
 
@@ -158,7 +157,39 @@ the gateway does not produce fallback data. Profile GET and self PATCH return on
 `id`, `name`, `subjects`, and `createdAt`; admin rows omit email, district, and raw student results.
 Wire timestamps remain JSON strings in both generated validators and gateway projection.
 
-WebSockets are counted separately: `/ws/chat/rooms/{id}` and `/ws/dms/{id}`. Task 18 adds
-session/Origin-checked forwarding of these two paths. At the Task 16 boundary they are still
-rejected before upstream connection. Python owns room/DM behavior; the current DM mission
-sends its unfinished-learning message and closes, which subsequent forwarding must preserve.
+## WebSocket transport
+
+WebSockets are counted separately from the 48 REST operations. Only GET upgrades at
+`/ws/chat/rooms/{id}` and `/ws/dms/{id}` are tunneled; IDs must be canonical positive safe integers
+and queries are forbidden. An exact configured Origin and a valid Cookie-backed Python session
+are mandatory, including for the currently unfinished DM endpoint. Unknown paths and unauthorized
+upgrades return 403; malformed handshakes return 400. Origin failures retain the fixed `forbidden`
+error. Maintenance or shutdown drain returns 503 before authentication.
+
+The gateway forwards Cookie, WebSocket handshake fields, and a newly generated X-Request-Id.
+It validates the upstream 101 status, accept hash, Upgrade/Connection fields, and offered
+subprotocol/extensions before exposing the upgrade. Session renewal and upstream Set-Cookie lines
+remain separate. Non-101 4xx/5xx statuses are retained with a fixed public error, while malformed,
+truncated, oversized, or unexpected success/redirect responses become 502. The error body is never
+copied from Python. Handshakes, including session lookup and non-101 bodies, have a 5-second deadline
+(504); non-101 bodies are limited to 16KiB. Early client bytes are bounded at 64KiB (413 on overflow).
+
+Each gateway process allows 40 pending/active tunnels in total and two per verified user (429 on
+excess), releasing counts on every exit. Idle tunnels close after 120 seconds without traffic.
+Native stream backpressure handles slow peers; both initial head buffers are transferred once.
+SIGINT/SIGTERM closes registered WebSockets through the gateway's `closeWebSockets()` method before
+waiting for the HTTP server. The later readiness task extends this drain to the PostgreSQL pool.
+Per-frame limits, moderation, message semantics, and participant authorization remain Python's
+responsibility. Transport shutdown destroys sockets; the gateway does not parse or synthesize frames.
+Multi-instance deployments require shared connection limits.
+
+Vite dev and preview both proxy `/ws` with upgrades enabled to the same
+`VITE_API_PROXY_TARGET` as `/api` (default `http://127.0.0.1:8080`). Configure
+`GATEWAY_PUBLIC_ORIGIN` to the browser's exact serving origin. Production `/ws` remains owned by
+the gateway artifact; Python port 8181 is private. ChatWidget continues REST polling.
+
+Native synthetic-upstream tests cover successful/denied upgrades, session renewal, header and
+body validation, head bytes, cancellation, deadlines, caps, backpressure, idle cleanup, and
+independent gateway shutdown. Task 23 must still verify a real Python room and record the DM
+learning-message-then-close behavior. Local transport tests do not establish provider ingress or
+participant authorization correctness.

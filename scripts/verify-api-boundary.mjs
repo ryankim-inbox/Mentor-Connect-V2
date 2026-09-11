@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createRequire } from "node:module";
 
 const workspaceRoot = process.cwd();
 let checks = 0;
@@ -135,6 +136,29 @@ check(
   !/paths\s*=\s*\[\s*"\/api"/.test(privateBackendArtifact),
   "private Python artifact must not be a public /api route owner",
 );
+
+// Evaluate the shipped Vite config, so both local serving modes retain the gateway boundary.
+const frontendRequire = createRequire(
+  resolve(workspaceRoot, "artifacts/peerbridge/package.json"),
+);
+const { loadConfigFromFile } = await import(frontendRequire.resolve("vite"));
+const viteConfig = await loadConfigFromFile(
+  { command: "build", mode: "production" },
+  resolve(workspaceRoot, "artifacts/peerbridge/vite.config.ts"),
+);
+for (const mode of ["server", "preview"]) {
+  const proxy = viteConfig?.config[mode]?.proxy;
+  check(
+    proxy?.["/ws"]?.ws === true &&
+      proxy["/ws"].changeOrigin === true &&
+      proxy["/ws"].target === proxy["/api"]?.target &&
+      proxy["/ws"].target ===
+        (process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8080"),
+    "Vite " +
+      mode +
+      " must proxy /ws upgrades to the same gateway target as /api",
+  );
+}
 
 await verifyBundleDoesNotExposePrivateUpstream();
 

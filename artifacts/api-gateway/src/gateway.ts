@@ -5,7 +5,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import type { Duplex } from "node:stream";
+import { createWebSocketUpgradeHandler } from "./websocket.js";
 
 import {
   resolvePublicRoute,
@@ -135,7 +135,11 @@ const defaultLogger: GatewayLogger = {
   },
 };
 
-export function createGatewayServer(options: GatewayOptions = {}): Server {
+export type GatewayServer = Server & { closeWebSockets(): void };
+
+export function createGatewayServer(
+  options: GatewayOptions = {},
+): GatewayServer {
   const config = resolveGatewayConfig(options);
   const server = createServer((request, response) => {
     void handleRequest(request, response, config);
@@ -147,11 +151,16 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
     void handleRequest(request, response, config);
   });
 
-  // WebSocket support is deliberately absent until Slice 06. Reject every
-  // upgrade before an upstream connection can be created.
-  server.on("upgrade", (request, socket) => {
-    rejectUpgrade(request, socket, config);
+  const upgrade = createWebSocketUpgradeHandler({
+    upstreamOrigin: config.upstreamOrigin,
+    verifySession: (request, signal, requestId) =>
+      verifySession(request, config, requestId, signal),
+    assertOrigin: (request) =>
+      assertAllowedOrigin(request.headers.origin, config.publicOrigin),
+    maintenanceMode: config.maintenanceMode,
+    logger: config.logger,
   });
+  server.on("upgrade", upgrade);
 
   server.on("clientError", (_error, socket) => {
     socket.end(
@@ -166,7 +175,7 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
   server.keepAliveTimeout = 5_000;
   server.maxHeadersCount = 64;
 
-  return server;
+  return Object.assign(server, { closeWebSockets: upgrade.closeWebSockets });
 }
 
 export function resolveGatewayConfig(
@@ -463,51 +472,6 @@ async function handleRequest(
     request.removeListener("aborted", abortForDisconnectedClient);
     response.removeListener("close", abortForClosedResponse);
   }
-}
-
-function rejectUpgrade(
-  request: IncomingMessage,
-  socket: Duplex,
-  config: GatewayConfig,
-): void {
-  const requestId = randomUUID();
-  let error = "websocket_unavailable";
-  try {
-    assertAllowedOrigin(
-      typeof request.headers.origin === "string"
-        ? request.headers.origin
-        : undefined,
-      config.publicOrigin,
-    );
-  } catch {
-    error = "forbidden";
-  }
-  // Upgrades never join an upstream connection. Keep their external response
-  // distinct from ordinary HTTP quarantine requests: the WebSocket handshake
-  // must always terminate with 403 before an upgrade can be established.
-  const body = Buffer.from(JSON.stringify({ error, requestId }));
-
-  socket.write(
-    "HTTP/1.1 403 Forbidden\r\n" +
-      "Content-Type: application/json; charset=utf-8\r\n" +
-      "Cache-Control: no-store\r\n" +
-      "Connection: close\r\n" +
-      "Content-Length: " +
-      body.length +
-      "\r\n" +
-      "X-Request-Id: " +
-      requestId +
-      "\r\n\r\n",
-  );
-  socket.end(body);
-
-  log(config, "gateway.upgrade_denied", {
-    method: request.method?.toUpperCase() ?? "GET",
-    requestId,
-    reason: error,
-    routeFamily: "websocket",
-    status: 403,
-  });
 }
 
 function assertRequestOrigin(
