@@ -28,7 +28,9 @@ function portBlocks(replitConfig) {
     .map((block) => ({
       localPort: /^\s*localPort\s*=\s*(\d+)\s*$/m.exec(block)?.[1],
       externalPort: /^\s*externalPort\s*=\s*(\d+)\s*$/m.exec(block)?.[1],
-      exposeLocalhost: /^\s*exposeLocalhost\s*=\s*(true|false)\s*$/m.exec(block)?.[1],
+      exposeLocalhost: /^\s*exposeLocalhost\s*=\s*(true|false)\s*$/m.exec(
+        block,
+      )?.[1],
     }));
 }
 
@@ -55,7 +57,10 @@ async function verifyBundleDoesNotExposePrivateUpstream() {
   try {
     files = await listFiles(bundleDirectory);
   } catch {
-    check(false, "frontend bundle is missing; run pnpm --filter @workspace/peerbridge build first");
+    check(
+      false,
+      "frontend bundle is missing; run pnpm --filter @workspace/peerbridge build first",
+    );
     return;
   }
 
@@ -79,11 +84,12 @@ async function verifyBundleDoesNotExposePrivateUpstream() {
   }
 }
 
-const [replitConfig, gatewayArtifact, privateBackendArtifact] = await Promise.all([
-  readWorkspaceFile(".replit"),
-  readWorkspaceFile("artifacts/api-gateway/.replit-artifact/artifact.toml"),
-  readWorkspaceFile("artifacts/api-server/.replit-artifact/artifact.toml"),
-]);
+const [replitConfig, gatewayArtifact, privateBackendArtifact] =
+  await Promise.all([
+    readWorkspaceFile(".replit"),
+    readWorkspaceFile("artifacts/api-gateway/.replit-artifact/artifact.toml"),
+    readWorkspaceFile("artifacts/api-server/.replit-artifact/artifact.toml"),
+  ]);
 
 const ports = portBlocks(replitConfig);
 const publicPorts = ports.filter((port) => port.externalPort !== undefined);
@@ -97,7 +103,8 @@ check(
 
 const privatePort = ports.find((port) => port.localPort === "8181");
 check(
-  privatePort?.externalPort === undefined && privatePort?.exposeLocalhost === "false",
+  privatePort?.externalPort === undefined &&
+    privatePort?.exposeLocalhost === "false",
   "private Python port 8181 must have no externalPort and exposeLocalhost = false",
 );
 
@@ -106,11 +113,15 @@ check(
   "gateway artifact must listen on port 8080",
 );
 check(
-  /paths\s*=\s*\[\s*"\/api"\s*,\s*"\/livez"\s*,\s*"\/ws"\s*\]/.test(gatewayArtifact),
-  "gateway artifact must own /api, /livez, and /ws",
+  /paths\s*=\s*\[\s*"\/api"\s*,\s*"\/livez"\s*,\s*"\/readyz"\s*,\s*"\/ws"\s*\]/.test(
+    gatewayArtifact,
+  ),
+  "gateway artifact must own /api, /livez, /readyz, and /ws",
 );
 check(
-  /GATEWAY_UPSTREAM_ORIGIN\s*=\s*"http:\/\/127\.0\.0\.1:8181"/.test(gatewayArtifact),
+  /GATEWAY_UPSTREAM_ORIGIN\s*=\s*"http:\/\/127\.0\.0\.1:8181"/.test(
+    gatewayArtifact,
+  ),
   "gateway upstream must be the private loopback address",
 );
 check(
@@ -118,6 +129,12 @@ check(
     gatewayArtifact,
   ),
   "gateway production service must execute the compiled API Shield",
+);
+check(
+  /\[services\.production\.health\.startup\]\s*path\s*=\s*"\/readyz"/.test(
+    gatewayArtifact,
+  ),
+  "gateway production startup probe must use /readyz",
 );
 
 check(
@@ -163,7 +180,13 @@ for (const mode of ["server", "preview"]) {
 await verifyBundleDoesNotExposePrivateUpstream();
 
 if (failures > 0) {
-  console.error("API boundary verification failed (" + failures + " of " + checks + " checks).");
+  console.error(
+    "API boundary verification failed (" +
+      failures +
+      " of " +
+      checks +
+      " checks).",
+  );
   process.exitCode = 1;
 } else {
   console.log("API boundary verification passed (" + checks + " checks).");

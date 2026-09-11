@@ -1,17 +1,41 @@
 # API gateway 운영 절차
 
-상태: 전체 학습 REST 계약과 두 WebSocket tunnel이 구현되었고 production UI가 공개되어 있다. 실제 Python WebSocket과 provider ingress 검증은 Task 23에서 수행한다.
+상태: 전체 학습 REST 계약, 두 WebSocket tunnel, bounded readiness, production UI가 구현되어 있다. 실제 Python WebSocket과 provider ingress 검증은 Task 23에서 수행한다.
 소유자: Release manager(배포 승인과 증빙), Platform owner(네트워크 경계)
 
 ## 공개 경계
 
 브라우저의 외부 API 진입점은 `artifacts/api-gateway` 하나다. Python backend는
 `127.0.0.1:8181`에서 기존 업무 로직과 데이터 접근을 담당하며 직접 공개하지 않는다.
-Gateway의 `GET /livez`는 upstream을 호출하지 않는 process liveness endpoint다.
+Gateway의 `GET /livez`는 upstream을 호출하지 않는 process liveness endpoint다. `GET /readyz`는
+아래 dependency readiness를 확인하며 gateway가 직접 200 또는 503을 반환한다.
 
 REST 경로는 `src/route-policy.ts`의 48개 literal operation만 허용한다. 등록되지 않은
 경로와 method는 404, malformed canonical path와 잘못된 query는 400으로 거부한다.
 무제한 `/api/*` fallback은 없다. WebSocket은 아래 두 exact path만 session/Origin 검증 후 private Python으로 연결한다.
+
+## Liveness와 readiness
+
+`GET /livez`는 항상 `200 {"status":"ok"}`로 process liveness만 나타낸다. `GET /readyz`는
+Python `GET /api/healthz`, PostgreSQL `SELECT 1`, operational migration ledger의 마지막 id,
+그리고 build asset `dist/release.json`의 expected migration id가 모두 일치할 때만
+`200 {"status":"ready"}`를 반환한다. 실패나 drain 중에는 진단 내용을 노출하지 않고
+`503 {"status":"not_ready"}`만 반환한다. Matching, scheduling, 기타 학생 기능의 응답은
+readiness probe 대상이 아니다.
+
+Readiness용 `READINESS_DATABASE_URL`에는 read-only PostgreSQL credential을 배포 환경에서
+별도로 provision한다. Gateway는 이 값이 없을 때 startup을 중단하지 않고 `/readyz`를 503으로
+유지하며, 일반 `DATABASE_URL`로 fallback하지 않는다. Pool은 process당 connection 하나,
+1초 connect timeout, 1초 statement timeout을 사용한다. Probe 전체 deadline은 2초이고 결과는
+2초 cache하며 concurrent probe는 하나의 in-flight 작업을 공유한다. SQL은 `BEGIN READ ONLY`,
+`SELECT 1`, migration ledger tail `SELECT`, `ROLLBACK`으로 제한된다.
+
+`pnpm --filter @workspace/api-gateway run build`는 TypeScript 뒤에 `dist/release.json`을 쓴다.
+Production archive build는 배포 commit의 `RELEASE_SHA`를 명시해야 한다. Checkout이 있는 local
+build만 `git rev-parse HEAD` fallback을 사용할 수 있다. Process startup event에는 이 build asset의
+SHA가 정확히 한 번 기록된다. Source-mode development처럼 colocated metadata가 없으면 startup
+SHA는 고정값 `unknown`이며 이는 release가 검증되었다는 증거가 아니다. Production metadata가
+없거나 malformed여도 SHA를 추측하지 않고 readiness는 `not_ready`다.
 
 ## REST allowlist
 
@@ -75,8 +99,10 @@ the public profile projection.
 - Mutation and WebSocket Origin checks compare with the configured origin as an exact string.
   `Host`, `X-Forwarded-Host`, and `X-Forwarded-For` do not select or bypass an origin or rate bucket.
 - Hop-by-hop, Server, Location, CORS, compression, and upstream content-length headers are stripped.
-- Logs receive fixed event names, canonical paths, method, status, and correlation id, never Cookie,
-  Authorization, request bodies, or upstream error details.
+- Each HTTP request log contains only `family`, `outcome`, `status`, generated `requestId`,
+  `durationMs`, and `upstreamDurationMs` when Python was called. It never contains a raw path,
+  query, user id, email, Cookie, Authorization, request body, SQL, or upstream error detail.
+  Unknown requests use `family=unknown`; an incoming `X-Request-Id` is replaced.
 
 `GATEWAY_PUBLIC_ORIGIN` is required at startup. Production accepts only one canonical exact HTTPS
 origin such as `https://classroom.example.com`; replace the example in the gateway artifact settings
@@ -116,6 +142,8 @@ NODE_ENV=development GATEWAY_PUBLIC_ORIGIN=http://127.0.0.1:14200 PORT=8080 pnpm
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
 pnpm --filter @workspace/api-gateway typecheck
+RELEASE_SHA=<deployment-commit-sha> pnpm --filter @workspace/api-gateway run build
+pnpm gateway:verify-boundary
 ```
 
 The package tests verify all 48 operations, every REST family's exact upstream method/path/query/body/
@@ -134,8 +162,9 @@ curl -i -X POST -H 'Origin: https://classroom.example.com' https://classroom.exa
 
 Record request time, deployment SHA, gateway correlation id, HTTP status, and observed upstream call
 count. Exercise public, authenticated, query-bearing, bodyless, 204, unknown-route, malformed-path,
-duplicate-header, and WebSocket upgrade cases. Verify separately that port 8181 is unreachable from
-the public network. Local tests cannot prove hosting ingress configuration.
+duplicate-header, readiness, and WebSocket upgrade cases. Confirm provider startup probes retry
+`/readyz` while Python starts, the actual external `GATEWAY_PUBLIC_ORIGIN` and TLS endpoint match,
+and port 8181 is unreachable from the public network. Local tests do not prove these hosting settings.
 
 If the gateway is bypassed or the Python port is public, stop the release and deploy with
 `GATEWAY_MAINTENANCE_MODE=true`. Maintenance mode keeps only `/livez` available and returns 503 for
@@ -177,8 +206,9 @@ copied from Python. Handshakes, including session lookup and non-101 bodies, hav
 Each gateway process allows 40 pending/active tunnels in total and two per verified user (429 on
 excess), releasing counts on every exit. Idle tunnels close after 120 seconds without traffic.
 Native stream backpressure handles slow peers; both initial head buffers are transferred once.
-SIGINT/SIGTERM closes registered WebSockets through the gateway's `closeWebSockets()` method before
-waiting for the HTTP server. The later readiness task extends this drain to the PostgreSQL pool.
+SIGINT/SIGTERM first marks readiness draining, then closes registered WebSockets, drains HTTP, and
+ends the readiness PostgreSQL pool. A hard 10-second deadline terminates the process if cleanup does
+not finish. During the drain, `/readyz` returns 503.
 Per-frame limits, moderation, message semantics, and participant authorization remain Python's
 responsibility. Transport shutdown destroys sockets; the gateway does not parse or synthesize frames.
 Multi-instance deployments require shared connection limits.
