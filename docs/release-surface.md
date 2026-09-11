@@ -1,9 +1,10 @@
 # PeerBridge release surface
 
 Status: the gateway exposes the approved 48-operation learning REST contract. Production UI feature
-flags remain gated until the later UI release task, and WebSocket upgrades remain closed until the
-dedicated WebSocket task. This intermediate state makes the REST boundary testable without claiming
-that the complete browser experience or live WebSocket transport is released.
+flags and shared desktop/mobile navigation are open, and Task 20 verifies the learning screens in
+Chromium against the production bundle with intercepted API fixtures. WebSocket upgrades remain
+closed until the dedicated WebSocket task. This state does not claim live-provider or live WebSocket
+verification.
 
 ## Runtime boundary
 
@@ -66,10 +67,10 @@ and `/api/practice/locations/test` is limited to 16 KiB.
 
 ## Controls that remain closed
 
-WebSocket upgrade requests still return 403 before an upstream connection. The current production
-browser flags and navigation remain gated until the later UI task verifies that the full learning
-screens distinguish successful data, empty data, HTTP failures, student-module failures, and known
-incomplete DM behavior. REST availability here is not evidence that those later release checks pass.
+WebSocket upgrade requests still return 403 before an upstream connection. The production browser
+now exposes the learning screens and shared navigation. Task 20 verifies those built pages with
+successful and failing intercepted fixtures and aborts every unknown API request; it does not prove
+live-provider behavior, WebSocket transport, readiness, or known incomplete DM behavior.
 
 Unknown routes, wrong methods, invalid queries, malformed paths, duplicate headers, oversized bodies,
 maintenance mode, unauthenticated session routes, and cross-user PATCH remain negative regressions.
@@ -81,9 +82,11 @@ Authentication-dependent GET responses use `Cache-Control: no-store` and `Vary: 
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
 pnpm --filter @workspace/api-gateway typecheck
+pnpm test:peerbridge-release
+pnpm e2e
 ```
 
 Release approval also requires staging evidence that only the gateway is public, maintenance mode
-fail-closes REST forwarding, and the Python port cannot be reached externally. UI, WebSocket,
-readiness, error projection, rate limiting, contract generation, and final CI evidence are tracked by
-their later release tasks and are not implied by this gateway policy change.
+fail-closes REST forwarding, and the Python port cannot be reached externally. Live-provider,
+WebSocket, readiness, rate limiting, contract generation, and final CI evidence are tracked by their
+later release tasks and are not implied by the Task 20 production-browser fixtures.

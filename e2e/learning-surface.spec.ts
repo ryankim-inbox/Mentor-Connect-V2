@@ -41,6 +41,27 @@ const request = {
   preferredTimes: ["Mon 17:00"],
 };
 
+const matchedRequest = {
+  ...request,
+  status: "matched",
+  matchedUserId: signedInUser.id,
+  matchedUserName: signedInUser.name,
+};
+
+const memberLinkNames = [
+  "Dashboard",
+  "Districts",
+  "Requests",
+  "New Request",
+  "Matches",
+  "Practice",
+  "Analytics",
+  "Scheduling",
+  "Reports",
+  "Profile",
+  "Settings",
+] as const;
+
 const pythonEnvelope = (feature: string, data: unknown) => ({
   ok: true,
   success: true,
@@ -64,6 +85,7 @@ const fixtures: Record<string, unknown> = {
   "/api/districts": [district],
   "/api/tags": [tag],
   "/api/requests": [request],
+  "/api/requests/11": request,
   "/api/stats/overview": {
     totalUsers: 12,
     totalMentors: 6,
@@ -157,6 +179,7 @@ async function interceptApi(
   const unknownRequests: string[] = [];
   await page.route("**/api/**", async (route: Route) => {
     const { pathname } = new URL(route.request().url());
+    const method = route.request().method();
 
     if (pathname === "/api/auth/me" && options.anonymous) {
       await route.fulfill({
@@ -174,9 +197,14 @@ async function interceptApi(
       return;
     }
 
-    const fixture = fixtures[pathname];
+    const fixture =
+      method === "POST" && pathname === "/api/requests/11/match"
+        ? matchedRequest
+        : method === "GET"
+          ? fixtures[pathname]
+          : undefined;
     if (fixture === undefined) {
-      unknownRequests.push(`${route.request().method()} ${pathname}`);
+      unknownRequests.push(`${method} ${pathname}`);
       await route.abort("blockedbyclient");
       return;
     }
@@ -229,22 +257,43 @@ test("mobile menu exposes every signed-in destination and chat", async ({ page }
   await page.goto("/dashboard");
   await page.getByText("Menu", { exact: true }).click();
 
-  for (const name of [
-    "Dashboard",
-    "Districts",
-    "Requests",
-    "New Request",
-    "Matches",
-    "Practice",
-    "Analytics",
-    "Scheduling",
-    "Reports",
-    "Profile",
-    "Settings",
-  ]) {
+  for (const name of memberLinkNames) {
     await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
+  expect(unknownRequests).toEqual([]);
+});
+
+test("desktop navigation exposes every signed-in destination", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+
+  await page.goto("/dashboard");
+
+  const navigation = page.getByRole("navigation");
+  for (const name of memberLinkNames) {
+    await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
+  }
+  expect(unknownRequests).toEqual([]);
+});
+
+test("request detail Connect completes through the production control", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+
+  await page.goto("/requests/11");
+  await expect(page.getByRole("heading", { name: "Calculus study session" })).toBeVisible();
+  const connectRequest = page.waitForRequest((request) => {
+    const { pathname } = new URL(request.url());
+    return request.method() === "POST" && pathname === "/api/requests/11/match";
+  });
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await connectRequest;
+
+  await expect(page.getByRole("heading", { name: "You're connected!" })).toBeVisible();
+  await expect(
+    page.getByText("Minimum member profiles include names, subjects, and join dates.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   expect(unknownRequests).toEqual([]);
 });
 
