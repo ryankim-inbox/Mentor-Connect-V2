@@ -45,6 +45,18 @@ test("all learning routes load their required APIs through the built gateway aft
         expect(response.status(), response.url()).toBe(200);
         expect(response.headers()["x-request-id"], response.url()).toBeTruthy();
       }
+      if (route === "/practice-lab") {
+        for (const [heading, message] of [
+          ["Location Engine Test", "Location module loaded."],
+          ["Block / Report Engine Test", "Block module loaded."],
+        ]) {
+          const section = page.locator("section").filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
+          await expect(section.getByText("connected", { exact: true })).toBeVisible();
+          await expect(section.getByText(message, { exact: true })).toBeVisible();
+        }
+        await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeEnabled();
+        await expect(page.getByRole("alert")).toHaveCount(0);
+      }
     });
   }
 });

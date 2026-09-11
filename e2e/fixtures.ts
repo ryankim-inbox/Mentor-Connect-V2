@@ -78,6 +78,7 @@ export const fixtures: Record<string, unknown> = {
   "/api/practice/status": {
     success: true,
     status: "connected",
+    message: "Python practice API is running. Individual engine statuses are listed below.",
     engines: {},
   },
   "/api/practice/locations/status": {

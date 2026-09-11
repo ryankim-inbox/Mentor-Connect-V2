@@ -242,6 +242,47 @@ test("chat keeps its draft and backs off after rate limits and network failures"
   await expect(draft).toHaveValue("Keep me through polling failures");
 });
 
+test("cached chat rooms expose background failures and retry without losing the thread draft", async ({ page }) => {
+  let roomsReads = 0;
+  await routeApi(page, async (route, path) => {
+    if (path === "/api/chat/rooms") {
+      roomsReads++;
+      await route.fulfill(roomsReads === 2
+        ? { status: 503, json: { detail: "private rooms trace" } }
+        : { json: [{ id: 8, type: "global", districtId: null, name: "Global" }] });
+      return true;
+    }
+    if (path === "/api/chat/rooms/8/messages") {
+      await route.fulfill({ json: [{
+        id: 1, roomId: 8, senderId: 2, senderName: "Peer",
+        body: "Existing room message", createdAt: "2026-09-09T00:00:00Z",
+      }] });
+      return true;
+    }
+    return undefined;
+  });
+
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Open chat" }).click();
+  await expect(page.getByText("Existing room message", { exact: true })).toBeVisible();
+  const draft = page.getByPlaceholder("Type a message…");
+  await draft.fill("Keep me through rooms failures");
+  await page.clock.fastForward(30_100);
+  await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+  await expect.poll(() => roomsReads).toBe(2);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("We had a connection problem. Please try again.");
+  await expect(page.getByText("private rooms trace")).toHaveCount(0);
+  await expect(page.getByText("Existing room message", { exact: true })).toBeVisible();
+  await expect(draft).toHaveValue("Keep me through rooms failures");
+  await alert.getByRole("button", { name: "Try again" }).click();
+  await expect.poll(() => roomsReads).toBe(3);
+  await expect(alert).toHaveCount(0);
+  await expect(page.getByText("Existing room message", { exact: true })).toBeVisible();
+  await expect(draft).toHaveValue("Keep me through rooms failures");
+});
+
 test("failed Connect rechecks server state and never shows matched success", async ({ page }) => {
   let detailReads = 0;
   let matchCalls = 0;
