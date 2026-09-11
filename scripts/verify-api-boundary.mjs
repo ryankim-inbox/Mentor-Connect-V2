@@ -34,6 +34,14 @@ function portBlocks(replitConfig) {
     }));
 }
 
+function rewritePaths(artifact) {
+  return artifact
+    .split(/^\[\[services\.production\.rewrites\]\]\s*$/m)
+    .slice(1)
+    .map((block) => /^\s*from\s*=\s*"([^"]+)"\s*$/m.exec(block)?.[1])
+    .filter(Boolean);
+}
+
 async function listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
@@ -84,12 +92,31 @@ async function verifyBundleDoesNotExposePrivateUpstream() {
   }
 }
 
-const [replitConfig, gatewayArtifact, privateBackendArtifact] =
+const [
+  replitConfig,
+  gatewayArtifact,
+  privateBackendArtifact,
+  frontendArtifact,
+  mockupArtifact,
+  frontendHtml,
+] =
   await Promise.all([
     readWorkspaceFile(".replit"),
     readWorkspaceFile("artifacts/api-gateway/.replit-artifact/artifact.toml"),
     readWorkspaceFile("artifacts/api-server/.replit-artifact/artifact.toml"),
+    readWorkspaceFile("artifacts/peerbridge/.replit-artifact/artifact.toml"),
+    readWorkspaceFile("artifacts/mockup-sandbox/.replit-artifact/artifact.toml"),
+    readWorkspaceFile("artifacts/peerbridge/index.html"),
   ]);
+
+check(
+  /^router\s*=\s*"application"$/m.test(replitConfig),
+  ".replit must use the application artifact router",
+);
+check(
+  /^deploymentTarget\s*=\s*"autoscale"$/m.test(replitConfig),
+  ".replit must keep the verified autoscale deployment target",
+);
 
 const ports = portBlocks(replitConfig);
 const publicPorts = ports.filter((port) => port.externalPort !== undefined);
@@ -152,6 +179,72 @@ check(
 check(
   !/paths\s*=\s*\[\s*"\/api"/.test(privateBackendArtifact),
   "private Python artifact must not be a public /api route owner",
+);
+
+check(
+  /localPort\s*=\s*21288/.test(frontendArtifact),
+  "frontend artifact must listen on port 21288",
+);
+check(
+  /paths\s*=\s*\[\s*"\/"\s*\]/.test(frontendArtifact),
+  "frontend artifact must own the root path",
+);
+check(
+  /publicDir\s*=\s*"artifacts\/peerbridge\/dist\/public"/.test(
+    frontendArtifact,
+  ) && /serve\s*=\s*"static"/.test(frontendArtifact),
+  "frontend production service must serve the built static bundle",
+);
+const expectedSpaRewrites = [
+  "/login",
+  "/register",
+  "/dashboard",
+  "/dashboard/practice-lab",
+  "/districts",
+  "/districts/*",
+  "/requests",
+  "/requests/new",
+  "/requests/*",
+  "/profile",
+  "/profile/*",
+  "/settings",
+  "/recommendations",
+  "/practice-lab",
+  "/analytics",
+  "/scheduling",
+  "/admin/reports",
+];
+const actualSpaRewrites = rewritePaths(frontendArtifact);
+check(
+  actualSpaRewrites.length === expectedSpaRewrites.length &&
+    expectedSpaRewrites.every((path) => actualSpaRewrites.includes(path)),
+  "frontend artifact must rewrite only declared SPA route families",
+);
+check(
+  !actualSpaRewrites.includes("/*") &&
+    frontendArtifact
+      .split(/^\[\[services\.production\.rewrites\]\]\s*$/m)
+      .slice(1)
+      .every((block) => /^\s*to\s*=\s*"\/index\.html"\s*$/m.test(block)),
+  "frontend artifact must not turn unknown paths or missing assets into HTML 200",
+);
+check(
+  !/\[services\.production\]/.test(mockupArtifact),
+  "development mockup artifact must not define a production service",
+);
+check(
+  frontendHtml.includes(
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'",
+  ),
+  "frontend HTML must include the classroom CSP meta policy",
+);
+check(
+  !frontendHtml.match(/http-equiv="Content-Security-Policy"[^>]*frame-ancestors/),
+  "frontend CSP meta must not claim unsupported frame-ancestors enforcement",
+);
+check(
+  /<meta\s+name="referrer"\s+content="no-referrer"\s*\/>/.test(frontendHtml),
+  "frontend HTML must set the no-referrer meta policy",
 );
 
 // Evaluate the shipped Vite config, so both local serving modes retain the gateway boundary.

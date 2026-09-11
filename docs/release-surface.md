@@ -4,8 +4,9 @@ Status: the gateway exposes the approved 48-operation learning REST contract. Pr
 flags and shared desktop/mobile navigation are open, and Task 20 verifies the learning screens in
 Chromium against the production bundle with intercepted API fixtures. The two exact WebSocket
 endpoints now use a session/Origin-checked native gateway tunnel. Gateway-local liveness and bounded
-Python/database/schema readiness are implemented. This state does not claim live-provider or
-real-Python WebSocket verification.
+Python/database/schema readiness are implemented. CI now targets the complete classroom release
+command and retains production and full-toolchain dependency audits. This state does not claim a
+public Replit origin, live-provider headers, instance count, or remote smoke evidence.
 
 ## Runtime boundary
 
@@ -116,6 +117,15 @@ pnpm gateway:verify-boundary
 pnpm test:peerbridge-release
 pnpm e2e
 ```
+
+`pnpm verify:release` is the CI/local release gate and preserves the complete ordered sequence,
+including frozen install, disposable PostgreSQL suites, generated-client drift, secret checks, smoke
+self-tests, Chromium, and the two Python freeze bases for this non-Python track. The operational
+provider checklist, release-record fields, external port checks, and rollback procedure are in
+[`docs/runbooks/classroom-release.md`](runbooks/classroom-release.md).
+
+The static artifact rewrites only declared SPA route families to `index.html`. It leaves unknown paths
+and missing assets to return 404 instead of applying a site-wide catch-all fallback.
 
 Release approval also requires staging evidence that only the gateway is public, maintenance mode
 fail-closes REST and WebSocket forwarding, the Python port cannot be reached externally, the actual

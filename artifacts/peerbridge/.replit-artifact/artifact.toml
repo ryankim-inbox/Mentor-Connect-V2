@@ -23,7 +23,71 @@ publicDir = "artifacts/peerbridge/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]
-from = "/*"
+from = "/login"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/register"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/dashboard"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/dashboard/practice-lab"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/districts"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/districts/*"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/requests"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/requests/new"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/requests/*"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/profile"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/profile/*"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/settings"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/recommendations"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/practice-lab"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/analytics"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/scheduling"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/admin/reports"
 to = "/index.html"
 
 [services.env]
