@@ -2773,7 +2773,7 @@ export const sendChatRoomMessage = async (
   roomId: number,
   sendChatMessageBody: SendChatMessageBody,
   options?: Parameters<typeof customFetch>[1],
-): Promise<ScaffoldTodo | ChatMessage> => {
+): Promise<ChatMessage | ScaffoldTodo> => {
   const getHeaders = (
     h?: NonNullable<RequestInit["headers"]>,
   ): Record<string, string | readonly string[]> => {
@@ -2795,7 +2795,7 @@ export const sendChatRoomMessage = async (
     }
     return headers;
   };
-  return customFetch<ScaffoldTodo | ChatMessage>(
+  return customFetch<ChatMessage | ScaffoldTodo>(
     getSendChatRoomMessageUrl(roomId),
     {
       ...options,
@@ -3296,7 +3296,7 @@ export const sendDmMessage = async (
   conversationId: number,
   sendChatMessageBody: SendChatMessageBody,
   options?: Parameters<typeof customFetch>[1],
-): Promise<ScaffoldTodo | DmMessage> => {
+): Promise<DmMessage | ScaffoldTodo> => {
   const getHeaders = (
     h?: NonNullable<RequestInit["headers"]>,
   ): Record<string, string | readonly string[]> => {
@@ -3318,7 +3318,7 @@ export const sendDmMessage = async (
     }
     return headers;
   };
-  return customFetch<ScaffoldTodo | DmMessage>(
+  return customFetch<DmMessage | ScaffoldTodo>(
     getSendDmMessageUrl(conversationId),
     {
       ...options,

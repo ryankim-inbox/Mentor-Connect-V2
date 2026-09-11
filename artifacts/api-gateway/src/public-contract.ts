@@ -77,6 +77,79 @@ const adminRow = z.object({
   lastReportedAt: timestamp.nullable(),
   topReasons: z.array(z.string()),
 });
+// These check wire fields, not Python authorization or business decisions.
+const integer = z.number().int();
+const string = z.string();
+const user = z.object({
+  id,
+  email: string,
+  name: string,
+  role: z.enum(["mentor", "mentee", "both"]),
+  districtId: integer,
+  districtName: string.nullable().optional(),
+  bio: string.nullable().optional(),
+  subjects: string.array(),
+  isVerified: z.boolean(),
+  createdAt: string,
+});
+const auth = z.object({ user, message: string });
+const messageResponse = z.object({ message: string });
+const health = z.object({ status: string });
+const district = z.object({
+  id: integer,
+  name: string,
+  county: string,
+  type: z.enum(["high_school", "unified", "elementary", "other"]),
+  memberCount: integer,
+  openRequestCount: integer,
+});
+const tag = z.object({
+  id: integer,
+  name: string,
+  color: string,
+  requestCount: integer,
+});
+const mentorshipRequest = z.object({
+  id: integer,
+  authorId: integer,
+  authorName: string,
+  authorRole: z.enum(["mentor", "mentee"]),
+  districtId: integer,
+  districtName: string,
+  title: string,
+  description: string,
+  tags: tag.array(),
+  status: z.enum(["open", "matched", "closed"]),
+  matchedUserId: integer.nullable().optional(),
+  matchedUserName: string.nullable().optional(),
+  createdAt: string,
+  preferredTimes: string.array().optional(),
+});
+const blockedUser = z.object({
+  id: integer,
+  blockedUserId: integer,
+  blockedUserName: string,
+  createdAt: string,
+});
+const statsOverview = z.object({
+  totalUsers: integer,
+  totalMentors: integer,
+  totalMentees: integer,
+  totalDistricts: integer,
+  openRequests: integer,
+  successfulMatches: integer,
+  topTags: tag.array(),
+});
+const districtStats = z.object({
+  districtId: integer,
+  districtName: string,
+  memberCount: integer,
+  mentorCount: integer,
+  menteeCount: integer,
+  openRequests: integer,
+  matchedRequests: integer,
+  topTags: tag.array(),
+});
 const record = z.record(z.unknown());
 const studentModule = z
   .object({
@@ -113,7 +186,6 @@ export function projectStudentPayload(payload: unknown): unknown {
   if (Array.isArray(payload)) return payload.map(projectStudentPayload);
   if (payload === null || typeof payload !== "object") return payload;
   const value = record.parse(payload);
-  if (value.status === "todo") return todo.parse(value);
   const failed =
     value.success === false ||
     value.ok === false ||
@@ -189,18 +261,28 @@ export function projectPublicPayload(
       projected.data = adminRow.array().parse(value.data);
     return projected;
   }
-  // Non-learning endpoints still require their JSON container and identity fields.
-  if (
-    ["/api/districts", "/api/tags", "/api/requests", "/api/blocks"].includes(
-      path,
-    ) &&
-    method === "GET"
-  )
-    return z.array(record).parse(payload);
-  const value = record.parse(payload);
-  if (path === "/api/auth/me") id.parse(value.id);
+  if (path === "/api/auth/me") return user.parse(payload);
   if (path === "/api/auth/login" || path === "/api/auth/register")
-    id.parse(record.parse(value.user).id);
-  if (path === "/api/healthz") z.literal("ok").parse(value.status);
-  return value;
+    return auth.parse(payload);
+  if (
+    path === "/api/auth/logout" ||
+    path === "/api/reports" ||
+    (path === "/api/blocks" && method === "POST")
+  )
+    return messageResponse.parse(payload);
+  if (path === "/api/districts") return district.array().parse(payload);
+  if (path.startsWith("/api/districts/")) return district.parse(payload);
+  if (path === "/api/tags") return tag.array().parse(payload);
+  if (path.startsWith("/api/requests"))
+    return (
+      path === "/api/requests" && method === "GET"
+        ? mentorshipRequest.array()
+        : mentorshipRequest
+    ).parse(payload);
+  if (path === "/api/blocks") return blockedUser.array().parse(payload);
+  if (path === "/api/stats/overview") return statsOverview.parse(payload);
+  if (path.startsWith("/api/stats/district/"))
+    return districtStats.parse(payload);
+  if (path === "/api/healthz") return health.parse(payload);
+  throw new TypeError("unsupported_public_response");
 }

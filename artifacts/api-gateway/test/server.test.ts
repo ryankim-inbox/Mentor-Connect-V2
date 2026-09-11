@@ -8,6 +8,11 @@ import {
 import test from "node:test";
 
 import { createGatewayServer } from "../src/gateway.ts";
+import {
+  userFixture,
+  requestFixture,
+  overviewFixture,
+} from "./contract-fixtures.ts";
 
 interface UpstreamCall {
   body: string;
@@ -82,15 +87,7 @@ test("forwards one valid request from every REST family with exact method, targe
 
     if (request.url === "/api/auth/me") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(
-        JSON.stringify({
-          id: 1,
-          email: "student@example.edu",
-          name: "Student One",
-          subjects: ["Math"],
-          createdAt: "2026-08-26T00:00:00+00:00",
-        }),
-      );
+      response.end(JSON.stringify(userFixture));
       return;
     }
     if (request.url === "/api/users/2") {
@@ -115,41 +112,47 @@ test("forwards one valid request from every REST family with exact method, targe
     response.writeHead(200, { "content-type": "application/json" });
     const path = new URL(request.url ?? "/", "http://test").pathname;
     const payload =
-      path === "/api/districts" || path === "/api/tags"
-        ? []
-        : path === "/api/chat/rooms/1/messages"
-          ? {
-              id: 1,
-              roomId: 1,
-              senderId: 1,
-              senderName: "Student",
-              body: "hello",
-              createdAt: "2026-01-01",
-            }
-          : path === "/api/dms/start"
-            ? {
-                id: 1,
-                otherUserId: 2,
-                otherUserName: "Other",
-                createdAt: "2026-01-01",
-              }
-            : path === "/api/healthz"
-              ? { status: "ok" }
-              : path.startsWith("/api/matches") ||
-                  path.startsWith("/api/practice/matching")
+      path === "/api/auth/logout" || path === "/api/reports"
+        ? { message: "Completed" }
+        : path === "/api/requests/2/match"
+          ? requestFixture
+          : path === "/api/stats/overview"
+            ? overviewFixture
+            : path === "/api/districts" || path === "/api/tags"
+              ? []
+              : path === "/api/chat/rooms/1/messages"
                 ? {
-                    success: true,
-                    status: "connected",
-                    question_id: 1,
-                    limit: 5,
-                    matches: [],
+                    id: 1,
+                    roomId: 1,
+                    senderId: 1,
+                    senderName: "Student",
+                    body: "hello",
+                    createdAt: "2026-01-01",
                   }
-                : {
-                    ok: true,
-                    source: "adapter-fallback",
-                    student_module: null,
-                    data: [],
-                  };
+                : path === "/api/dms/start"
+                  ? {
+                      id: 1,
+                      otherUserId: 2,
+                      otherUserName: "Other",
+                      createdAt: "2026-01-01",
+                    }
+                  : path === "/api/healthz"
+                    ? { status: "ok" }
+                    : path.startsWith("/api/matches") ||
+                        path.startsWith("/api/practice/matching")
+                      ? {
+                          success: true,
+                          status: "connected",
+                          question_id: 1,
+                          limit: 5,
+                          matches: [],
+                        }
+                      : {
+                          ok: true,
+                          source: "adapter-fallback",
+                          student_module: null,
+                          data: [],
+                        };
     response.end(JSON.stringify(payload));
   });
   const upstreamPort = await listen(upstream);
@@ -315,7 +318,7 @@ test("forwards every allowed raw practice module once after session validation",
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
       request.url === "/api/auth/me"
-        ? '{"id":1}'
+        ? JSON.stringify(userFixture)
         : '{"success":true,"status":"connected"}',
     );
   });
@@ -352,7 +355,7 @@ test("limits the practice location test body to 16 KiB before its upstream route
     calls.push(request.url ?? "/");
     if (request.url === "/api/auth/me") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end('{"id":1}');
+      response.end(JSON.stringify(userFixture));
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });

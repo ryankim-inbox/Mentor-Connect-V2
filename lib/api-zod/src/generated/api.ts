@@ -653,32 +653,38 @@ export const SendChatRoomMessageBody = zod.object({
   body: zod.string(),
 });
 
-export const sendChatRoomMessageResponseOneMessageMax = 1000;
+export const sendChatRoomMessageResponseOneIdMax = 9007199254740991;
 
-export const sendChatRoomMessageResponseOneGuideMax = 500;
+export const sendChatRoomMessageResponseOneRoomIdMax = 9007199254740991;
+
+export const sendChatRoomMessageResponseOneSenderIdMax = 9007199254740991;
+
+export const sendChatRoomMessageResponseOneCreatedAtMax = 128;
 
 export const sendChatRoomMessageResponseTwoMessageMax = 1000;
 
 export const sendChatRoomMessageResponseTwoGuideMax = 500;
 
 export const SendChatRoomMessageResponse = zod.union([
-  zod
-    .object({
-      status: zod.enum(["todo"]),
-      mission: zod
-        .number()
-        .int()
-        .optional()
-        .describe("Mission number in docs/STUDENT_CHAT_BACKEND_GUIDE.md"),
-      message: zod.string().max(sendChatRoomMessageResponseOneMessageMax),
-      guide: zod
-        .string()
-        .max(sendChatRoomMessageResponseOneGuideMax)
-        .optional(),
-    })
-    .describe(
-      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python/routers/chat.py).\n",
-    ),
+  zod.object({
+    id: zod.number().int().min(1).max(sendChatRoomMessageResponseOneIdMax),
+    roomId: zod
+      .number()
+      .int()
+      .min(1)
+      .max(sendChatRoomMessageResponseOneRoomIdMax),
+    senderId: zod
+      .number()
+      .int()
+      .min(1)
+      .max(sendChatRoomMessageResponseOneSenderIdMax),
+    senderName: zod.string().min(1),
+    body: zod.string(),
+    createdAt: zod
+      .string()
+      .min(1)
+      .max(sendChatRoomMessageResponseOneCreatedAtMax),
+  }),
   zod
     .object({
       status: zod.enum(["todo"]),
@@ -886,29 +892,41 @@ export const SendDmMessageBody = zod.object({
   body: zod.string(),
 });
 
-export const sendDmMessageResponseOneMessageMax = 1000;
+export const sendDmMessageResponseOneIdMax = 9007199254740991;
 
-export const sendDmMessageResponseOneGuideMax = 500;
+export const sendDmMessageResponseOneConversationIdMax = 9007199254740991;
+
+export const sendDmMessageResponseOneSenderIdMax = 9007199254740991;
+
+export const sendDmMessageResponseOneCreatedAtMax = 128;
+
+export const sendDmMessageResponseOneReadAtMax = 128;
 
 export const sendDmMessageResponseTwoMessageMax = 1000;
 
 export const sendDmMessageResponseTwoGuideMax = 500;
 
 export const SendDmMessageResponse = zod.union([
-  zod
-    .object({
-      status: zod.enum(["todo"]),
-      mission: zod
-        .number()
-        .int()
-        .optional()
-        .describe("Mission number in docs/STUDENT_CHAT_BACKEND_GUIDE.md"),
-      message: zod.string().max(sendDmMessageResponseOneMessageMax),
-      guide: zod.string().max(sendDmMessageResponseOneGuideMax).optional(),
-    })
-    .describe(
-      "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python/routers/chat.py).\n",
-    ),
+  zod.object({
+    id: zod.number().int().min(1).max(sendDmMessageResponseOneIdMax),
+    conversationId: zod
+      .number()
+      .int()
+      .min(1)
+      .max(sendDmMessageResponseOneConversationIdMax),
+    senderId: zod
+      .number()
+      .int()
+      .min(1)
+      .max(sendDmMessageResponseOneSenderIdMax),
+    body: zod.string(),
+    createdAt: zod.string().min(1).max(sendDmMessageResponseOneCreatedAtMax),
+    readAt: zod
+      .string()
+      .min(1)
+      .max(sendDmMessageResponseOneReadAtMax)
+      .nullable(),
+  }),
   zod
     .object({
       status: zod.enum(["todo"]),
