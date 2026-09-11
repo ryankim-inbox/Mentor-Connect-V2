@@ -78,21 +78,21 @@ function postJson(body: unknown): RequestInit {
   };
 }
 
-export const fetchChatRooms = () => chatFetch<ChatRoom[]>("/api/chat/rooms");
+export const fetchChatRooms = (signal?: AbortSignal) => chatFetch<ChatRoom[]>("/api/chat/rooms", { signal });
 
-export const fetchRoomMessages = (roomId: number) =>
-  chatFetch<ChatMessage[]>(`/api/chat/rooms/${roomId}/messages`);
+export const fetchRoomMessages = (roomId: number, signal?: AbortSignal) =>
+  chatFetch<ChatMessage[]>(`/api/chat/rooms/${roomId}/messages`, { signal });
 
 export const sendRoomMessage = (roomId: number, body: string) =>
   chatFetch<ChatMessage>(`/api/chat/rooms/${roomId}/messages`, postJson({ body }));
 
-export const fetchDmConversations = () => chatFetch<DmConversation[]>("/api/dms");
+export const fetchDmConversations = (signal?: AbortSignal) => chatFetch<DmConversation[]>("/api/dms", { signal });
 
 export const startDmConversation = (toUserId: number) =>
   chatFetch<DmConversation>("/api/dms/start", postJson({ toUserId }));
 
-export const fetchDmMessages = (conversationId: number) =>
-  chatFetch<DmMessage[]>(`/api/dms/${conversationId}/messages`);
+export const fetchDmMessages = (conversationId: number, signal?: AbortSignal) =>
+  chatFetch<DmMessage[]>(`/api/dms/${conversationId}/messages`, { signal });
 
 export const sendDmMessage = (conversationId: number, body: string) =>
   chatFetch<DmMessage>(`/api/dms/${conversationId}/messages`, postJson({ body }));

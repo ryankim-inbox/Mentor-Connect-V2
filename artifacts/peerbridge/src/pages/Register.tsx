@@ -1,11 +1,48 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useRegister, useListDistricts } from "@workspace/api-client-react";
-import { useAuth } from "@/lib/auth-context";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth, sessionReturnPath } from "@/lib/auth-context";
 
 export default function Register() {
   const [, navigate] = useLocation();
   const { refetch } = useAuth();
+  const queryClient = useQueryClient();
+  const search = useSearch();
+  const destination = sessionReturnPath(
+    new URLSearchParams(search).get("returnTo"),
+  );
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
+  const confirmSession = async () => {
+    try {
+      const user = await refetch();
+      if (user) navigate(destination);
+      else
+        setError(
+          "Your session isn't active yet. Recheck your session or sign in again.",
+        );
+    } catch {
+      setError(
+        "Your account was accepted, but we couldn't verify the session. Please recheck it.",
+      );
+    }
+  };
+  const retrySession = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try {
+      await confirmSession();
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -36,8 +73,9 @@ export default function Register() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
     setError("");
 
     if (!form.email.toLowerCase().endsWith(".edu")) {
@@ -50,19 +88,26 @@ export default function Register() {
       return;
     }
 
-    registerMutation.mutate(
-      { data: form },
-      {
-        onSuccess: () => {
-          refetch();
-          navigate("/profile");
-        },
-        onError: (err: unknown) => {
-          const e = err as { data?: { error?: string } };
-          setError(e?.data?.error ?? "Registration failed. Please try again.");
-        },
-      },
-    );
+    busy.current = true;
+    setPending(true);
+    setNeedsConfirmation(false);
+    try {
+      await queryClient.cancelQueries({ queryKey: getGetMeQueryKey() });
+      const response = await registerMutation.mutateAsync({ data: form });
+      await queryClient.cancelQueries();
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],
+      });
+      queryClient.setQueryData(getGetMeQueryKey(), response.user);
+      setNeedsConfirmation(true);
+      await confirmSession();
+    } catch (error) {
+      const failure = error as { data?: { error?: string } };
+      setError(failure.data?.error ?? "Registration failed. Please try again.");
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
   };
 
   return (
@@ -209,14 +254,23 @@ export default function Register() {
               </p>
             )}
 
+            {needsConfirmation && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void retrySession()}
+                className="w-full rounded-lg border px-3 py-2 disabled:opacity-50"
+              >
+                Recheck session
+              </button>
+            )}
+
             <button
               type="submit"
-              disabled={registerMutation.isPending || !!emailError}
+              disabled={pending || !!emailError}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {registerMutation.isPending
-                ? "Creating account..."
-                : "Create account"}
+              {pending ? "Creating account..." : "Create account"}
             </button>
           </form>
 

@@ -42,11 +42,11 @@ function QueryError({
 export default function AdminReports() {
   const flagged = useQuery({
     queryKey: ["learning", "flagged-users"],
-    queryFn: () => getPythonApi<FlaggedUser[]>("/api/admin/flagged-users"),
+    queryFn: ({ signal }) => getPythonApi<FlaggedUser[]>("/api/admin/flagged-users", { signal }),
   });
   const signups = useQuery({
     queryKey: ["learning", "signup-summary"],
-    queryFn: () => getPythonApi<SignupSummary>("/api/python-reports/summary"),
+    queryFn: ({ signal }) => getPythonApi<SignupSummary>("/api/python-reports/summary", { signal }),
   });
 
   const flaggedUsers = Array.isArray(flagged.data?.data) ? flagged.data.data : [];

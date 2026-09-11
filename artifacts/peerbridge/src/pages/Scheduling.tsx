@@ -80,12 +80,12 @@ export default function Scheduling() {
 
   const statusQuery = useQuery({
     queryKey: ["scheduling", "status"],
-    queryFn: () => getPythonApi<null>("/api/scheduling/status"),
+    queryFn: ({ signal }) => getPythonApi<null>("/api/scheduling/status", { signal }),
     enabled: !!user,
   });
   const overviewQuery = useQuery({
     queryKey: ["scheduling", "overview"],
-    queryFn: () => getPythonApi<SchedulingOverview>("/api/scheduling/overview"),
+    queryFn: ({ signal }) => getPythonApi<SchedulingOverview>("/api/scheduling/overview", { signal }),
     enabled: !!user,
   });
 
