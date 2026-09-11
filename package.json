@@ -25,7 +25,8 @@
     "test:secrets": "sh scripts/test-secret-history.sh && sh scripts/test-secret-workflow-policy.sh",
     "api:generate": "pnpm --filter @workspace/api-spec codegen",
     "api:contract-test": "node scripts/test-api-contract.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "verify:release": "sh scripts/verify-release.sh"
   },
   "private": true,
   "devDependencies": {
