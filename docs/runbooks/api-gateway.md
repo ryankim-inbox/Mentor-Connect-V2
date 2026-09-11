@@ -99,3 +99,24 @@ the public network. Local tests cannot prove hosting ingress configuration.
 If the gateway is bypassed or the Python port is public, stop the release and deploy with
 `GATEWAY_MAINTENANCE_MODE=true`. Maintenance mode keeps only `/livez` available and returns 503 for
 registered REST routes.
+
+## Public response contract and generation
+
+The public OpenAPI inventory is 48 REST operations. `pnpm api:generate` regenerates the
+React client and Zod validators; `pnpm api:contract-test` compares those paths with the
+compiled gateway policy and literal decorators in the routers included by `Python/main.py`.
+It does not execute Python. `/livez` and `/readyz` are separate gateway operational endpoints.
+
+Every API response uses `Cache-Control: no-store` and a gateway `X-Request-Id`. HTTP errors
+expose only `{error:string}`; upstream diagnostics and debug headers are discarded, while
+`Set-Cookie` is handled separately. HTTP-success learning results remain distinct: `status:todo`,
+`success:false` with `data:null`, and successful data are preserved. Diagnostic error/message
+text is replaced with fixed student-facing text. Existing `source:adapter-fallback` stays visible;
+the gateway does not produce fallback data. Profile GET and self PATCH return only
+`id`, `name`, `subjects`, and `createdAt`; admin rows omit email, district, and raw student results.
+Wire timestamps remain JSON strings in both generated validators and gateway projection.
+
+WebSockets are counted separately: `/ws/chat/rooms/{id}` and `/ws/dms/{id}`. Task 18 adds
+session/Origin-checked forwarding of these two paths. At the Task 16 boundary they are still
+rejected before upstream connection. Python owns room/DM behavior; the current DM mission
+sends its unfinished-learning message and closes, which subsequent forwarding must preserve.

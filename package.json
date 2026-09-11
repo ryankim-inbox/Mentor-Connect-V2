@@ -22,12 +22,15 @@
     "secrets:scan:self-test": "sh scripts/check-secrets.sh --self-test",
     "secrets:history": "sh scripts/check-secret-history.sh",
     "test:secret-workflow-policy": "sh scripts/test-secret-workflow-policy.sh",
-    "test:secrets": "sh scripts/test-secret-history.sh && sh scripts/test-secret-workflow-policy.sh"
+    "test:secrets": "sh scripts/test-secret-history.sh && sh scripts/test-secret-workflow-policy.sh",
+    "api:generate": "pnpm --filter @workspace/api-spec codegen",
+    "api:contract-test": "node scripts/test-api-contract.mjs"
   },
   "private": true,
   "devDependencies": {
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "@playwright/test": "1.63.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "^4.60.2",
