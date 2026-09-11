@@ -13,6 +13,12 @@ import {
   type PublicRouteMatch,
 } from "./route-policy.js";
 
+import {
+  publicError,
+  projectProfile,
+  projectPublicPayload,
+} from "./public-contract.js";
+
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
 const DEFAULT_REQUEST_BODY_LIMIT_BYTES = 1_048_576;
 const DEFAULT_RESPONSE_BODY_LIMIT_BYTES = 2_097_152;
@@ -330,6 +336,7 @@ async function handleRequest(
       requestId,
       sessionVerification?.setCookies,
       authenticationDependentGet,
+      policy,
     );
     log(config, "gateway.proxied", {
       method,
@@ -812,37 +819,27 @@ function sendSelfProfileResponse(
   requestId: string,
   sessionSetCookies: readonly string[],
 ): void {
-  if (upstream.response.status === 404) {
-    sendGatewayError(response, 404, "not_found", requestId);
+  const setCookies = [
+    ...sessionSetCookies,
+    ...getSetCookies(upstream.response.headers),
+  ];
+  if (setCookies.length > 0) response.setHeader("set-cookie", setCookies);
+  if (upstream.response.status >= 400) {
+    sendJson(
+      response,
+      upstream.response.status,
+      publicError(upstream.response.status),
+      requestId,
+    );
     return;
   }
-
-  if (!upstream.response.ok) {
-    if (upstream.response.status >= 400 && upstream.response.status < 500) {
-      sendGatewayError(
-        response,
-        method === "PATCH" ? 400 : 404,
-        method === "PATCH" ? "invalid_profile_update" : "not_found",
-        requestId,
-      );
-      return;
-    }
-
-    throw new UpstreamFailureError();
-  }
+  if (!upstream.response.ok) throw new UpstreamFailureError();
 
   const profile = sanitizeSelfProfile(upstream.body, expectedUserId);
   if (!profile) {
     throw new UpstreamFailureError();
   }
 
-  const setCookies = [
-    ...sessionSetCookies,
-    ...getSetCookies(upstream.response.headers),
-  ];
-  if (setCookies.length > 0) {
-    response.setHeader("set-cookie", setCookies);
-  }
   response.setHeader("vary", "Cookie");
   sendJson(response, 200, profile, requestId);
 }
@@ -858,23 +855,11 @@ function sanitizeSelfProfile(
     return undefined;
   }
 
-  if (!isJsonRecord(payload) || payload.id !== expectedUserId) {
+  try {
+    return projectProfile(payload, expectedUserId);
+  } catch {
     return undefined;
   }
-
-  const name = readBoundedString(payload.name, 120);
-  const subjects = sanitizeSubjects(payload.subjects);
-  const createdAt = readBoundedString(payload.createdAt, 128);
-  if (!name || !subjects || !createdAt) {
-    return undefined;
-  }
-
-  return {
-    id: expectedUserId,
-    name,
-    subjects,
-    createdAt,
-  };
 }
 
 function sanitizeSubjects(value: unknown): string[] | undefined {
@@ -1163,6 +1148,7 @@ function sendUpstreamResponse(
   requestId: string,
   additionalSetCookies: readonly string[] | undefined,
   authenticationDependentGet: boolean,
+  policy: PublicRouteMatch,
 ): void {
   if (response.writableEnded || response.destroyed) {
     return;
@@ -1173,7 +1159,7 @@ function sendUpstreamResponse(
     if (
       normalizedName === "set-cookie" ||
       STRIPPED_RESPONSE_HEADERS.has(normalizedName) ||
-      normalizedName.startsWith("access-control-")
+      !["content-type", "retry-after", "vary"].includes(normalizedName)
     ) {
       continue;
     }
@@ -1197,11 +1183,33 @@ function sendUpstreamResponse(
     );
   }
 
-  response.statusCode = upstream.response.status;
-  response.setHeader("content-length", upstream.body.length);
-  response.setHeader("x-content-type-options", "nosniff");
-  response.setHeader("x-request-id", requestId);
-  response.end(upstream.body);
+  response.setHeader("cache-control", "no-store");
+  if (upstream.response.status >= 400) {
+    sendJson(
+      response,
+      upstream.response.status,
+      publicError(upstream.response.status),
+      requestId,
+    );
+    return;
+  }
+  if (upstream.response.status === 204) {
+    response.writeHead(204, { "x-request-id": requestId });
+    response.end();
+    return;
+  }
+  let payload: unknown;
+  try {
+    payload = projectPublicPayload(
+      JSON.parse(upstream.body.toString("utf8")),
+      policy.template,
+      policy.method,
+    );
+  } catch {
+    sendGatewayError(response, 502, "backend_error", requestId);
+    return;
+  }
+  sendJson(response, upstream.response.status, payload, requestId);
 }
 
 function mergeVaryHeader(

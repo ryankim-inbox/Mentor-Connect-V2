@@ -8,13 +8,18 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/route-policy.test.ts test/server.test.ts test/self-only.test.ts",
-    "test:shield": "sh -c 'gateway_test_dir=$(mktemp -d); trap \"rm -rf \\\"$gateway_test_dir\\\"\" EXIT; tsc -p tsconfig.test.json --outDir \"$gateway_test_dir\" && node --test \"$gateway_test_dir/gateway.test.js\"'",
+    "test": "tsx --test test/route-policy.test.ts test/server.test.ts test/self-only.test.ts test/public-contract.test.ts",
+    "test:shield": "sh -c 'gateway_test_dir=$(mktemp -d \"$PWD/.gateway-test.XXXXXX\"); trap \"rm -rf \\\"$gateway_test_dir\\\"\" EXIT; tsc -p tsconfig.test.json --outDir \"$gateway_test_dir\" && node --test \"$gateway_test_dir/gateway.test.js\"'",
     "test:self-only": "tsx --test test/self-only.test.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "catalog:",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "@types/pg": "8.18.0"
+  },
+  "dependencies": {
+    "zod": "catalog:",
+    "pg": "8.20.0"
   }
 }

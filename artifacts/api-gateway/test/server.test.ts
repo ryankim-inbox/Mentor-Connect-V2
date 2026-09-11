@@ -113,7 +113,44 @@ test("forwards one valid request from every REST family with exact method, targe
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });
-    response.end('{"ok":true}');
+    const path = new URL(request.url ?? "/", "http://test").pathname;
+    const payload =
+      path === "/api/districts" || path === "/api/tags"
+        ? []
+        : path === "/api/chat/rooms/1/messages"
+          ? {
+              id: 1,
+              roomId: 1,
+              senderId: 1,
+              senderName: "Student",
+              body: "hello",
+              createdAt: "2026-01-01",
+            }
+          : path === "/api/dms/start"
+            ? {
+                id: 1,
+                otherUserId: 2,
+                otherUserName: "Other",
+                createdAt: "2026-01-01",
+              }
+            : path === "/api/healthz"
+              ? { status: "ok" }
+              : path.startsWith("/api/matches") ||
+                  path.startsWith("/api/practice/matching")
+                ? {
+                    success: true,
+                    status: "connected",
+                    question_id: 1,
+                    limit: 5,
+                    matches: [],
+                  }
+                : {
+                    ok: true,
+                    source: "adapter-fallback",
+                    student_module: null,
+                    data: [],
+                  };
+    response.end(JSON.stringify(payload));
   });
   const upstreamPort = await listen(upstream);
   const gateway = createGatewayServer({
@@ -277,7 +314,9 @@ test("forwards every allowed raw practice module once after session validation",
     });
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
-      request.url === "/api/auth/me" ? '{"id":1}' : '{"ok":true}',
+      request.url === "/api/auth/me"
+        ? '{"id":1}'
+        : '{"success":true,"status":"connected"}',
     );
   });
   const upstreamPort = await listen(upstream);

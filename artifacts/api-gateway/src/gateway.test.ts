@@ -78,13 +78,17 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
           "csrf=issued; Path=/",
         ],
       });
-      response.end(JSON.stringify({ signedIn: true }));
+      response.end(
+        JSON.stringify({ user: { id: 7 }, message: "Logged in successfully" }),
+      );
       return;
     }
 
     if (request.url === "/api/auth/register") {
       response.writeHead(201, { "content-type": "application/json" });
-      response.end(JSON.stringify({ registered: true }));
+      response.end(
+        JSON.stringify({ user: { id: 7 }, message: "Registered successfully" }),
+      );
       return;
     }
 
@@ -207,7 +211,7 @@ test("proxies registered public routes and deliberately forwards response data",
 
     const health = await fetch(fixture.gatewayOrigin + "/api/healthz");
     assert.equal(health.status, 200);
-    assert.equal(health.headers.get("x-upstream-marker"), "health");
+    assert.equal(health.headers.get("x-upstream-marker"), null);
     assert.equal(health.headers.get("location"), null);
     assert.deepEqual(await health.json(), { status: "ok" });
 
@@ -221,7 +225,10 @@ test("proxies registered public routes and deliberately forwards response data",
       body: loginPayload,
     });
     assert.equal(login.status, 201);
-    assert.deepEqual(await login.json(), { signedIn: true });
+    assert.deepEqual(await login.json(), {
+      user: { id: 7 },
+      message: "Logged in successfully",
+    });
     assert.deepEqual(getSetCookies(login), [
       "peerbridge_session=valid; HttpOnly; Path=/",
       "csrf=issued; Path=/",
