@@ -10,6 +10,8 @@
 
 **Spec:** [재감사·설계](../specs/2026-09-09-full-learning-deployment-design.md). 이 문서의 Global Constraints 전체를 모든 하위 계획에 적용한다.
 
+**실행 상태 (2026-09-11):** Task 21–24 저장소 구현과 1–24 재점검을 완료했다. [전체 검증 기록](../execution/2026-09-11-tasks-21-24.md)에 로컬·Linux 결과, Python 변경 0, 실제 배포·PR 통합에서 남은 확인을 구분해 기록했다.
+
 ## Global Constraints
 
 - Backend는 Python을 메인으로 쓴다.
