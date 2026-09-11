@@ -95,7 +95,7 @@ export default function RequestDetail({ id }: Props) {
                 {justMatched ? "You're connected!" : "This request has been matched"}
               </h3>
               <p className="text-green-700 text-sm mt-1">
-                Private participant profiles are unavailable while the release uses self-only profile access.
+                Minimum member profiles include names, subjects, and join dates.
               </p>
               <div className="mt-4 sm:w-52 bg-white border border-green-100 rounded-xl p-4">
                 <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Tips</p>
