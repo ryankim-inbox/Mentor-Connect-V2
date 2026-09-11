@@ -7,9 +7,9 @@ id = "artifacts/api-gateway"
 [[services]]
 localPort = 8080
 name = "API Shield"
-# These public families must be owned by the shield. /ws is listed explicitly
-# so upgrade requests cannot fall through to another artifact.
-paths = ["/api", "/livez", "/ws"]
+# These public families must be owned by the shield. Operational probes and
+# upgrades are listed explicitly so they cannot fall through to another artifact.
+paths = ["/api", "/livez", "/readyz", "/ws"]
 
 [services.development]
 run = "pnpm --filter @workspace/api-gateway run dev"
@@ -30,4 +30,4 @@ GATEWAY_UPSTREAM_ORIGIN = "http://127.0.0.1:8181"
 GATEWAY_PUBLIC_ORIGIN = "https://classroom.example.com"
 
 [services.production.health.startup]
-path = "/livez"
+path = "/readyz"

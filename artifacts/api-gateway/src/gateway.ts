@@ -81,6 +81,7 @@ export interface GatewayOptions {
   readonly upstreamTimeoutMs?: number;
   readonly requestBodyTimeoutMs?: number;
   readonly maintenanceMode?: boolean;
+  readonly checkReadiness?: () => Promise<boolean>;
   readonly logger?: GatewayLogger;
 }
 
@@ -93,7 +94,15 @@ interface GatewayConfig {
   readonly upstreamTimeoutMs: number;
   readonly requestBodyTimeoutMs: number;
   readonly maintenanceMode: boolean;
+  readonly checkReadiness: () => Promise<boolean>;
   readonly logger: GatewayLogger;
+}
+
+interface RequestTrace {
+  family: string;
+  readonly startedAt: number;
+  upstreamCalls: number;
+  upstreamDurationMs: number;
 }
 
 interface RequestTarget {
@@ -128,9 +137,8 @@ class UpstreamResponseTooLargeError extends Error {}
 
 const defaultLogger: GatewayLogger = {
   info(event, fields) {
-    // Only fixed event names, canonical paths, method, status, and correlation
-    // IDs are supplied to this logger. Request bodies and credential headers
-    // never enter the logging surface.
+    // Only fixed families/outcomes, status, timings, and generated correlation
+    // IDs enter this surface. Request targets, bodies, and credentials do not.
     console.info(JSON.stringify({ event, ...fields }));
   },
 };
@@ -232,6 +240,7 @@ export function resolveGatewayConfig(
     maintenanceMode:
       options.maintenanceMode ??
       process.env.GATEWAY_MAINTENANCE_MODE === "true",
+    checkReadiness: options.checkReadiness ?? (async () => false),
     logger: options.logger ?? defaultLogger,
   };
 }
@@ -242,6 +251,12 @@ async function handleRequest(
   config: GatewayConfig,
 ): Promise<void> {
   const requestId = randomUUID();
+  const trace: RequestTrace = {
+    family: "unknown",
+    startedAt: Date.now(),
+    upstreamCalls: 0,
+    upstreamDurationMs: 0,
+  };
   const clientAbortController = new AbortController();
   let clientDisconnected = false;
 
@@ -266,14 +281,28 @@ async function handleRequest(
     const method = request.method?.toUpperCase() ?? "GET";
 
     if (method === "GET" && target.pathname === "/livez" && !target.hasQuery) {
+      trace.family = "liveness";
       drainRequest(request);
       sendJson(response, 200, { status: "ok" }, requestId);
-      log(config, "gateway.livez", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 200,
-      });
+      logRequest(config, trace, requestId, "ok", 200);
+      return;
+    }
+
+    if (method === "GET" && target.pathname === "/readyz" && !target.hasQuery) {
+      trace.family = "readiness";
+      drainRequest(request);
+      let ready = false;
+      if (!config.maintenanceMode) {
+        try {
+          ready = await config.checkReadiness();
+        } catch {
+          // Probe details stay internal; readiness is a boolean public contract.
+        }
+      }
+      const status = ready ? 200 : 503;
+      const outcome = ready ? "ready" : "not_ready";
+      sendJson(response, status, { status: outcome }, requestId);
+      logRequest(config, trace, requestId, outcome, status);
       return;
     }
 
@@ -281,14 +310,10 @@ async function handleRequest(
     if (!policy) {
       drainRequest(request);
       sendGatewayError(response, 404, "not_found", requestId);
-      log(config, "gateway.denied", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 404,
-      });
+      logRequest(config, trace, requestId, "not_found", 404);
       return;
     }
+    trace.family = policy.family;
 
     assertRequestOrigin(request, method, config);
 
@@ -300,6 +325,7 @@ async function handleRequest(
         requestId,
         policy,
         clientAbortController.signal,
+        trace,
       );
       return;
     }
@@ -316,12 +342,7 @@ async function handleRequest(
     if (config.maintenanceMode) {
       drainRequest(request);
       sendGatewayError(response, 503, "maintenance", requestId);
-      log(config, "gateway.maintenance_denied", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 503,
-      });
+      logRequest(config, trace, requestId, "maintenance", 503);
       return;
     }
 
@@ -331,12 +352,7 @@ async function handleRequest(
     if (policy.authentication !== "none" && !hasCookie(request)) {
       drainRequest(request);
       sendGatewayError(response, 401, "unauthorized", requestId);
-      log(config, "gateway.unauthorized", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 401,
-      });
+      logRequest(config, trace, requestId, "unauthorized", 401);
       return;
     }
 
@@ -347,6 +363,7 @@ async function handleRequest(
         config,
         requestId,
         clientAbortController.signal,
+        trace,
       );
     }
 
@@ -405,6 +422,7 @@ async function handleRequest(
       config,
       requestId,
       clientAbortController.signal,
+      trace,
     );
 
     if (clientDisconnected) {
@@ -419,15 +437,10 @@ async function handleRequest(
       authenticationDependentGet,
       policy,
     );
-    log(config, "gateway.proxied", {
-      method,
-      path: target.pathname,
-      requestId,
-      status: upstream.response.status,
-    });
+    logRequest(config, trace, requestId, "proxied", response.statusCode);
   } catch (error) {
     if (clientDisconnected || error instanceof ClientDisconnectedError) {
-      log(config, "gateway.client_disconnected", { requestId });
+      logRequest(config, trace, requestId, "client_disconnected", 499);
       return;
     }
 
@@ -437,37 +450,30 @@ async function handleRequest(
         response.setHeader("retry-after", String(error.retryAfter));
       }
       sendGatewayError(response, error.status, error.code, requestId);
-      log(config, "gateway.rejected", {
-        requestId,
-        status: error.status,
-        reason: error.code,
-      });
+      logRequest(config, trace, requestId, error.code, error.status);
       return;
     }
 
     if (error instanceof UpstreamTimeoutError) {
       sendGatewayError(response, 504, "upstream_timeout", requestId);
-      log(config, "gateway.upstream_timeout", { requestId, status: 504 });
+      logRequest(config, trace, requestId, "upstream_timeout", 504);
       return;
     }
 
     if (error instanceof UpstreamResponseTooLargeError) {
       sendGatewayError(response, 502, "upstream_response_too_large", requestId);
-      log(config, "gateway.upstream_response_too_large", {
-        requestId,
-        status: 502,
-      });
+      logRequest(config, trace, requestId, "upstream_response_too_large", 502);
       return;
     }
 
     if (error instanceof UpstreamFailureError) {
       sendGatewayError(response, 502, "upstream_unavailable", requestId);
-      log(config, "gateway.upstream_unavailable", { requestId, status: 502 });
+      logRequest(config, trace, requestId, "upstream_unavailable", 502);
       return;
     }
 
     sendGatewayError(response, 500, "gateway_error", requestId);
-    log(config, "gateway.unexpected_error", { requestId, status: 500 });
+    logRequest(config, trace, requestId, "gateway_error", 500);
   } finally {
     request.removeListener("aborted", abortForDisconnectedClient);
     response.removeListener("close", abortForClosedResponse);
@@ -730,6 +736,7 @@ async function handleSelfProfileRequest(
   requestId: string,
   policy: PublicRouteMatch,
   clientSignal: AbortSignal,
+  trace: RequestTrace,
 ): Promise<void> {
   const { method, resourceId: requestedUserId } = policy;
   if (requestedUserId === undefined) {
@@ -744,12 +751,7 @@ async function handleSelfProfileRequest(
   if (config.maintenanceMode) {
     drainRequest(request);
     sendGatewayError(response, 503, "maintenance", requestId);
-    log(config, "gateway.maintenance_denied", {
-      method,
-      requestId,
-      routeFamily: "self-profile",
-      status: 503,
-    });
+    logRequest(config, trace, requestId, "maintenance", 503);
     return;
   }
 
@@ -772,12 +774,7 @@ async function handleSelfProfileRequest(
     if (!hasCookie(request)) {
       drainRequest(request);
       sendGatewayError(response, 401, "unauthorized", requestId);
-      log(config, "gateway.unauthorized", {
-        method,
-        requestId,
-        routeFamily: "self-profile",
-        status: 401,
-      });
+      logRequest(config, trace, requestId, "unauthorized", 401);
       return;
     }
 
@@ -792,16 +789,17 @@ async function handleSelfProfileRequest(
 
   if (!hasCookie(request)) {
     sendGatewayError(response, 401, "unauthorized", requestId);
-    log(config, "gateway.unauthorized", {
-      method,
-      requestId,
-      routeFamily: "self-profile",
-      status: 401,
-    });
+    logRequest(config, trace, requestId, "unauthorized", 401);
     return;
   }
 
-  const session = await verifySession(request, config, requestId, clientSignal);
+  const session = await verifySession(
+    request,
+    config,
+    requestId,
+    clientSignal,
+    trace,
+  );
   if (method !== "GET") {
     takeRateLimit(
       config,
@@ -811,13 +809,7 @@ async function handleSelfProfileRequest(
   }
   if (method === "PATCH" && session.userId !== requestedUserId) {
     sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.self_profile_denied", {
-      method,
-      outcome: "id_mismatch",
-      requestId,
-      routeFamily: "self-profile",
-      status: 404,
-    });
+    logRequest(config, trace, requestId, "id_mismatch", 404);
     return;
   }
 
@@ -829,6 +821,7 @@ async function handleSelfProfileRequest(
     config,
     requestId,
     clientSignal,
+    trace,
   );
 
   sendSelfProfileResponse(
@@ -839,12 +832,7 @@ async function handleSelfProfileRequest(
     requestId,
     session.setCookies,
   );
-  log(config, "gateway.self_profile_proxied", {
-    method,
-    requestId,
-    routeFamily: "self-profile",
-    status: upstream.response.status,
-  });
+  logRequest(config, trace, requestId, "proxied", response.statusCode);
 }
 
 function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
@@ -1000,6 +988,7 @@ async function verifySession(
   config: GatewayConfig,
   requestId: string,
   clientSignal: AbortSignal,
+  trace?: RequestTrace,
 ): Promise<SessionVerification> {
   const upstream = await fetchUpstream(
     request,
@@ -1009,6 +998,7 @@ async function verifySession(
     config,
     requestId,
     clientSignal,
+    trace,
   );
 
   if (upstream.response.status === 401 || upstream.response.status === 403) {
@@ -1126,7 +1116,9 @@ async function fetchUpstream(
   config: GatewayConfig,
   requestId: string,
   clientSignal: AbortSignal,
+  trace?: RequestTrace,
 ): Promise<UpstreamResponse> {
+  const startedAt = Date.now();
   const timeoutAbortController = new AbortController();
   let timedOut = false;
   const abortForClientDisconnect = () => timeoutAbortController.abort();
@@ -1172,6 +1164,10 @@ async function fetchUpstream(
   } finally {
     clearTimeout(timeout);
     clientSignal.removeEventListener("abort", abortForClientDisconnect);
+    if (trace) {
+      trace.upstreamCalls += 1;
+      trace.upstreamDurationMs += Date.now() - startedAt;
+    }
   }
 }
 
@@ -1372,10 +1368,21 @@ function drainRequest(request: IncomingMessage): void {
   }
 }
 
-function log(
+function logRequest(
   config: GatewayConfig,
-  event: string,
-  fields: Readonly<Record<string, boolean | number | string>>,
+  trace: RequestTrace,
+  requestId: string,
+  outcome: string,
+  status: number,
 ): void {
-  config.logger.info(event, fields);
+  config.logger.info("gateway_http", {
+    family: trace.family,
+    outcome,
+    status,
+    requestId,
+    durationMs: Date.now() - trace.startedAt,
+    ...(trace.upstreamCalls > 0
+      ? { upstreamDurationMs: trace.upstreamDurationMs }
+      : {}),
+  });
 }

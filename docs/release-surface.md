@@ -3,19 +3,24 @@
 Status: the gateway exposes the approved 48-operation learning REST contract. Production UI feature
 flags and shared desktop/mobile navigation are open, and Task 20 verifies the learning screens in
 Chromium against the production bundle with intercepted API fixtures. The two exact WebSocket
-endpoints now use a session/Origin-checked native gateway tunnel. This state does not claim
-live-provider or real-Python WebSocket verification.
+endpoints now use a session/Origin-checked native gateway tunnel. Gateway-local liveness and bounded
+Python/database/schema readiness are implemented. This state does not claim live-provider or
+real-Python WebSocket verification.
 
 ## Runtime boundary
 
-The browser uses the same-origin gateway for `/api` and `/ws`; Vite dev/preview proxy both to the same gateway target. ChatWidget continues REST polling.
+The browser uses the same-origin gateway for `/api` and `/ws`; Vite dev/preview proxy both to the
+same gateway target. ChatWidget continues REST polling.
 The existing Python application remains the main backend on `127.0.0.1:8181`; the gateway validates
 and forwards requests and does not replace Python matching, authorization, chat, scheduling, reports,
 or database logic. Student-module success, error, empty, and incomplete responses pass through as real
 learning outcomes rather than synthesized success data.
 
-`GET /livez` is gateway-local. The REST allowlist contains exactly the operations in the approved
-full-learning design:
+`GET /livez` is gateway-local and remains 200 independently of dependencies. `GET /readyz` is also
+gateway-owned and returns only ready/not_ready with 200/503 after checking Python health, a read-only
+PostgreSQL transaction, and the built schema-tail metadata. The gateway artifact owns exactly
+`/api`, `/livez`, `/readyz`, and `/ws`; its startup probe is `/readyz`. The REST allowlist contains
+exactly the operations in the approved full-learning design:
 
 - auth and account: register, login, logout, current account, and user profile GET/PATCH;
 - discovery and requests: districts, tags, requests, Connect, reports, blocks, and statistics;
@@ -50,12 +55,12 @@ dot segments, uppercase variants, and trailing slashes are rejected before forwa
 
 Only these query keys are accepted:
 
-| Route                         | Contract                                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/districts`          | optional `type` is `high_school` or `unified`; optional `search` is no longer than 200 UTF-8 bytes                     |
+| Route                         | Contract                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/districts`          | optional `type` is `high_school` or `unified`; optional `search` is no longer than 200 UTF-8 bytes                                       |
 | `GET /api/requests`           | optional positive `districtId` and `tagId`; optional `role` is `mentor` or `mentee`; optional `status` is `open`, `matched`, or `closed` |
-| matching GET routes           | optional `limit` from 1 through 20                                                                                   |
-| `GET /api/scheduling/suggest` | required positive `user_a` and `user_b`                                                                              |
+| matching GET routes           | optional `limit` from 1 through 20                                                                                                       |
+| `GET /api/scheduling/suggest` | required positive `user_a` and `user_b`                                                                                                  |
 
 Malformed encoding, duplicates, unknown keys, empty numbers, zero, noncanonical integers, unsafe
 integers, and out-of-range values return 400. Accepted queries are serialized and forwarded; omitted
@@ -82,18 +87,40 @@ Unknown routes, wrong methods, invalid queries, malformed paths, duplicate heade
 maintenance mode, unauthenticated session routes, and cross-user PATCH remain negative regressions.
 Authentication-dependent GET responses use `Cache-Control: no-store` and `Vary: Cookie`.
 
+## Readiness, release identity, and drain
+
+The readiness pool has one connection, one-second connection and statement timeouts, a two-second
+overall probe deadline, and a two-second result cache shared by concurrent callers. Its only SQL is
+a read-only transaction containing `SELECT 1` and the migration-ledger tail query. A separately
+provisioned `READINESS_DATABASE_URL` is required for a ready result; it never falls through to an
+ambient `DATABASE_URL`, and its absence does not prevent process startup.
+
+Gateway builds write `dist/release.json` from `database/schema/version.json` and the supplied
+`RELEASE_SHA` (or local checkout HEAD). The built SHA appears once in the startup event. Source-mode
+development without the colocated asset reports `unknown`, which is not release-verification proof;
+missing or malformed production metadata remains not_ready. HTTP logs expose only a fixed family,
+outcome, status, gateway-generated request id, duration, and upstream duration when applicable.
+
+SIGINT/SIGTERM marks readiness draining, closes native WebSocket tunnels, drains HTTP, and ends the
+PostgreSQL pool within a hard ten-second process deadline. Local synthetic HTTP/WS and disposable
+PostgreSQL 16 checks verify this implementation, but do not replace staging evidence.
+
 ## Verification
 
 ```sh
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
 pnpm --filter @workspace/api-gateway typecheck
+RELEASE_SHA=<deployment-commit-sha> pnpm --filter @workspace/api-gateway run build
+pnpm gateway:verify-boundary
 pnpm test:peerbridge-release
 pnpm e2e
 ```
 
 Release approval also requires staging evidence that only the gateway is public, maintenance mode
-fail-closes REST and WebSocket forwarding, and the Python port cannot be reached externally. Live-provider,
-real-Python WebSocket behavior (Task 23), readiness, and final CI evidence remain separate release
-checks and are not implied by the Task 20 production-browser fixtures. The current DM exercise
-sends its learning message and closes; the tunnel preserves that behavior instead of replacing it.
+fail-closes REST and WebSocket forwarding, the Python port cannot be reached externally, the actual
+public Origin/TLS values are correct, and provider startup retries readiness while Python starts.
+Live-provider and real-Python WebSocket behavior (Task 23), production credentials, and final CI
+evidence remain separate release checks and are not implied by local readiness or Task 20 browser
+fixtures. The current DM exercise sends its learning message and closes; the tunnel preserves that
+behavior instead of replacing it.
