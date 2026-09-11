@@ -1,11 +1,10 @@
 import { createContext, useContext, useRef, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   ApiError,
   getMe,
   logout as endSession,
-  useGetMe,
   getGetMeQueryKey,
   type User,
 } from "@workspace/api-client-react";
@@ -30,41 +29,41 @@ export function sessionReturnPath(value: string | null): string {
   return pathname;
 }
 
+// Both automatic and explicit checks replace rejected account data with null.
+const sessionQueryOptions = {
+  queryKey: getGetMeQueryKey(),
+  queryFn: async ({
+    signal,
+  }: {
+    signal: AbortSignal;
+  }): Promise<User | null> => {
+    try {
+      return await getMe({ signal });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return null;
+      throw error;
+    }
+  },
+  staleTime: 0,
+  retry: false,
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const logoutPending = useRef<Promise<void> | null>(null);
-  const { data, error, isPending } = useGetMe({
-    query: { queryKey: getGetMeQueryKey(), retry: false, staleTime: 0 },
-  });
-  const expired = error instanceof ApiError && error.status === 401;
-  const user = expired ? null : (data ?? null);
-  const status: AuthStatus = expired
-    ? "anonymous"
-    : error
-      ? "error"
-      : user
-        ? "authenticated"
-        : isPending
-          ? "loading"
-          : "anonymous";
+  const { data, error, isPending } = useQuery(sessionQueryOptions);
+  const user = data ?? null;
+  const status: AuthStatus = error
+    ? "error"
+    : user
+      ? "authenticated"
+      : isPending
+        ? "loading"
+        : "anonymous";
 
-  const refreshSession = async (): Promise<User | null> => {
-    try {
-      return await queryClient.fetchQuery({
-        queryKey: getGetMeQueryKey(),
-        queryFn: ({ signal }) => getMe({ signal }),
-        staleTime: 0,
-        retry: false,
-      });
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        queryClient.setQueryData(getGetMeQueryKey(), null);
-        return null;
-      }
-      throw error;
-    }
-  };
+  const refreshSession = (): Promise<User | null> =>
+    queryClient.fetchQuery(sessionQueryOptions);
 
   const logout = (): Promise<void> => {
     if (logoutPending.current) return logoutPending.current;

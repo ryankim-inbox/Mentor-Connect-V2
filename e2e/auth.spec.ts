@@ -203,27 +203,74 @@ for (const destination of [
   });
 }
 
-test("expired background session clears the cached member and returns to login", async ({
+test("expired background session stays cleared through later service errors until a verified User", async ({
   page,
 }) => {
   await fallback(page);
-  let expired = false;
-  await page.route("**/api/auth/me", (route) =>
-    route.fulfill(expired ? { status: 401, json: {} } : { json: accountA }),
-  );
+  let response: 200 | 401 | 503 | "network" = 200;
+  let completed = 0;
+  const pending = deferred();
+  let delay = false;
+  await page.route("**/api/auth/me", async (route) => {
+    const outcome = response;
+    if (delay) await pending.promise;
+    if (outcome === "network") await route.abort("failed");
+    else
+      await route.fulfill(
+        outcome === 200 ? { json: accountA } : { status: outcome, json: {} },
+      );
+    completed++;
+  });
+  const memberControls = page.getByRole("button", {
+    name: "Log out",
+    exact: true,
+  });
+  const settings = page.getByRole("heading", { name: "Settings", exact: true });
+  const checkNoMember = async () => {
+    await expect(memberControls).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(
+      0,
+    );
+    await expect(settings).toHaveCount(0);
+    await expect(page.locator('input[type="email"][disabled]')).toHaveCount(0);
+  };
   await page.goto("/settings");
-  await expect(
-    page.getByRole("heading", { name: "Settings", exact: true }),
-  ).toBeVisible();
-  expired = true;
+  await expect(settings).toBeVisible();
+  response = 401;
   await page.evaluate(() =>
     window.dispatchEvent(new Event("visibilitychange")),
   );
   await expect(page).toHaveURL(/\/login\?returnTo=%2Fsettings$/);
+  await checkNoMember();
+
+  for (const failure of [503, "network"] as const) {
+    response = failure;
+    const previous = completed;
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event("visibilitychange")),
+    );
+    await expect.poll(() => completed).toBe(previous + 1);
+    // Enter the protected route without reloading or discarding its query cache.
+    await page.evaluate(() => window.history.pushState({}, "", "/settings"));
+    await expect(
+      page.getByRole("button", { name: "Retry session" }),
+    ).toBeVisible();
+    await checkNoMember();
+  }
+
+  response = 200;
+  delay = true;
+  await page.getByRole("button", { name: "Retry session" }).click();
   await expect(
-    page.getByRole("button", { name: "Log out", exact: true }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
+    page.getByRole("button", { name: "Checking session..." }),
+  ).toBeVisible();
+  await checkNoMember();
+  pending.resolve();
+  await expect(settings).toBeVisible();
+  await expect(memberControls).toBeVisible();
+  await expect(page.locator('input[type="email"][disabled]')).toHaveValue(
+    accountA.email,
+  );
 });
 
 test("background auth errors and retries preserve the profile draft, then empty bio persists", async ({
