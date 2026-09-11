@@ -8,6 +8,7 @@ import {
   projectProfile,
   projectPublicPayload,
 } from "../src/public-contract.ts";
+import { userFixture } from "./contract-fixtures.ts";
 
 const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
 
@@ -55,6 +56,99 @@ test("public errors and learning failures never expose diagnostic canaries", () 
     }),
     { success: true, source: "adapter-fallback", data: [{ count: 3 }] },
   );
+});
+
+for (const [field, value] of [
+  ["data", { count: 3, detail: "audit-canary-data" }],
+  ["matches", [{ score: 1, traceback: "audit-canary-matches" }]],
+  ["result", { answer: 42, debug: "audit-canary-result" }],
+] as const)
+  test(`failed ${field} redacts nested diagnostics while success stays opaque`, () => {
+    const failed = projectStudentPayload({
+      success: false,
+      [field]: value,
+    }) as Record<string, unknown>;
+    assert.ok(!JSON.stringify(failed).includes("audit-canary"), field);
+
+    const successful = { success: true, [field]: value };
+    assert.deepEqual(projectStudentPayload(successful), successful, field);
+  });
+
+test("gateway preserves generated learning TODO and successful payload semantics", async (t) => {
+  const generated = await import("../../../lib/api-zod/src/generated/api.ts");
+  let payload: unknown;
+  const upstream = createServer((request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify(request.url === "/api/auth/me" ? userFixture : payload),
+    );
+  });
+  const origin = await listen(upstream);
+  const gateway = createGatewayServer({
+    upstreamOrigin: origin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
+    logger: { info() {} },
+  });
+  const url = await listen(gateway);
+  t.after(() => {
+    gateway.closeAllConnections();
+    upstream.closeAllConnections();
+    gateway.close();
+    upstream.close();
+  });
+
+  const todo = {
+    success: false,
+    status: "todo",
+    message: "audit-canary",
+    is_todo: true,
+    result: null,
+  };
+  const emptySuccess = {
+    ok: true,
+    success: true,
+    source: "adapter-fallback" as const,
+    student_module: null,
+    data: [],
+  };
+  const opaqueSuccess = {
+    ...emptySuccess,
+    data: { detail: "lesson detail", result: { answer: 42 } },
+  };
+  for (const [path, schema, upstreamPayload, expected] of [
+    [
+      "/api/practice/raw/locations",
+      generated.GetPracticeRawModuleResponse,
+      todo,
+      {
+        ...todo,
+        message: "Student module returned an error. Check the named function.",
+      },
+    ],
+    [
+      "/api/analysis/status",
+      generated.GetAnalysisStatusResponse,
+      emptySuccess,
+      emptySuccess,
+    ],
+    [
+      "/api/analysis/status",
+      generated.GetAnalysisStatusResponse,
+      opaqueSuccess,
+      opaqueSuccess,
+    ],
+  ] as const) {
+    assert.ok(schema.safeParse(upstreamPayload).success, `${path} generated`);
+    payload = upstreamPayload;
+    const response = await fetch(url + path, {
+      headers: { cookie: "peerbridge_session=fixture" },
+    });
+    assert.equal(response.status, 200, path);
+    const body = await response.json();
+    assert.ok(schema.safeParse(body).success, `${path} projected generated`);
+    assert.deepEqual(body, expected, path);
+  }
 });
 test("profile and admin projections remove private fields and reject malformed success", () => {
   const profile = {
