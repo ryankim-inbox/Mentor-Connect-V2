@@ -4,6 +4,7 @@ import { useRegister, useListDistricts } from "@workspace/api-client-react";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, sessionReturnPath } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -102,8 +103,7 @@ export default function Register() {
       setNeedsConfirmation(true);
       await confirmSession();
     } catch (error) {
-      const failure = error as { data?: { error?: string } };
-      setError(failure.data?.error ?? "Registration failed. Please try again.");
+      setError(apiErrorMessage(error));
     } finally {
       busy.current = false;
       setPending(false);
@@ -123,13 +123,15 @@ export default function Register() {
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-8 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-busy={pending}>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-name" className="block text-sm font-medium text-foreground mb-1.5">
                 Full name
               </label>
               <input
+                id="register-name"
                 type="text"
+                autoComplete="name"
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
@@ -141,14 +143,16 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-email" className="block text-sm font-medium text-foreground mb-1.5">
                 School email{" "}
                 <span className="text-muted-foreground font-normal">
                   (must be .edu)
                 </span>
               </label>
               <input
+                id="register-email"
                 type="email"
+                autoComplete="username"
                 value={form.email}
                 onChange={handleEmailChange}
                 placeholder="you@school.edu"
@@ -156,16 +160,18 @@ export default function Register() {
                 className={`w-full px-3 py-2.5 border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition ${emailError ? "border-destructive" : "border-input"}`}
               />
               {emailError && (
-                <p className="text-xs text-destructive mt-1">{emailError}</p>
+                <p className="text-xs text-destructive mt-1" role="alert">{emailError}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-password" className="block text-sm font-medium text-foreground mb-1.5">
                 Password
               </label>
               <input
+                id="register-password"
                 type="password"
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
@@ -177,10 +183,10 @@ export default function Register() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+            <fieldset>
+              <legend className="block text-sm font-medium text-foreground mb-2">
                 I want to be a...
-              </label>
+              </legend>
               <div className="grid grid-cols-3 gap-2">
                 {(["mentee", "mentor", "both"] as const).map((r) => (
                   <button
@@ -209,20 +215,23 @@ export default function Register() {
                 {form.role === "both" &&
                   "You'll both give and receive guidance"}
               </p>
-            </div>
+            </fieldset>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="district-search" className="block text-sm font-medium text-foreground mb-1.5">
                 School district
               </label>
               <input
+                id="district-search"
                 type="text"
                 placeholder="Search districts..."
                 value={districtSearch}
                 onChange={(e) => setDistrictSearch(e.target.value)}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition mb-2"
               />
+              <label htmlFor="district-choice" className="sr-only">District choices</label>
               <select
+                id="district-choice"
                 value={form.districtId || ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, districtId: Number(e.target.value) }))
@@ -249,7 +258,7 @@ export default function Register() {
             </div>
 
             {error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2" role="alert">
                 {error}
               </p>
             )}

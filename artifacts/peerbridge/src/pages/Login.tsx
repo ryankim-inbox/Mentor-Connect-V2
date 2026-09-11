@@ -4,6 +4,7 @@ import { useLogin } from "@workspace/api-client-react";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, sessionReturnPath } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -70,8 +71,7 @@ export default function Login() {
       setNeedsConfirmation(true);
       await confirmSession();
     } catch (error) {
-      const failure = error as { data?: { error?: string } };
-      setError(failure.data?.error ?? "Login failed. Please try again.");
+      setError(apiErrorMessage(error));
     } finally {
       busy.current = false;
       setPending(false);
@@ -89,13 +89,15 @@ export default function Login() {
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-8 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-busy={pending}>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="login-email" className="block text-sm font-medium text-foreground mb-1.5">
                 School email
               </label>
               <input
+                id="login-email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@school.edu"
@@ -105,11 +107,13 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="login-password" className="block text-sm font-medium text-foreground mb-1.5">
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
@@ -119,7 +123,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2" role="alert">
                 {error}
               </p>
             )}

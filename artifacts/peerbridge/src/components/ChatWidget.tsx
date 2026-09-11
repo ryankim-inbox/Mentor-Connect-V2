@@ -13,6 +13,7 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
+import { ApiError } from "@workspace/api-client-react";
 import { ArrowLeft, Hammer, MessageCircle, Send, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import { relativeTime } from "@/lib/pythonApi";
 import {
   fetchChatRooms,
@@ -42,8 +44,13 @@ import {
 // answers with the todo envelope there is nothing new to poll for.
 const POLL_MS = 5000;
 
-function pollUnlessTodo(data: unknown): number | false {
-  return isScaffoldTodo(data) ? false : POLL_MS;
+function pollDelay(data: unknown, error: unknown, failures: number): number | false {
+  if (isScaffoldTodo(data)) return false;
+  if (!error) return Array.isArray(data) ? POLL_MS : false;
+  if (error instanceof ApiError && error.status < 500 && error.status !== 429) return false;
+  const retryAfter = error instanceof ApiError ? error.headers.get("retry-after") : null;
+  if (retryAfter && /^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000;
+  return Math.min(POLL_MS * 2 ** Math.max(1, failures), 60_000);
 }
 
 export function ChatWidget() {
@@ -69,7 +76,7 @@ export function ChatWidget() {
 
 function ChatPanel({ currentUserId, districtId }: { currentUserId: number; districtId: number }) {
   const roomsQuery = useQuery({
-    queryKey: ["chat", "rooms"],
+    queryKey: ["chat", currentUserId, "rooms"],
     queryFn: ({ signal }) => fetchChatRooms(signal),
   });
 
@@ -133,13 +140,14 @@ function TodoState({ message }: { message?: string }) {
   );
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
+function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+    <div
+      className="flex h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center"
+      role="alert"
+    >
       <WifiOff className="h-8 w-8 text-muted-foreground" />
-      <p className="text-sm text-muted-foreground">
-        Can't reach the service right now. Please try again later.
-      </p>
+      <p className="text-sm text-muted-foreground">{apiErrorMessage(error)}</p>
       <Button variant="outline" size="sm" onClick={onRetry}>
         Try again
       </Button>
@@ -161,7 +169,7 @@ interface SendMutationLike {
   data: unknown;
   isPending: boolean;
   isError: boolean;
-  error: Error | null;
+  error: unknown;
   mutate: (body: string, options?: { onSuccess?: (created: unknown) => void }) => void;
 }
 
@@ -181,7 +189,9 @@ function RoomPane({
   currentUserId: number;
 }) {
   if (roomsQuery.isLoading) return <LoadingState />;
-  if (roomsQuery.isError) return <ErrorState onRetry={() => void roomsQuery.refetch()} />;
+  if (roomsQuery.isError && !Array.isArray(roomsQuery.data)) {
+    return <ErrorState error={roomsQuery.error} onRetry={() => void roomsQuery.refetch()} />;
+  }
 
   const rooms = roomsQuery.data;
   if (!rooms || isScaffoldTodo(rooms)) {
@@ -199,22 +209,27 @@ function RoomPane({
 function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: number }) {
   const queryClient = useQueryClient();
   const messagesQuery = useQuery({
-    queryKey: ["chat", "room-messages", room.id],
+    queryKey: ["chat", currentUserId, "room-messages", room.id],
     queryFn: ({ signal }) => fetchRoomMessages(room.id, signal),
-    refetchInterval: (query) => pollUnlessTodo(query.state.data),
+    refetchInterval: (query) =>
+      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
   });
 
   const sendMutation = useMutation({
     mutationFn: (body: string) => sendRoomMessage(room.id, body),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
-        void queryClient.invalidateQueries({ queryKey: ["chat", "room-messages", room.id] });
+        void queryClient.invalidateQueries({
+          queryKey: ["chat", currentUserId, "room-messages", room.id],
+        });
       }
     },
   });
 
   if (messagesQuery.isLoading) return <LoadingState />;
-  if (messagesQuery.isError) return <ErrorState onRetry={() => void messagesQuery.refetch()} />;
+  if (messagesQuery.isError && !Array.isArray(messagesQuery.data)) {
+    return <ErrorState error={messagesQuery.error} onRetry={() => void messagesQuery.refetch()} />;
+  }
 
   const messages = messagesQuery.data;
   if (!messages || isScaffoldTodo(messages)) {
@@ -233,6 +248,7 @@ function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: nu
       }))}
       currentUserId={currentUserId}
       sendMutation={sendMutation}
+      readError={messagesQuery.error}
       emptyText="No messages yet — say hi!"
     />
   );
@@ -254,37 +270,46 @@ function DmsPane({ currentUserId }: { currentUserId: number }) {
       />
     );
   }
-  return <DmList onOpen={setOpenConversation} />;
+  return <DmList currentUserId={currentUserId} onOpen={setOpenConversation} />;
 }
 
-function DmList({ onOpen }: { onOpen: (conversation: DmConversation) => void }) {
+function DmList({
+  currentUserId,
+  onOpen,
+}: {
+  currentUserId: number;
+  onOpen: (conversation: DmConversation) => void;
+}) {
   const queryClient = useQueryClient();
   const [newDmUserId, setNewDmUserId] = useState("");
   const [startNotice, setStartNotice] = useState<string | null>(null);
 
   const dmsQuery = useQuery({
-    queryKey: ["chat", "dms"],
+    queryKey: ["chat", currentUserId, "dms"],
     queryFn: ({ signal }) => fetchDmConversations(signal),
-    refetchInterval: (query) => pollUnlessTodo(query.state.data),
+    refetchInterval: (query) =>
+      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
   });
 
   const startMutation = useMutation({
     mutationFn: (toUserId: number) => startDmConversation(toUserId),
     onSuccess: (created) => {
       if (isScaffoldTodo(created)) {
-        setStartNotice("Starting DMs isn't implemented yet — that's Mission 6.");
+        setStartNotice(created.message);
       } else {
         setStartNotice(null);
         setNewDmUserId("");
-        void queryClient.invalidateQueries({ queryKey: ["chat", "dms"] });
+        void queryClient.invalidateQueries({ queryKey: ["chat", currentUserId, "dms"] });
         onOpen(created);
       }
     },
-    onError: (error: Error) => setStartNotice(error.message),
+    onError: (error) => setStartNotice(apiErrorMessage(error)),
   });
 
   if (dmsQuery.isLoading) return <LoadingState />;
-  if (dmsQuery.isError) return <ErrorState onRetry={() => void dmsQuery.refetch()} />;
+  if (dmsQuery.isError && !Array.isArray(dmsQuery.data)) {
+    return <ErrorState error={dmsQuery.error} onRetry={() => void dmsQuery.refetch()} />;
+  }
 
   const conversations = dmsQuery.data;
   if (!conversations || isScaffoldTodo(conversations)) {
@@ -344,7 +369,16 @@ function DmList({ onOpen }: { onOpen: (conversation: DmConversation) => void }) 
             Start
           </Button>
         </div>
-        {startNotice && <p className="mt-2 text-xs text-muted-foreground">{startNotice}</p>}
+        {dmsQuery.error && (
+          <p className="mt-2 text-xs text-destructive" role="alert">
+            {apiErrorMessage(dmsQuery.error)}
+          </p>
+        )}
+        {startNotice && (
+          <p className="mt-2 text-xs text-muted-foreground" role="status">
+            {startNotice}
+          </p>
+        )}
       </form>
     </div>
   );
@@ -361,16 +395,19 @@ function DmThread({
 }) {
   const queryClient = useQueryClient();
   const messagesQuery = useQuery({
-    queryKey: ["chat", "dm-messages", conversation.id],
+    queryKey: ["chat", currentUserId, "dm-messages", conversation.id],
     queryFn: ({ signal }) => fetchDmMessages(conversation.id, signal),
-    refetchInterval: (query) => pollUnlessTodo(query.state.data),
+    refetchInterval: (query) =>
+      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
   });
 
   const sendMutation = useMutation({
     mutationFn: (body: string) => sendDmMessage(conversation.id, body),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
-        void queryClient.invalidateQueries({ queryKey: ["chat", "dm-messages", conversation.id] });
+        void queryClient.invalidateQueries({
+          queryKey: ["chat", currentUserId, "dm-messages", conversation.id],
+        });
       }
     },
   });
@@ -387,7 +424,9 @@ function DmThread({
   );
 
   if (messagesQuery.isLoading) return <LoadingState />;
-  if (messagesQuery.isError) return <ErrorState onRetry={() => void messagesQuery.refetch()} />;
+  if (messagesQuery.isError && !Array.isArray(messagesQuery.data)) {
+    return <ErrorState error={messagesQuery.error} onRetry={() => void messagesQuery.refetch()} />;
+  }
 
   const messages = messagesQuery.data;
   if (!messages || isScaffoldTodo(messages)) {
@@ -414,6 +453,7 @@ function DmThread({
       }))}
       currentUserId={currentUserId}
       sendMutation={sendMutation}
+      readError={messagesQuery.error}
       emptyText="No messages yet — send the first one."
     />
   );
@@ -437,6 +477,7 @@ function Thread({
   messages,
   currentUserId,
   sendMutation,
+  readError,
   emptyText,
 }: {
   title: string;
@@ -444,6 +485,7 @@ function Thread({
   messages: ThreadMessage[];
   currentUserId: number;
   sendMutation: SendMutationLike;
+  readError?: unknown;
   emptyText: string;
 }) {
   const [draft, setDraft] = useState("");
@@ -454,7 +496,7 @@ function Thread({
   }, [messages.length]);
 
   const sendBlocked = isScaffoldTodo(sendMutation.data)
-    ? "Sending isn't implemented yet — that's a POST mission in the guide."
+    ? `${sendMutation.data.message}. Sending isn't implemented yet.`
     : null;
 
   const handleSend = (event: FormEvent) => {
@@ -523,9 +565,20 @@ function Thread({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        {sendBlocked && <p className="mt-2 text-xs text-muted-foreground">{sendBlocked}</p>}
-        {sendMutation.isError && sendMutation.error && (
-          <p className="mt-2 text-xs text-destructive">{sendMutation.error.message}</p>
+        {readError != null && (
+          <p className="mt-2 text-xs text-destructive" role="alert">
+            {apiErrorMessage(readError)}
+          </p>
+        )}
+        {sendBlocked && (
+          <p className="mt-2 text-xs text-muted-foreground" role="status">
+            {sendBlocked}
+          </p>
+        )}
+        {sendMutation.isError && (
+          <p className="mt-2 text-xs text-destructive" role="alert">
+            {apiErrorMessage(sendMutation.error)}
+          </p>
         )}
       </form>
     </div>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
+import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import { TagBadge } from "@/components/TagBadge";
 import { isFeatureEnabled } from "@/lib/release-flags";
 
@@ -73,6 +75,27 @@ function asRecord(value: unknown): PythonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as PythonRecord)
     : {};
+}
+
+function isPracticeResult(value: unknown, matches: boolean): boolean {
+  const record = asRecord(value);
+  return (
+    typeof record.success === "boolean" &&
+    typeof record.status === "string" &&
+    typeof record.message === "string" &&
+    (!matches || Array.isArray(record.matches))
+  );
+}
+
+async function practiceJson(path: string, matches = false): Promise<unknown> {
+  const payload = await customFetch<unknown>(path, {
+    responseType: "json",
+    credentials: "include",
+  });
+  if (!isPracticeResult(payload, matches)) {
+    throw new TypeError("Unexpected practice API response");
+  }
+  return payload;
 }
 
 function stringField(record: PythonRecord, keys: string[], fallback = "") {
@@ -262,29 +285,25 @@ export default function Recommendations() {
     setLastCheckedQuestionId(parsedQuestionId);
 
     try {
-      const [matchesResponse, blocksResponse] = await Promise.all([
-        fetch(`/api/practice/matching/${parsedQuestionId}?limit=5`),
-        fetch("/api/practice/blocks/status"),
+      const [matchesResponse, blocksResponse] = await Promise.allSettled([
+        practiceJson(`/api/practice/matching/${parsedQuestionId}?limit=5`, true),
+        practiceJson("/api/practice/blocks/status"),
       ]);
 
-      if (!matchesResponse.ok) {
-        throw new Error(`Matching endpoint returned HTTP ${matchesResponse.status}`);
-      }
-
-      const rawMatchResult: unknown = await matchesResponse.json();
+      if (matchesResponse.status === "rejected") throw matchesResponse.reason;
+      const rawMatchResult = matchesResponse.value;
       const normalizedResult = normalizeRecommendation(rawMatchResult, parsedQuestionId);
       setResult(normalizedResult);
       setMatchStatus(normalizeMatchStatus(rawMatchResult, normalizedResult.matches.length));
 
-      if (blocksResponse.ok) {
-        const rawBlockStatus: unknown = await blocksResponse.json();
-        setBlockStatus(normalizeBlockStatus(rawBlockStatus));
+      if (blocksResponse.status === "fulfilled") {
+        setBlockStatus(normalizeBlockStatus(blocksResponse.value));
       } else {
         setBlockStatus({
           endpointStatus: "unavailable",
           serviceAvailable: false,
           blockedUsersExcluded: null,
-          message: `Block status endpoint returned HTTP ${blocksResponse.status}.`,
+          message: apiErrorMessage(blocksResponse.reason),
         });
       }
     } catch (error) {
@@ -293,7 +312,7 @@ export default function Recommendations() {
         endpointStatus: "unavailable",
         matchCount: 0,
         message: "Could not connect to the Python matching service.",
-        error: error instanceof Error ? error.message : String(error),
+        error: apiErrorMessage(error),
         isReal: false,
         isTodo: false,
       });
@@ -302,7 +321,7 @@ export default function Recommendations() {
         serviceAvailable: false,
         blockedUsersExcluded: null,
         message: "Could not connect to the Python block status endpoint.",
-        error: error instanceof Error ? error.message : String(error),
+        error: "The matching request did not complete, so block status is unavailable.",
       });
     } finally {
       setIsLoading(false);
@@ -409,7 +428,7 @@ export default function Recommendations() {
               </p>
             )}
             {matchStatus.error && (
-              <p className="text-red-700">
+              <p className="text-red-700" role="alert">
                 <span className="font-medium">Error:</span> {matchStatus.error}
               </p>
             )}
@@ -443,7 +462,7 @@ export default function Recommendations() {
               <span className="text-muted-foreground">{blockStatus.message}</span>
             </p>
             {blockStatus.error && (
-              <p className="text-red-700">
+              <p className="text-red-700" role="alert">
                 <span className="font-medium">Error:</span> {blockStatus.error}
               </p>
             )}

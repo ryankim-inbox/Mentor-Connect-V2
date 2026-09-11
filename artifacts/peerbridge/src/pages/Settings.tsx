@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function Settings() {
   const { user, refetch } = useAuth();
@@ -120,8 +121,7 @@ export default function Settings() {
         );
       }
     } catch (error) {
-      const failure = error as { data?: { error?: string } };
-      setError(failure.data?.error ?? "Failed to update profile.");
+      setError(apiErrorMessage(error));
     } finally {
       busy.current = false;
       setPending(false);
@@ -138,13 +138,15 @@ export default function Settings() {
           Name: 120 UTF-8 bytes. Bio: 2,000 bytes. Up to 20 subjects, 80 bytes
           each. Non-English characters may use several bytes.
         </p>
-        <form onSubmit={handleSave} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4" aria-busy={pending}>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="settings-name" className="block text-sm font-medium text-foreground mb-1.5">
               Full name
             </label>
             <input
+              id="settings-name"
               type="text"
+              autoComplete="name"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               required
@@ -153,11 +155,13 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="settings-email" className="block text-sm font-medium text-foreground mb-1.5">
               Email
             </label>
             <input
+              id="settings-email"
               type="email"
+              autoComplete="username"
               value={user.email}
               disabled
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-muted text-muted-foreground cursor-not-allowed"
@@ -165,10 +169,11 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="settings-bio" className="block text-sm font-medium text-foreground mb-1.5">
               Bio
             </label>
             <textarea
+              id="settings-bio"
               value={form.bio}
               onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
               placeholder="Tell others about yourself, your interests and goals..."
@@ -178,13 +183,14 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="settings-subjects" className="block text-sm font-medium text-foreground mb-1.5">
               Subjects{" "}
               <span className="text-muted-foreground font-normal">
                 (comma-separated)
               </span>
             </label>
             <input
+              id="settings-subjects"
               type="text"
               value={form.subjects}
               onChange={(e) =>
@@ -196,7 +202,7 @@ export default function Settings() {
           </div>
 
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2" role="alert">
               {error}
             </p>
           )}

@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
 import { sortTimeSlots } from "@/lib/timeSlots";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
@@ -24,21 +25,23 @@ export default function RequestDetail({ id }: Props) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const [showReport, setShowReport] = useState(false);
-  const [justMatched, setJustMatched] = useState(false);
 
-  const { data: request, isLoading } = useGetRequest(requestId, {
+  const { data: request, error: requestError, isLoading, refetch } = useGetRequest(requestId, {
     query: { queryKey: getGetRequestQueryKey(requestId), enabled: !!requestId }
   });
 
   const isAuthor = user?.id === request?.authorId;
   const isMatched = user?.id === request?.matchedUserId;
-  const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched || justMatched);
+  const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched);
 
   const deleteMutation = useDeleteRequest();
 
   const handleMatched = () => {
-    setJustMatched(true);
-    queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
+    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
+  };
+
+  const handleMatchFailed = () => {
+    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
   };
 
   const handleDelete = () => {
@@ -55,6 +58,17 @@ export default function RequestDetail({ id }: Props) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="h-64 bg-card border border-card-border rounded-2xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (requestError && !request) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center" role="alert">
+        <p className="text-destructive">{apiErrorMessage(requestError)}</p>
+        <button type="button" onClick={() => void refetch()} className="mt-4 text-primary underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -82,7 +96,7 @@ export default function RequestDetail({ id }: Props) {
         <span className="text-foreground truncate">{request.title}</span>
       </div>
 
-      {(showMatchedPanel || justMatched) && (
+      {showMatchedPanel && (
         <div className="mb-5 bg-green-50 border border-green-200 rounded-2xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
@@ -92,7 +106,7 @@ export default function RequestDetail({ id }: Props) {
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-green-800 text-base">
-                {justMatched ? "You're connected!" : "This request has been matched"}
+                This request has been matched
               </h3>
               <p className="text-green-700 text-sm mt-1">
                 Minimum member profiles include names, subjects, and join dates.
@@ -170,7 +184,11 @@ export default function RequestDetail({ id }: Props) {
 
           <div className="flex gap-2">
             {canMatch && (
-              <ConnectAction requestId={requestId} onMatched={handleMatched} />
+              <ConnectAction
+                requestId={requestId}
+                onMatched={handleMatched}
+                onFailed={handleMatchFailed}
+              />
             )}
             {!isAuthor && user && (
               <button
@@ -184,6 +202,7 @@ export default function RequestDetail({ id }: Props) {
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
+                aria-busy={deleteMutation.isPending}
                 className="px-3 py-2 border border-destructive/30 text-destructive rounded-lg text-sm hover:bg-destructive/5 transition-colors"
               >
                 Delete
@@ -192,6 +211,15 @@ export default function RequestDetail({ id }: Props) {
           </div>
         </div>
       </div>
+
+      {deleteMutation.isError && (
+        <p
+          className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
+        >
+          {apiErrorMessage(deleteMutation.error)} Try Delete again to retry.
+        </p>
+      )}
 
       {showReport && request && (
         <ReportModal
