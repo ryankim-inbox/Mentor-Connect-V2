@@ -137,27 +137,27 @@ export default function Analytics() {
 
   const statusQuery = useQuery({
     queryKey: ["analysis", "status"],
-    queryFn: () => getPythonApi<null>("/api/analysis/status"),
+    queryFn: ({ signal }) => getPythonApi<null>("/api/analysis/status", { signal }),
     enabled: !!user,
   });
   const weeklyQuery = useQuery({
     queryKey: ["analytics", "weekly-matches"],
-    queryFn: () => getPythonApi<WeeklyMatch[]>("/api/analytics/weekly-matches"),
+    queryFn: ({ signal }) => getPythonApi<WeeklyMatch[]>("/api/analytics/weekly-matches", { signal }),
     enabled: !!user,
   });
   const subjectsQuery = useQuery({
     queryKey: ["analytics", "popular-subjects"],
-    queryFn: () => getPythonApi<SubjectDemand[]>("/api/analytics/popular-subjects"),
+    queryFn: ({ signal }) => getPythonApi<SubjectDemand[]>("/api/analytics/popular-subjects", { signal }),
     enabled: !!user,
   });
   const slotsQuery = useQuery({
     queryKey: ["analytics", "popular-time-slots"],
-    queryFn: () => getPythonApi<TimeSlotDemand[]>("/api/analytics/popular-time-slots"),
+    queryFn: ({ signal }) => getPythonApi<TimeSlotDemand[]>("/api/analytics/popular-time-slots", { signal }),
     enabled: !!user,
   });
   const mentorsQuery = useQuery({
     queryKey: ["analytics", "mentor-response-rates"],
-    queryFn: () => getPythonApi<MentorResponseRate[]>("/api/analytics/mentor-response-rates"),
+    queryFn: ({ signal }) => getPythonApi<MentorResponseRate[]>("/api/analytics/mentor-response-rates", { signal }),
     enabled: !!user,
   });
 

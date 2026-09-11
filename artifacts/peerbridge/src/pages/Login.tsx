@@ -1,34 +1,81 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useLogin } from "@workspace/api-client-react";
-import { useAuth } from "@/lib/auth-context";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth, sessionReturnPath } from "@/lib/auth-context";
 
 export default function Login() {
   const [, navigate] = useLocation();
   const { refetch } = useAuth();
+  const queryClient = useQueryClient();
+  const search = useSearch();
+  const destination = sessionReturnPath(
+    new URLSearchParams(search).get("returnTo"),
+  );
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
+  const confirmSession = async () => {
+    try {
+      const user = await refetch();
+      if (user) navigate(destination);
+      else
+        setError(
+          "Your session isn't active yet. Recheck your session or sign in again.",
+        );
+    } catch {
+      setError(
+        "Your account was accepted, but we couldn't verify the session. Please recheck it.",
+      );
+    }
+  };
+  const retrySession = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try {
+      await confirmSession();
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const loginMutation = useLogin();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
     setError("");
 
-    loginMutation.mutate(
-      { data: { email, password } },
-      {
-        onSuccess: () => {
-          refetch();
-          navigate("/profile");
-        },
-        onError: (err: unknown) => {
-          const e = err as { data?: { error?: string } };
-          setError(e?.data?.error ?? "Login failed. Please try again.");
-        },
-      },
-    );
+    busy.current = true;
+    setPending(true);
+    setNeedsConfirmation(false);
+    try {
+      await queryClient.cancelQueries({ queryKey: getGetMeQueryKey() });
+      const response = await loginMutation.mutateAsync({
+        data: { email, password },
+      });
+      await queryClient.cancelQueries();
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],
+      });
+      queryClient.setQueryData(getGetMeQueryKey(), response.user);
+      setNeedsConfirmation(true);
+      await confirmSession();
+    } catch (error) {
+      const failure = error as { data?: { error?: string } };
+      setError(failure.data?.error ?? "Login failed. Please try again.");
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
   };
 
   return (
@@ -77,12 +124,23 @@ export default function Login() {
               </p>
             )}
 
+            {needsConfirmation && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void retrySession()}
+                className="w-full rounded-lg border px-3 py-2 disabled:opacity-50"
+              >
+                Recheck session
+              </button>
+            )}
+
             <button
               type="submit"
-              disabled={loginMutation.isPending}
+              disabled={pending}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {loginMutation.isPending ? "Signing in..." : "Sign in"}
+              {pending ? "Signing in..." : "Sign in"}
             </button>
           </form>
 
@@ -91,7 +149,10 @@ export default function Login() {
           </p>
           <p className="mt-2 text-center text-sm text-muted-foreground">
             Need an account?{" "}
-            <Link href="/register" className="font-medium text-primary hover:underline">
+            <Link
+              href="/register"
+              className="font-medium text-primary hover:underline"
+            >
               Sign up
             </Link>
           </p>

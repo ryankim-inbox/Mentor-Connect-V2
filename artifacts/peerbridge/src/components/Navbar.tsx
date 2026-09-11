@@ -1,7 +1,6 @@
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
+import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { releaseSurface } from "@/lib/release-flags";
 
 const memberLinks = [
@@ -35,33 +34,45 @@ function MemberLinks({ className }: { className: string }) {
 }
 
 export function Navbar() {
-  const { user, refetch } = useAuth();
-  const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
-  const logoutMutation = useLogout();
+  const { user, logout } = useAuth();
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogout = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
     try {
-      await logoutMutation.mutateAsync();
+      await logout();
     } catch {
-      // The local session is cleared even when the server is unavailable.
+      setError("Couldn't log out. Please try again.");
+    } finally {
+      busy.current = false;
+      setPending(false);
     }
-    queryClient.setQueryData(getGetMeQueryKey(), null);
-    queryClient.removeQueries({ queryKey: getGetMeQueryKey() });
-    queryClient.clear();
-    refetch();
-    navigate("/");
   };
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-white shadow-sm">
+      {error && (
+        <p role="alert" className="px-4 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="mx-auto max-w-[96rem] px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-16 items-center justify-between gap-4 py-2">
           <div className="flex min-w-0 items-center gap-6">
-            <Link href={user ? "/profile" : "/"} className="shrink-0 text-xl font-bold text-primary">
+            <Link
+              href={user ? "/profile" : "/"}
+              className="shrink-0 text-xl font-bold text-primary"
+            >
               PeerBridge
             </Link>
-            {user && <MemberLinks className="hidden items-center gap-4 xl:flex" />}
+            {user && (
+              <MemberLinks className="hidden items-center gap-4 xl:flex" />
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
@@ -75,9 +86,10 @@ export function Navbar() {
                 </details>
                 <button
                   onClick={handleLogout}
+                  disabled={pending}
                   className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
                 >
-                  Log out
+                  {pending ? "Logging out..." : "Log out"}
                 </button>
               </>
             ) : (

@@ -54,7 +54,7 @@ export function ChatWidget() {
 
   return (
     <>
-      {open && <ChatPanel currentUserId={user.id} districtId={user.districtId} />}
+      {open && <ChatPanel key={user.id} currentUserId={user.id} districtId={user.districtId} />}
       <Button
         size="icon"
         aria-label={open ? "Close chat" : "Open chat"}
@@ -70,7 +70,7 @@ export function ChatWidget() {
 function ChatPanel({ currentUserId, districtId }: { currentUserId: number; districtId: number }) {
   const roomsQuery = useQuery({
     queryKey: ["chat", "rooms"],
-    queryFn: fetchChatRooms,
+    queryFn: ({ signal }) => fetchChatRooms(signal),
   });
 
   return (
@@ -200,7 +200,7 @@ function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: nu
   const queryClient = useQueryClient();
   const messagesQuery = useQuery({
     queryKey: ["chat", "room-messages", room.id],
-    queryFn: () => fetchRoomMessages(room.id),
+    queryFn: ({ signal }) => fetchRoomMessages(room.id, signal),
     refetchInterval: (query) => pollUnlessTodo(query.state.data),
   });
 
@@ -264,7 +264,7 @@ function DmList({ onOpen }: { onOpen: (conversation: DmConversation) => void }) 
 
   const dmsQuery = useQuery({
     queryKey: ["chat", "dms"],
-    queryFn: fetchDmConversations,
+    queryFn: ({ signal }) => fetchDmConversations(signal),
     refetchInterval: (query) => pollUnlessTodo(query.state.data),
   });
 
@@ -362,7 +362,7 @@ function DmThread({
   const queryClient = useQueryClient();
   const messagesQuery = useQuery({
     queryKey: ["chat", "dm-messages", conversation.id],
-    queryFn: () => fetchDmMessages(conversation.id),
+    queryFn: ({ signal }) => fetchDmMessages(conversation.id, signal),
     refetchInterval: (query) => pollUnlessTodo(query.state.data),
   });
 
