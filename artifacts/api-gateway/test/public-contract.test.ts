@@ -58,17 +58,29 @@ test("public errors and learning failures never expose diagnostic canaries", () 
   );
 });
 
-for (const [field, value] of [
-  ["data", { count: 3, detail: "audit-canary-data" }],
-  ["matches", [{ score: 1, traceback: "audit-canary-matches" }]],
-  ["result", { answer: 42, debug: "audit-canary-result" }],
+for (const [field, value, expected] of [
+  [
+    "data",
+    { count: 3, result: { answer: 42, debug: "audit-canary-data" } },
+    { count: 3, result: { answer: 42 } },
+  ],
+  [
+    "matches",
+    [{ score: 1, data: { answer: 42, traceback: "audit-canary-matches" } }],
+    [{ score: 1, data: { answer: 42 } }],
+  ],
+  [
+    "result",
+    { answer: 42, matches: [{ score: 1, detail: "audit-canary-result" }] },
+    { answer: 42, matches: [{ score: 1 }] },
+  ],
 ] as const)
   test(`failed ${field} redacts nested diagnostics while success stays opaque`, () => {
     const failed = projectStudentPayload({
       success: false,
       [field]: value,
-    }) as Record<string, unknown>;
-    assert.ok(!JSON.stringify(failed).includes("audit-canary"), field);
+    });
+    assert.deepEqual(failed, { success: false, [field]: expected }, field);
 
     const successful = { success: true, [field]: value };
     assert.deepEqual(projectStudentPayload(successful), successful, field);

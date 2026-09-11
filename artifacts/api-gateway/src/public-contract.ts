@@ -183,10 +183,21 @@ const failureMessage =
 
 // Only diagnostics are changed. Successful student data is never synthesized.
 export function projectStudentPayload(payload: unknown): unknown {
-  if (Array.isArray(payload)) return payload.map(projectStudentPayload);
+  return projectStudentPayloadWithFailure(payload, false);
+}
+
+function projectStudentPayloadWithFailure(
+  payload: unknown,
+  ancestorFailed: boolean,
+): unknown {
+  if (Array.isArray(payload))
+    return payload.map((entry) =>
+      projectStudentPayloadWithFailure(entry, ancestorFailed),
+    );
   if (payload === null || typeof payload !== "object") return payload;
   const value = record.parse(payload);
   const failed =
+    ancestorFailed ||
     value.success === false ||
     value.ok === false ||
     (typeof value.error === "string" && value.error.length > 0);
@@ -211,8 +222,10 @@ export function projectStudentPayload(payload: unknown): unknown {
         ? failureMessage
         : z.string().max(1000).parse(entry);
     else if (["data", "matches", "result"].includes(key))
-      projected[key] = failed ? projectStudentPayload(entry) : entry;
-    else projected[key] = projectStudentPayload(entry);
+      projected[key] = failed
+        ? projectStudentPayloadWithFailure(entry, true)
+        : entry;
+    else projected[key] = projectStudentPayloadWithFailure(entry, failed);
   }
   return projected;
 }
