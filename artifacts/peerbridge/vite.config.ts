@@ -92,6 +92,7 @@ export default defineConfig(async ({ command }) => {
       // artifacts/peerbridge/.replit-artifact/artifact.toml.
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      manifest: true,
     },
     server: {
       port,

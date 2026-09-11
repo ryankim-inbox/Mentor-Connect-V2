@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -87,7 +87,13 @@ export default function Login() {
           </form>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
-            Account creation is unavailable in this reduced release.
+            Explore requests, matching, and chat in this learning app.
+          </p>
+          <p className="mt-2 text-center text-sm text-muted-foreground">
+            Need an account?{" "}
+            <Link href="/register" className="font-medium text-primary hover:underline">
+              Sign up
+            </Link>
           </p>
         </div>
       </div>
