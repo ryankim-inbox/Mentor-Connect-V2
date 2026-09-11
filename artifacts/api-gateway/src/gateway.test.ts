@@ -50,6 +50,19 @@ async function readBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+const userFixture = {
+  id: 7,
+  email: "student@example.test",
+  name: "Student",
+  role: "mentee",
+  districtId: 1,
+  districtName: "School",
+  bio: null,
+  subjects: [],
+  isVerified: true,
+  createdAt: "2026-01-01T00:00:00",
+};
+
 function createFixtureUpstream(calls: UpstreamCall[]): Server {
   return createServer(async (request, response) => {
     const body = await readBody(request);
@@ -79,7 +92,10 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
         ],
       });
       response.end(
-        JSON.stringify({ user: { id: 7 }, message: "Logged in successfully" }),
+        JSON.stringify({
+          user: userFixture,
+          message: "Logged in successfully",
+        }),
       );
       return;
     }
@@ -87,7 +103,10 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
     if (request.url === "/api/auth/register") {
       response.writeHead(201, { "content-type": "application/json" });
       response.end(
-        JSON.stringify({ user: { id: 7 }, message: "Registered successfully" }),
+        JSON.stringify({
+          user: userFixture,
+          message: "Registered successfully",
+        }),
       );
       return;
     }
@@ -99,7 +118,7 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
           "content-type": "application/json",
           vary: "Accept-Encoding, accept-encoding",
         });
-        response.end(JSON.stringify({ id: 7, email: "student@example.test" }));
+        response.end(JSON.stringify(userFixture));
         return;
       }
 
@@ -113,7 +132,7 @@ function createFixtureUpstream(calls: UpstreamCall[]): Server {
         "content-type": "application/json",
         "set-cookie": "peerbridge_session=; Max-Age=0; Path=/",
       });
-      response.end(JSON.stringify({ loggedOut: true }));
+      response.end(JSON.stringify({ message: "Logged out successfully" }));
       return;
     }
 
@@ -226,7 +245,7 @@ test("proxies registered public routes and deliberately forwards response data",
     });
     assert.equal(login.status, 201);
     assert.deepEqual(await login.json(), {
-      user: { id: 7 },
+      user: userFixture,
       message: "Logged in successfully",
     });
     assert.deepEqual(getSetCookies(login), [
@@ -355,7 +374,7 @@ test("requires the same cookie for protected paths and verifies a session before
     assert.equal(me.status, 200);
     assert.equal(me.headers.get("cache-control"), "no-store");
     assert.equal(me.headers.get("vary"), "Accept-Encoding, Cookie");
-    assert.deepEqual(await me.json(), { id: 7, email: "student@example.test" });
+    assert.deepEqual(await me.json(), userFixture);
     assert.equal(calls[0]?.cookie, "peerbridge_session=valid");
 
     const invalidLogout = await fetch(
@@ -376,7 +395,9 @@ test("requires the same cookie for protected paths and verifies a session before
       },
     );
     assert.equal(validLogout.status, 200);
-    assert.deepEqual(await validLogout.json(), { loggedOut: true });
+    assert.deepEqual(await validLogout.json(), {
+      message: "Logged out successfully",
+    });
     assert.deepEqual(
       calls.slice(-2).map((call) => call.path),
       ["/api/auth/me", "/api/auth/logout"],

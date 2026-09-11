@@ -917,7 +917,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/ScaffoldTodo"
+                  - $ref: "#/components/schemas/ChatMessage"
                   - $ref: "#/components/schemas/ScaffoldTodo"
           headers:
             X-Request-Id:
@@ -1111,7 +1111,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/ScaffoldTodo"
+                  - $ref: "#/components/schemas/DmMessage"
                   - $ref: "#/components/schemas/ScaffoldTodo"
           headers:
             X-Request-Id:
