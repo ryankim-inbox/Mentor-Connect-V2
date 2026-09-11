@@ -211,7 +211,7 @@ export function projectStudentPayload(payload: unknown): unknown {
         ? failureMessage
         : z.string().max(1000).parse(entry);
     else if (["data", "matches", "result"].includes(key))
-      projected[key] = entry;
+      projected[key] = failed ? projectStudentPayload(entry) : entry;
     else projected[key] = projectStudentPayload(entry);
   }
   return projected;
