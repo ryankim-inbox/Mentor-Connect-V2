@@ -18,6 +18,12 @@ import {
   projectProfile,
   projectPublicPayload,
 } from "./public-contract.js";
+import {
+  assertAllowedOrigin,
+  assertValidPublicOrigin,
+  createLimiter,
+  validateAuthBody,
+} from "./request-controls.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
 const DEFAULT_REQUEST_BODY_LIMIT_BYTES = 1_048_576;
@@ -67,6 +73,9 @@ export interface GatewayLogger {
 
 export interface GatewayOptions {
   readonly upstreamOrigin?: string;
+  readonly publicOrigin?: string;
+  readonly allowLoopbackPublicOrigin?: boolean;
+  readonly rateLimitNow?: () => number;
   readonly requestBodyLimitBytes?: number;
   readonly responseBodyLimitBytes?: number;
   readonly upstreamTimeoutMs?: number;
@@ -77,6 +86,8 @@ export interface GatewayOptions {
 
 interface GatewayConfig {
   readonly upstreamOrigin: URL;
+  readonly publicOrigin: string;
+  readonly limiter: ReturnType<typeof createLimiter>;
   readonly requestBodyLimitBytes: number;
   readonly responseBodyLimitBytes: number;
   readonly upstreamTimeoutMs: number;
@@ -104,6 +115,7 @@ class GatewayHttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly retryAfter?: number,
   ) {
     super(code);
   }
@@ -149,6 +161,11 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
     );
   });
 
+  server.headersTimeout = 10_000;
+  server.requestTimeout = 15_000;
+  server.keepAliveTimeout = 5_000;
+  server.maxHeadersCount = 64;
+
   return server;
 }
 
@@ -163,8 +180,22 @@ export function resolveGatewayConfig(
 
   assertPrivateUpstream(upstreamOrigin);
 
+  const publicOrigin =
+    options.publicOrigin ?? process.env.GATEWAY_PUBLIC_ORIGIN;
+  if (!publicOrigin) {
+    throw new Error("GATEWAY_PUBLIC_ORIGIN is required.");
+  }
+  const allowLoopbackPublicOrigin =
+    process.env.NODE_ENV !== "production" &&
+    (options.allowLoopbackPublicOrigin === true ||
+      process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "test");
+  assertValidPublicOrigin(publicOrigin, allowLoopbackPublicOrigin);
+
   return {
     upstreamOrigin,
+    publicOrigin,
+    limiter: createLimiter(options.rateLimitNow ?? Date.now),
     requestBodyLimitBytes: resolvePositiveInteger(
       options.requestBodyLimitBytes,
       process.env.GATEWAY_MAX_BODY_BYTES,
@@ -250,6 +281,8 @@ async function handleRequest(
       return;
     }
 
+    assertRequestOrigin(request, method, config);
+
     if (policy.family === "users" && policy.resourceId !== undefined) {
       await handleSelfProfileRequest(
         request,
@@ -308,13 +341,52 @@ async function handleRequest(
       );
     }
 
-    const body = await readRequestBody(
+    if (sessionVerification) {
+      if (method !== "GET") {
+        takeRateLimit(
+          config,
+          "session:" + String(sessionVerification.userId) + ":mutation",
+          60,
+        );
+      }
+      if (isExpensiveRequest(policy)) {
+        takeRateLimit(
+          config,
+          "session:" + String(sessionVerification.userId) + ":expensive",
+          12,
+        );
+      }
+    }
+
+    let body = await readRequestBody(
       request,
       policy.allowsBody ? routeBodyLimit : 0,
       policy.allowsBody,
       config.requestBodyTimeoutMs,
       clientAbortController.signal,
     );
+
+    if (
+      policy.template === "/api/auth/login" ||
+      policy.template === "/api/auth/register"
+    ) {
+      let validated: ReturnType<typeof validateAuthBody>;
+      try {
+        validated = validateAuthBody(
+          policy.template === "/api/auth/login" ? "login" : "register",
+          body,
+        );
+      } catch {
+        throw new GatewayHttpError(400, "invalid_input");
+      }
+      body = validated.body;
+      if (policy.template === "/api/auth/login") {
+        takeRateLimit(config, "login:global", 120);
+        takeRateLimit(config, "login:account:" + validated.accountKey, 10);
+      } else {
+        takeRateLimit(config, "register:global", 30);
+      }
+    }
 
     const upstream = await fetchUpstream(
       request,
@@ -352,6 +424,9 @@ async function handleRequest(
 
     if (error instanceof GatewayHttpError) {
       drainRequest(request);
+      if (error.retryAfter !== undefined) {
+        response.setHeader("retry-after", String(error.retryAfter));
+      }
       sendGatewayError(response, error.status, error.code, requestId);
       log(config, "gateway.rejected", {
         requestId,
@@ -396,12 +471,21 @@ function rejectUpgrade(
   config: GatewayConfig,
 ): void {
   const requestId = randomUUID();
+  let error = "websocket_unavailable";
+  try {
+    assertAllowedOrigin(
+      typeof request.headers.origin === "string"
+        ? request.headers.origin
+        : undefined,
+      config.publicOrigin,
+    );
+  } catch {
+    error = "forbidden";
+  }
   // Upgrades never join an upstream connection. Keep their external response
   // distinct from ordinary HTTP quarantine requests: the WebSocket handshake
   // must always terminate with 403 before an upgrade can be established.
-  const body = Buffer.from(
-    JSON.stringify({ error: "websocket_unavailable", requestId }),
-  );
+  const body = Buffer.from(JSON.stringify({ error, requestId }));
 
   socket.write(
     "HTTP/1.1 403 Forbidden\r\n" +
@@ -420,9 +504,46 @@ function rejectUpgrade(
   log(config, "gateway.upgrade_denied", {
     method: request.method?.toUpperCase() ?? "GET",
     requestId,
+    reason: error,
     routeFamily: "websocket",
     status: 403,
   });
+}
+
+function assertRequestOrigin(
+  request: IncomingMessage,
+  method: string,
+  config: GatewayConfig,
+): void {
+  if (method === "GET") {
+    return;
+  }
+
+  try {
+    assertAllowedOrigin(getHeader(request, "origin"), config.publicOrigin);
+  } catch {
+    throw new GatewayHttpError(403, "forbidden");
+  }
+}
+
+function takeRateLimit(
+  config: GatewayConfig,
+  key: string,
+  limit: number,
+): void {
+  const result = config.limiter.take(key, limit);
+  if (!result.allowed) {
+    throw new GatewayHttpError(429, "rate_limited", result.retryAfter);
+  }
+}
+
+function isExpensiveRequest(policy: PublicRoute): boolean {
+  return (
+    policy.template === "/api/matches/{questionId}" ||
+    policy.template === "/api/matches" ||
+    policy.template === "/api/practice/matching/{questionId}" ||
+    policy.template === "/api/practice/locations/test"
+  );
 }
 
 function assertPrivateUpstream(upstreamOrigin: URL): void {
@@ -568,7 +689,7 @@ function validateRouteHeaders(
     throw new GatewayHttpError(413, "request_body_too_large");
   }
 
-  if (policy.requiresJson) {
+  if (policy.requiresJson && bytes > 0) {
     const contentType = getHeader(request, "content-type");
     if (!contentType || !isJsonContentType(contentType)) {
       throw new GatewayHttpError(415, "json_content_type_required");
@@ -717,6 +838,13 @@ async function handleSelfProfileRequest(
   }
 
   const session = await verifySession(request, config, requestId, clientSignal);
+  if (method !== "GET") {
+    takeRateLimit(
+      config,
+      "session:" + String(session.userId) + ":mutation",
+      60,
+    );
+  }
   if (method === "PATCH" && session.userId !== requestedUserId) {
     sendGatewayError(response, 404, "not_found", requestId);
     log(config, "gateway.self_profile_denied", {

@@ -42,17 +42,23 @@ Gateway parses allowed query values with `URLSearchParams`, rejects malformed pe
 duplicate keys, unknown keys, and invalid values, then forwards the validated serialized query.
 It never inserts an omitted optional value, so Python defaults remain authoritative.
 
-| Route                                                                         | Allowed query                                                                                                             |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/districts`                                                          | `type` is `high_school` or `unified`; `search` is at most 200 UTF-8 bytes                                                  |
-| `GET /api/requests`                                                           | positive safe `districtId` and `tagId`; `role` is `mentor` or `mentee`; `status` is `open`, `matched`, or `closed`          |
-| `GET /api/matches/{questionId}` and `GET /api/practice/matching/{questionId}` | `limit` from 1 through 20                                                                                                 |
-| `GET /api/scheduling/suggest`                                                 | positive safe `user_a` and `user_b`; both required                                                                         |
+| Route                                                                         | Allowed query                                                                                                      |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/districts`                                                          | `type` is `high_school` or `unified`; `search` is at most 200 UTF-8 bytes                                          |
+| `GET /api/requests`                                                           | positive safe `districtId` and `tagId`; `role` is `mentor` or `mentee`; `status` is `open`, `matched`, or `closed` |
+| `GET /api/matches/{questionId}` and `GET /api/practice/matching/{questionId}` | `limit` from 1 through 20                                                                                          |
+| `GET /api/scheduling/suggest`                                                 | positive safe `user_a` and `user_b`; both required                                                                 |
 
-POST/PATCH operations with a body require `application/json`. `POST /api/auth/logout`,
+Every POST/PATCH/DELETE request must carry an `Origin` exactly equal to the configured public
+origin. Requests that actually carry a JSON body require `application/json`. `POST /api/auth/logout`,
 `POST /api/requests/{id}/match`, and every DELETE are bodyless. The default request limit is
 1 MiB and the practice location test is capped at 16 KiB. Upstream response bodies default to
 2 MiB. Request-body and upstream-response timeouts default to 10 and 5 seconds.
+
+Login accepts only `email` and `password`; registration accepts only `email`, `name`, `password`,
+`role`, and `districtId`. Passwords must be 1 through 72 UTF-8 bytes and are never truncated.
+Accepted auth JSON bytes are forwarded unchanged. Only SHA-256 of the trimmed, lowercased email is
+kept as the per-account limiter identity.
 
 Profile GET is available to a signed-in user for another canonical user id, but gateway output is
 always projected to `id`, `name`, `subjects`, and `createdAt`. PATCH remains self-only and accepts
@@ -67,19 +73,47 @@ the public profile projection.
   de-duplicated `Vary: Cookie`.
 - Duplicate headers, Transfer-Encoding, Expect, absolute targets, backslashes, percent-encoded
   paths, dot segments, repeated slashes, uppercase route variants, and trailing slashes are rejected.
+- Mutation and WebSocket Origin checks compare with the configured origin as an exact string.
+  `Host`, `X-Forwarded-Host`, and `X-Forwarded-For` do not select or bypass an origin or rate bucket.
 - Hop-by-hop, Server, Location, CORS, compression, and upstream content-length headers are stripped.
 - Logs receive fixed event names, canonical paths, method, status, and correlation id, never Cookie,
   Authorization, request bodies, or upstream error details.
+
+`GATEWAY_PUBLIC_ORIGIN` is required at startup. Production accepts only one canonical exact HTTPS
+origin such as `https://classroom.example.com`; replace the example in the gateway artifact settings
+with the deployment's real external origin before release. It must not contain credentials, a path,
+query, fragment, trailing slash, or normalized spelling difference. Development/test may explicitly
+use `http://localhost:<port>`, `http://127.0.0.1:<port>`, or `http://[::1]:<port>` with
+`NODE_ENV=development|test`. The gateway never derives this value from request headers.
 
 `GATEWAY_UPSTREAM_ORIGIN` must be a credential-free loopback HTTP origin. Limits can be reduced with
 `GATEWAY_MAX_BODY_BYTES`, `GATEWAY_MAX_RESPONSE_BYTES`, `GATEWAY_BODY_TIMEOUT_MS`, and
 `GATEWAY_UPSTREAM_TIMEOUT_MS`; each value must be a positive integer.
 
+One gateway process starts with these fixed 60-second plans:
+
+| Bucket                                             |      Limit |
+| -------------------------------------------------- | ---------: |
+| normalized login account                           |  10/minute |
+| all login attempts                                 | 120/minute |
+| all registrations                                  |  30/minute |
+| each verified user's mutations                     |  60/minute |
+| each verified user's matching/practice computation |  12/minute |
+
+The expensive bucket is shared by both matching GET aliases, `POST /api/matches`, and
+`POST /api/practice/locations/test`. Informational practice GETs and ordinary polling are outside
+that bucket. A refusal returns 429 with an integer `Retry-After`; Task 22 owns the matching UI for
+that response. Counters are per process and capped at 10,000 keys; move them to a shared limiter only
+if deployment gains multiple gateway instances.
+
+The Node server also fixes `headersTimeout=10s`, `requestTimeout=15s`, `keepAliveTimeout=5s`, and
+`maxHeadersCount=64` while retaining the body and upstream limits above.
+
 ## 로컬 검증
 
 ```sh
 cd Python && python -m uvicorn main:app --host 127.0.0.1 --port 8181
-PORT=8080 pnpm --filter @workspace/api-gateway run dev
+NODE_ENV=development GATEWAY_PUBLIC_ORIGIN=http://127.0.0.1:14200 PORT=8080 pnpm --filter @workspace/api-gateway run dev
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
 pnpm --filter @workspace/api-gateway typecheck
@@ -88,6 +122,14 @@ pnpm --filter @workspace/api-gateway typecheck
 The package tests verify all 48 operations, every REST family's exact upstream method/path/query/body/
 Cookie, auth/me recursion prevention, bodyless operations, 204 handling, public profile projection,
 self-only PATCH, and retained negative HTTP boundaries.
+
+For staging mutations, always send the configured external origin explicitly, including bodyless
+operations:
+
+```sh
+curl -i -X POST -H 'Origin: https://classroom.example.com' https://classroom.example.com/api/auth/logout
+curl -i -X POST -H 'Origin: https://classroom.example.com' https://classroom.example.com/api/requests/1/match
+```
 
 ## Staging 증빙과 rollback
 

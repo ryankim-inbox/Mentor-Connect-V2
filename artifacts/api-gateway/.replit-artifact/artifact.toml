@@ -26,6 +26,8 @@ args = ["node", "artifacts/api-gateway/dist/index.js"]
 PORT = "8080"
 NODE_ENV = "production"
 GATEWAY_UPSTREAM_ORIGIN = "http://127.0.0.1:8181"
+# Replace this example with the deployment's exact external HTTPS origin.
+GATEWAY_PUBLIC_ORIGIN = "https://classroom.example.com"
 
 [services.production.health.startup]
 path = "/livez"
