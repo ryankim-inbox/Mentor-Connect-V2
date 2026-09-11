@@ -117,5 +117,5 @@ const server = createServer(async (req, res) => {
   } catch { if (!res.headersSent) send(400, { detail: 'Invalid fixture request' }); else res.end(); }
 });
 server.on('error', () => { console.error('Fixture server failed to bind 127.0.0.1:18181'); process.exitCode = 1; });
-server.listen(18181, '127.0.0.1');
+server.listen(18181, '127.0.0.1', () => process.send?.('fixture-ready'));
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.close(() => process.exit(0)));

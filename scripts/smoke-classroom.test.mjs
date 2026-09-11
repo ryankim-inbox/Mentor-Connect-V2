@@ -40,24 +40,31 @@ test('smoke separates learning envelopes from transport failure without retainin
   assert.equal(classifyResponse(200, { ok: true, success: true, source: 'python', feature: 'analysis', data: [] }).status, 'pass');
 });
 
-test('loopback fixture enforces cookie sessions, persists edits/messages, and refuses an occupied port', async () => {
+async function exerciseFixture() {
   const { spawn } = await import('node:child_process');
   const { once } = await import('node:events');
-  const child = spawn(process.execPath, ['e2e/fixtures.mjs'], { stdio: ['ignore', 'pipe', 'pipe'] });
-  let ready = false;
+  const child = spawn(process.execPath, ['e2e/fixtures.mjs'], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
   const origin = 'http://127.0.0.1:18181';
   const request = (route, method = 'GET', body, cookie) => fetch(origin + route, {
     method, headers: { ...(cookie ? { cookie } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   try {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (child.exitCode !== null) throw new Error('Fixture process exited before readiness');
-      try { ready = (await request('/api/healthz')).ok; } catch {}
-      if (ready) break;
-      await new Promise(resolve => setTimeout(resolve, 20));
-    }
-    assert.equal(ready, true);
+    await new Promise((resolve, reject) => {
+      const finish = (error) => {
+        clearTimeout(timer);
+        child.off('error', failed);
+        child.off('exit', failed);
+        child.off('message', ready);
+        error ? reject(error) : resolve();
+      };
+      const failed = () => finish(new Error('Fixture child exited before acquiring its port'));
+      const ready = message => message === 'fixture-ready' ? finish() : failed();
+      const timer = setTimeout(failed, 5000);
+      child.once('error', failed);
+      child.once('exit', failed);
+      child.once('message', ready);
+    });
     assert.equal((await request('/api/auth/me')).status, 401);
     assert.equal((await request('/api/auth/login', 'POST', { email: 'mentor@classroom.example.edu', password: 'incorrect' })).status, 401);
     const login = await request('/api/auth/login', 'POST', { email: 'mentor@classroom.example.edu', password: 'classroom-fixture-pass' });
@@ -79,5 +86,24 @@ test('loopback fixture enforces cookie sessions, persists edits/messages, and re
   } finally {
     child.kill('SIGTERM');
     if (child.exitCode === null) await once(child, 'exit');
+  }
+}
+test('loopback fixture enforces cookie sessions, persists edits/messages, and refuses an occupied port', exerciseFixture);
+
+test('fixture self-test never sends traffic to an existing listener on its port', async () => {
+  const { createServer } = await import('node:http');
+  let requests = 0;
+  const existing = createServer((req, res) => {
+    requests++;
+    res.writeHead(req.url === '/api/healthz' ? 200 : 401, { 'Content-Type': 'application/json' });
+    res.end('{}');
+  });
+  await new Promise((resolve, reject) => { existing.once('error', reject); existing.listen(18181, '127.0.0.1', resolve); });
+  try {
+    await assert.rejects(exerciseFixture);
+    assert.equal(requests, 0, 'The pre-existing listener must receive no probes or mutations');
+  } finally {
+    existing.closeAllConnections();
+    await new Promise(resolve => existing.close(resolve));
   }
 });
