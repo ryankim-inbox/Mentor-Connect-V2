@@ -10,6 +10,8 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { createGatewayServer } from "../src/gateway.ts";
 
+const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
+
 const authenticatedUser = {
   id: 1,
   email: "student@example.edu",
@@ -83,6 +85,8 @@ async function createHarness(): Promise<Harness> {
   const upstreamOrigin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const origin = await listen(gateway);
@@ -151,6 +155,7 @@ test("a session cannot patch another user's profile", async (context) => {
     headers: {
       "content-type": "application/json",
       cookie: "session=user-a",
+      origin: TEST_PUBLIC_ORIGIN,
     },
     body: JSON.stringify({ name: "Changed" }),
   });
@@ -200,6 +205,7 @@ test("all non-allowlisted PATCH fields are rejected before authentication or pro
       headers: {
         "content-type": "application/json",
         cookie: "session=user-a",
+        origin: TEST_PUBLIC_ORIGIN,
       },
       body: JSON.stringify(payload),
     });
@@ -223,6 +229,7 @@ test("allowlisted PATCH fields are sanitized and forwarded only for the session 
     headers: {
       "content-type": "application/json",
       cookie: "session=user-a",
+      origin: TEST_PUBLIC_ORIGIN,
     },
     body: JSON.stringify({
       name: " Updated student ",

@@ -9,6 +9,8 @@ import {
   projectPublicPayload,
 } from "../src/public-contract.ts";
 
+const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
+
 test("public errors and learning failures never expose diagnostic canaries", () => {
   for (const [status, error] of [
     [400, "invalid_input"],
@@ -117,6 +119,8 @@ test("real gateway strips HTTP error bodies/debug headers, preserves cookies and
   const origin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: origin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const url = await listen(gateway);
@@ -355,6 +359,8 @@ test("each ordinary wire-model family agrees with generated validation and rejec
   const origin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: origin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const url = await listen(gateway);
@@ -388,6 +394,7 @@ test("each ordinary wire-model family agrees with generated validation and rejec
       method: c.method,
       headers: {
         cookie: "peerbridge_session=fixture",
+        ...(c.method === "GET" ? {} : { origin: TEST_PUBLIC_ORIGIN }),
         ...(c.path === "/api/auth/login"
           ? { "content-type": "application/json" }
           : {}),

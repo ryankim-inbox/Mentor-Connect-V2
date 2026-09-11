@@ -21,6 +21,8 @@ interface UpstreamCall {
   path: string;
 }
 
+const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
+
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -158,6 +160,8 @@ test("forwards one valid request from every REST family with exact method, targe
   const upstreamPort = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const gatewayPort = await listen(gateway);
@@ -275,6 +279,9 @@ test("forwards one valid request from every REST family with exact method, targe
   for (const example of cases) {
     calls.length = 0;
     const headers: Record<string, string> = { cookie: "session=user-a" };
+    if (example.method !== "GET") {
+      headers.origin = TEST_PUBLIC_ORIGIN;
+    }
     if (example.body !== undefined) {
       headers["content-type"] = "application/json";
       headers["content-length"] = String(Buffer.byteLength(example.body));
@@ -325,6 +332,8 @@ test("forwards every allowed raw practice module once after session validation",
   const upstreamPort = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const gatewayPort = await listen(gateway);
@@ -364,6 +373,8 @@ test("limits the practice location test body to 16 KiB before its upstream route
   const upstreamPort = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const gatewayPort = await listen(gateway);
@@ -378,6 +389,7 @@ test("limits the practice location test body to 16 KiB before its upstream route
       cookie: "session=user-a",
       "content-type": "application/json",
       "content-length": String(Buffer.byteLength(body)),
+      origin: TEST_PUBLIC_ORIGIN,
     },
     body,
   );
@@ -396,6 +408,8 @@ test("rejects invalid paths, methods, and queries before any upstream request", 
   const upstreamPort = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: { info() {} },
   });
   const gatewayPort = await listen(gateway);

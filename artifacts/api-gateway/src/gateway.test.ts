@@ -24,6 +24,7 @@ interface UpstreamCall {
 const quietLogger: GatewayLogger = {
   info() {},
 };
+const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
 
 async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1");
@@ -153,6 +154,8 @@ async function startFixture(
   const upstreamOrigin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     logger: quietLogger,
     ...gatewayOptions,
   });
@@ -214,6 +217,8 @@ test("accepts only a literal loopback private upstream", () => {
 
   const gateway = createGatewayServer({
     upstreamOrigin: "http://127.0.0.1:8181",
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
   });
   gateway.close();
 });
@@ -240,7 +245,10 @@ test("proxies registered public routes and deliberately forwards response data",
     });
     const login = await fetch(fixture.gatewayOrigin + "/api/auth/login", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        origin: TEST_PUBLIC_ORIGIN,
+      },
       body: loginPayload,
     });
     assert.equal(login.status, 201);
@@ -331,6 +339,9 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
       fixture.gatewayOrigin,
       "GET /ws/chat/1 HTTP/1.1\r\n" +
         "Host: gateway.test\r\n" +
+        "Origin: " +
+        TEST_PUBLIC_ORIGIN +
+        "\r\n" +
         "Connection: Upgrade\r\n" +
         "Upgrade: websocket\r\n" +
         "Sec-WebSocket-Version: 13\r\n" +
@@ -339,10 +350,25 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
     assert.equal(responseStatus(upgrade), 403);
     assert.match(upgrade, /websocket_unavailable/);
 
+    const missingOriginUpgrade = await rawRequest(
+      fixture.gatewayOrigin,
+      "GET /ws/chat/1 HTTP/1.1\r\n" +
+        "Host: gateway.test\r\n" +
+        "Connection: Upgrade\r\n" +
+        "Upgrade: websocket\r\n" +
+        "Sec-WebSocket-Version: 13\r\n" +
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
+    );
+    assert.equal(responseStatus(missingOriginUpgrade), 403);
+    assert.match(missingOriginUpgrade, /forbidden/);
+
     const authenticatedUpgrade = await rawRequest(
       fixture.gatewayOrigin,
       "GET /ws/dms/1 HTTP/1.1\r\n" +
         "Host: gateway.test\r\n" +
+        "Origin: " +
+        TEST_PUBLIC_ORIGIN +
+        "\r\n" +
         "Cookie: peerbridge_session=valid\r\n" +
         "Connection: Upgrade\r\n" +
         "Upgrade: websocket\r\n" +
@@ -351,6 +377,19 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
     );
     assert.equal(responseStatus(authenticatedUpgrade), 403);
     assert.match(authenticatedUpgrade, /websocket_unavailable/);
+
+    const hostileUpgrade = await rawRequest(
+      fixture.gatewayOrigin,
+      "GET /ws/chat/1 HTTP/1.1\r\n" +
+        "Host: gateway.test\r\n" +
+        "Origin: https://evil.invalid\r\n" +
+        "Connection: Upgrade\r\n" +
+        "Upgrade: websocket\r\n" +
+        "Sec-WebSocket-Version: 13\r\n" +
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
+    );
+    assert.equal(responseStatus(hostileUpgrade), 403);
+    assert.match(hostileUpgrade, /forbidden/);
     assert.equal(calls.length, 0);
   } finally {
     await stopFixture(fixture);
@@ -381,7 +420,10 @@ test("requires the same cookie for protected paths and verifies a session before
       fixture.gatewayOrigin + "/api/auth/logout",
       {
         method: "POST",
-        headers: { cookie: "peerbridge_session=invalid" },
+        headers: {
+          cookie: "peerbridge_session=invalid",
+          origin: TEST_PUBLIC_ORIGIN,
+        },
       },
     );
     assert.equal(invalidLogout.status, 401);
@@ -391,7 +433,10 @@ test("requires the same cookie for protected paths and verifies a session before
       fixture.gatewayOrigin + "/api/auth/logout",
       {
         method: "POST",
-        headers: { cookie: "peerbridge_session=valid" },
+        headers: {
+          cookie: "peerbridge_session=valid",
+          origin: TEST_PUBLIC_ORIGIN,
+        },
       },
     );
     assert.equal(validLogout.status, 200);
@@ -419,6 +464,8 @@ test("enforces request body limits and redacts credentials and payloads from gat
   const upstreamOrigin = await listen(upstream);
   const gateway = createGatewayServer({
     upstreamOrigin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
     requestBodyLimitBytes: 8,
     logger: {
       info(event, fields) {
@@ -431,7 +478,10 @@ test("enforces request body limits and redacts credentials and payloads from gat
   try {
     const tooLarge = await fetch(gatewayOrigin + "/api/auth/login", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        origin: TEST_PUBLIC_ORIGIN,
+      },
       body: '"123456789"',
     });
     assert.equal(tooLarge.status, 413);
@@ -447,6 +497,7 @@ test("enforces request body limits and redacts credentials and payloads from gat
         authorization: "Bearer dont-log-this-token",
         "content-type": "application/json",
         cookie: "peerbridge_session=dont-log-this-cookie",
+        origin: TEST_PUBLIC_ORIGIN,
       },
       body: privatePayload,
     });
