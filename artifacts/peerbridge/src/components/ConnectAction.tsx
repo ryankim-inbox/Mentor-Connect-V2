@@ -1,19 +1,14 @@
 import { useMatchRequest } from "@workspace/api-client-react";
 
-interface DevelopmentConnectActionProps {
+interface ConnectActionProps {
   readonly requestId: number;
   readonly onMatched: () => void;
 }
 
-/**
- * This component is loaded only from a development-only branch in
- * RequestDetail. Keeping the mutation here ensures a production build has no
- * match-action implementation or endpoint string to execute.
- */
-export default function DevelopmentConnectAction({
+export default function ConnectAction({
   requestId,
   onMatched,
-}: DevelopmentConnectActionProps) {
+}: ConnectActionProps) {
   const matchMutation = useMatchRequest();
 
   const handleMatch = () => {

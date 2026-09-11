@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useGetRequest,
@@ -10,23 +10,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
 import { sortTimeSlots } from "@/lib/timeSlots";
-import { isFeatureEnabled } from "@/lib/release-flags";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
   id: string;
 }
 
-// This import must remain behind Vite's compile-time DEV constant. It gives
-// developers an explicit opt-in path without emitting the match mutation in a
-// production bundle.
-const DevelopmentConnectAction = import.meta.env.DEV
-  ? lazy(() => import("@/components/DevelopmentConnectAction"))
-  : null;
+const ConnectAction = lazy(() => import("@/components/ConnectAction"));
 
 export default function RequestDetail({ id }: Props) {
   const requestId = Number(id);
-  const connectEnabled = isFeatureEnabled("connect");
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -76,8 +69,6 @@ export default function RequestDetail({ id }: Props) {
   }
 
   const canMatch =
-    DevelopmentConnectAction !== null &&
-    connectEnabled &&
     user !== null &&
     user !== undefined &&
     !isAuthor &&
@@ -178,25 +169,8 @@ export default function RequestDetail({ id }: Props) {
           </div>
 
           <div className="flex gap-2">
-            {canMatch && DevelopmentConnectAction && (
-              <Suspense
-                fallback={(
-                  <button
-                    type="button"
-                    disabled
-                    className="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold opacity-50"
-                  >
-                    Loading…
-                  </button>
-                )}
-              >
-                <DevelopmentConnectAction requestId={requestId} onMatched={handleMatched} />
-              </Suspense>
-            )}
-            {!connectEnabled && user && !isAuthor && request.status === "open" && (
-              <p className="self-center text-xs text-muted-foreground" role="status">
-                Connect is temporarily unavailable in this release.
-              </p>
+            {canMatch && (
+              <ConnectAction requestId={requestId} onMatched={handleMatched} />
             )}
             {!isAuthor && user && (
               <button

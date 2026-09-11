@@ -33,11 +33,6 @@ export default function Profile() {
                 <span className={"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border " + roleColor}>
                   {roleLabel}
                 </span>
-                {user.isVerified && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border text-green-600 bg-green-50 border-green-100">
-                    Verified student
-                  </span>
-                )}
               </div>
               {user.districtName && (
                 <p className="text-sm text-muted-foreground mt-1">{user.districtName}</p>
