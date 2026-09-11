@@ -398,6 +398,20 @@ test("accepts only the existing registration model", () => {
       email: "student@example.edu",
       name: "Student",
       password: "secret",
+      role: ["mentor"],
+      districtId: 1,
+    },
+    {
+      email: "student@example.edu",
+      name: "Student",
+      password: "secret",
+      role: [["both"]],
+      districtId: 1,
+    },
+    {
+      email: "student@example.edu",
+      name: "Student",
+      password: "secret",
       role: "both",
       districtId: 1.5,
     },
@@ -534,6 +548,25 @@ test("rejects invalid auth bodies before upstream and forwards accepted bytes un
   ];
   for (const body of invalidBodies) {
     const response = await fetch(fixture.gatewayOrigin + "/api/auth/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: DEV_PUBLIC_ORIGIN,
+      },
+      body,
+    });
+    assert.equal(response.status, 400, body);
+  }
+
+  for (const role of [["mentor"], [["both"]]]) {
+    const body = JSON.stringify({
+      email: "student@example.edu",
+      name: "Student",
+      password: "secret",
+      role,
+      districtId: 1,
+    });
+    const response = await fetch(fixture.gatewayOrigin + "/api/auth/register", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -755,9 +788,16 @@ test("allows classroom polling and informational practice GETs without mutation 
     assert.ok(responses.every((response) => response.status === 200));
   }
 
+  for (let poll = 0; poll < 57; poll += 1) {
+    const response = await fetch(fixture.gatewayOrigin + "/api/chat/rooms", {
+      headers: { cookie: "session=user-1" },
+    });
+    assert.equal(response.status, 200);
+  }
+
   assert.equal(
     fixture.calls.filter((call) => call.path === "/api/chat/rooms").length,
-    80,
+    137,
   );
 
   for (const path of [

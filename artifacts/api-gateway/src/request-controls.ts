@@ -52,7 +52,8 @@ export function validateAuthBody(
     kind === "register" &&
     (!payload.email.toLowerCase().endsWith(".edu") ||
       typeof payload.name !== "string" ||
-      !["mentor", "mentee", "both"].includes(String(payload.role)) ||
+      typeof payload.role !== "string" ||
+      !["mentor", "mentee", "both"].includes(payload.role) ||
       !Number.isSafeInteger(payload.districtId))
   ) {
     throw new Error("invalid_auth_body");
