@@ -2,13 +2,13 @@
 
 Status: the gateway exposes the approved 48-operation learning REST contract. Production UI feature
 flags and shared desktop/mobile navigation are open, and Task 20 verifies the learning screens in
-Chromium against the production bundle with intercepted API fixtures. WebSocket upgrades remain
-closed until the dedicated WebSocket task. This state does not claim live-provider or live WebSocket
-verification.
+Chromium against the production bundle with intercepted API fixtures. The two exact WebSocket
+endpoints now use a session/Origin-checked native gateway tunnel. This state does not claim
+live-provider or real-Python WebSocket verification.
 
 ## Runtime boundary
 
-The browser uses the same-origin gateway for `/api` and, after the later transport work, `/ws`.
+The browser uses the same-origin gateway for `/api` and `/ws`; Vite dev/preview proxy both to the same gateway target. ChatWidget continues REST polling.
 The existing Python application remains the main backend on `127.0.0.1:8181`; the gateway validates
 and forwards requests and does not replace Python matching, authorization, chat, scheduling, reports,
 or database logic. Student-module success, error, empty, and incomplete responses pass through as real
@@ -65,12 +65,18 @@ JSON routes require `application/json`. Logout, Connect, and DELETE requests are
 body. An upstream 204 is returned with no response body. General request bodies are limited to 1 MiB,
 and `/api/practice/locations/test` is limited to 16 KiB.
 
-## Controls that remain closed
+## WebSocket transport and retained controls
 
-WebSocket upgrade requests still return 403 before an upstream connection. The production browser
+Only `/ws/chat/rooms/{id}` and `/ws/dms/{id}` accept upgrades, with canonical positive safe IDs, no
+query, the exact configured Origin, and a Cookie verified against private `/api/auth/me`. The native
+tunnel validates the upstream handshake and transfers opaque bytes with stream backpressure.
+It limits handshakes to five seconds, idle time to 120 seconds, pending/active tunnels to 40 per
+process and two per verified user, and closes registered sockets during shutdown. Per-frame
+moderation and participant authorization remain Python responsibilities. The production browser
 now exposes the learning screens and shared navigation. Task 20 verifies those built pages with
 successful and failing intercepted fixtures and aborts every unknown API request; it does not prove
-live-provider behavior, WebSocket transport, readiness, or known incomplete DM behavior.
+live-provider behavior, readiness, or known incomplete DM behavior. Native gateway transport tests
+cover both WS paths, including actual session lookup, cancellation, non-101 responses and cleanup.
 
 Unknown routes, wrong methods, invalid queries, malformed paths, duplicate headers, oversized bodies,
 maintenance mode, unauthenticated session routes, and cross-user PATCH remain negative regressions.
@@ -87,6 +93,7 @@ pnpm e2e
 ```
 
 Release approval also requires staging evidence that only the gateway is public, maintenance mode
-fail-closes REST forwarding, and the Python port cannot be reached externally. Live-provider,
-WebSocket, readiness, rate limiting, contract generation, and final CI evidence are tracked by their
-later release tasks and are not implied by the Task 20 production-browser fixtures.
+fail-closes REST and WebSocket forwarding, and the Python port cannot be reached externally. Live-provider,
+real-Python WebSocket behavior (Task 23), readiness, and final CI evidence remain separate release
+checks and are not implied by the Task 20 production-browser fixtures. The current DM exercise
+sends its learning message and closes; the tunnel preserves that behavior instead of replacing it.

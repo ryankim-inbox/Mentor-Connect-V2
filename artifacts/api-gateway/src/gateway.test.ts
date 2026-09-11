@@ -320,7 +320,7 @@ test("denies unregistered methods, invalid queries, and path-normalization bypas
   }
 });
 
-test("rejects duplicate request headers and every WebSocket upgrade before the upstream", async () => {
+test("rejects duplicate request headers, unknown WebSocket paths and hostile origins before the upstream", async () => {
   const calls: UpstreamCall[] = [];
   const fixture = await startFixture({}, createFixtureUpstream(calls));
 
@@ -352,7 +352,7 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
 
     const missingOriginUpgrade = await rawRequest(
       fixture.gatewayOrigin,
-      "GET /ws/chat/1 HTTP/1.1\r\n" +
+      "GET /ws/chat/rooms/1 HTTP/1.1\r\n" +
         "Host: gateway.test\r\n" +
         "Connection: Upgrade\r\n" +
         "Upgrade: websocket\r\n" +
@@ -362,9 +362,9 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
     assert.equal(responseStatus(missingOriginUpgrade), 403);
     assert.match(missingOriginUpgrade, /forbidden/);
 
-    const authenticatedUpgrade = await rawRequest(
+    const unknownAuthenticatedUpgrade = await rawRequest(
       fixture.gatewayOrigin,
-      "GET /ws/dms/1 HTTP/1.1\r\n" +
+      "GET /ws/dms/0 HTTP/1.1\r\n" +
         "Host: gateway.test\r\n" +
         "Origin: " +
         TEST_PUBLIC_ORIGIN +
@@ -375,12 +375,12 @@ test("rejects duplicate request headers and every WebSocket upgrade before the u
         "Sec-WebSocket-Version: 13\r\n" +
         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
     );
-    assert.equal(responseStatus(authenticatedUpgrade), 403);
-    assert.match(authenticatedUpgrade, /websocket_unavailable/);
+    assert.equal(responseStatus(unknownAuthenticatedUpgrade), 403);
+    assert.match(unknownAuthenticatedUpgrade, /websocket_unavailable/);
 
     const hostileUpgrade = await rawRequest(
       fixture.gatewayOrigin,
-      "GET /ws/chat/1 HTTP/1.1\r\n" +
+      "GET /ws/chat/rooms/1 HTTP/1.1\r\n" +
         "Host: gateway.test\r\n" +
         "Origin: https://evil.invalid\r\n" +
         "Connection: Upgrade\r\n" +
