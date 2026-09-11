@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { SourceBadge } from "@/components/SourceBadge";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 
 type FlaggedUser = {
@@ -30,8 +31,11 @@ function QueryError({
   retry: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-      <p>{error instanceof Error ? error.message : String(error)}</p>
+    <div
+      className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      role="alert"
+    >
+      <p>{apiErrorMessage(error)}</p>
       <button type="button" onClick={retry} className="mt-2 text-xs font-semibold underline">
         Retry {label}
       </button>
