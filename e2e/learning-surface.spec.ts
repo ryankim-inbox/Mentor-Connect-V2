@@ -122,6 +122,7 @@ const fixtures: Record<string, unknown> = {
     student_name: "Classroom Mentor",
     requested_subject: "Math",
     requested_topic: "Derivatives",
+    limit: 5,
     matches: [],
   },
   "/api/analysis/status": pythonEnvelope("analysis", null),
@@ -184,7 +185,7 @@ async function interceptApi(
     if (pathname === "/api/auth/me" && options.anonymous) {
       await route.fulfill({
         status: 401,
-        json: { error: "Sign in required" },
+        json: { error: "unauthorized" },
       });
       return;
     }
@@ -192,7 +193,7 @@ async function interceptApi(
     if (options.failures?.has(pathname)) {
       await route.fulfill({
         status: 503,
-        json: { detail: `Learning fixture unavailable: ${pathname}` },
+        json: { error: "backend_error" },
       });
       return;
     }
@@ -325,9 +326,15 @@ test("failed report fixtures keep the page and retryable learning states visible
   await page.goto("/admin/reports");
 
   await expect(page.getByRole("heading", { name: "Learning Reports" })).toBeVisible();
-  await expect(page.getByText(/Learning fixture unavailable: \/api\/admin\/flagged-users/)).toBeVisible();
-  await expect(page.getByText(/Learning fixture unavailable: \/api\/python-reports\/summary/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry flagged users" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Retry signup summary" })).toBeVisible();
+  const signupSection = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Signup summary" }),
+  });
+  await expect(signupSection.getByText("HTTP 503", { exact: true })).toBeVisible();
+  await expect(signupSection.getByRole("button", { name: "Retry signup summary" })).toBeVisible();
+  const flaggedSection = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Flagged users" }),
+  });
+  await expect(flaggedSection.getByText("HTTP 503", { exact: true })).toBeVisible();
+  await expect(flaggedSection.getByRole("button", { name: "Retry flagged users" })).toBeVisible();
   expect(unknownRequests).toEqual([]);
 });
