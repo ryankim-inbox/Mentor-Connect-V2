@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 
 interface WeeklyMatch {
@@ -76,20 +77,30 @@ function HorizontalBar({ label, value, max, color }: { label: string; value: num
   );
 }
 
-function PythonErrorBox({ envelope }: { envelope: PyEnvelope<unknown> }) {
+function PythonErrorBox({
+  envelope,
+  onRetry,
+}: {
+  envelope: PyEnvelope<unknown>;
+  onRetry: () => void;
+}) {
   const student = envelope.student_module;
   const moduleFile = student?.module ? `Python/${student.module}.py` : "the Python module";
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+    <div
+      className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      role="alert"
+    >
       <p className="font-semibold">Python analysis failed.</p>
       {student && (
         <p className="mt-1">
           {student.module}.py — {student.status ?? "error"}
-          {envelope.error ? `: ${envelope.error}` : ""}
         </p>
       )}
-      {!student && envelope.error && <p className="mt-1">{envelope.error}</p>}
       <p className="mt-2 text-xs">Fix {moduleFile} and run again.</p>
+      <button type="button" onClick={onRetry} className="mt-2 text-xs font-semibold underline">
+        Retry
+      </button>
     </div>
   );
 }
@@ -115,8 +126,11 @@ function PanelBody({
   }
   if (query.error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <p>{query.error instanceof Error ? query.error.message : String(query.error)}</p>
+      <div
+        className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        role="alert"
+      >
+        <p>{apiErrorMessage(query.error)}</p>
         <button type="button" onClick={() => void query.refetch()} className="mt-2 text-xs font-semibold underline">
           Retry
         </button>
@@ -124,7 +138,7 @@ function PanelBody({
     );
   }
   if (query.data && !(query.data.success ?? query.data.ok)) {
-    return <PythonErrorBox envelope={query.data} />;
+    return <PythonErrorBox envelope={query.data} onRetry={() => void query.refetch()} />;
   }
   if (isEmpty) {
     return <div className="py-8 text-center text-sm text-muted-foreground">{emptyText}</div>;
@@ -137,27 +151,27 @@ export default function Analytics() {
 
   const statusQuery = useQuery({
     queryKey: ["analysis", "status"],
-    queryFn: () => getPythonApi<null>("/api/analysis/status"),
+    queryFn: ({ signal }) => getPythonApi<null>("/api/analysis/status", { signal }),
     enabled: !!user,
   });
   const weeklyQuery = useQuery({
     queryKey: ["analytics", "weekly-matches"],
-    queryFn: () => getPythonApi<WeeklyMatch[]>("/api/analytics/weekly-matches"),
+    queryFn: ({ signal }) => getPythonApi<WeeklyMatch[]>("/api/analytics/weekly-matches", { signal }),
     enabled: !!user,
   });
   const subjectsQuery = useQuery({
     queryKey: ["analytics", "popular-subjects"],
-    queryFn: () => getPythonApi<SubjectDemand[]>("/api/analytics/popular-subjects"),
+    queryFn: ({ signal }) => getPythonApi<SubjectDemand[]>("/api/analytics/popular-subjects", { signal }),
     enabled: !!user,
   });
   const slotsQuery = useQuery({
     queryKey: ["analytics", "popular-time-slots"],
-    queryFn: () => getPythonApi<TimeSlotDemand[]>("/api/analytics/popular-time-slots"),
+    queryFn: ({ signal }) => getPythonApi<TimeSlotDemand[]>("/api/analytics/popular-time-slots", { signal }),
     enabled: !!user,
   });
   const mentorsQuery = useQuery({
     queryKey: ["analytics", "mentor-response-rates"],
-    queryFn: () => getPythonApi<MentorResponseRate[]>("/api/analytics/mentor-response-rates"),
+    queryFn: ({ signal }) => getPythonApi<MentorResponseRate[]>("/api/analytics/mentor-response-rates", { signal }),
     enabled: !!user,
   });
 
@@ -233,12 +247,28 @@ export default function Analytics() {
           <span className="font-semibold">Python/analysis.py: </span>
           {analysisModule.importable
             ? `importable (functions: ${(analysisModule.available_functions ?? []).join(", ") || "none"})`
-            : `${analysisModule.status ?? "unavailable"} — ${analysisModule.error ?? "unknown error"}`}
+            : analysisModule.status ?? "unavailable"}
           {!analysisModule.importable && (
             <span className="block mt-1 text-xs opacity-80">
               Python analysis failed. Fix Python/analysis.py and run again.
             </span>
           )}
+        </div>
+      )}
+
+      {statusQuery.error && (
+        <div
+          className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
+        >
+          <p>{apiErrorMessage(statusQuery.error)}</p>
+          <button
+            type="button"
+            onClick={() => void statusQuery.refetch()}
+            className="mt-2 text-xs font-semibold underline"
+          >
+            Retry
+          </button>
         </div>
       )}
 

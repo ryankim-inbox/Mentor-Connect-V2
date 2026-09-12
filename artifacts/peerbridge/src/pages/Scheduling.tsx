@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 import { SourceBadge } from "@/components/SourceBadge";
 
@@ -29,20 +30,27 @@ function envelopeSucceeded(envelope: PyEnvelope<unknown> | undefined): boolean {
 function PythonErrorBox({
   envelope,
   fallbackModule,
+  onRetry,
 }: {
   envelope: PyEnvelope<unknown>;
   fallbackModule: string;
+  onRetry: () => void;
 }) {
   const student = envelope.student_module;
   const moduleName = student?.module ?? fallbackModule;
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+    <div
+      className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      role="alert"
+    >
       <p className="font-semibold">Python scheduling failed.</p>
       <p className="mt-1">
         {moduleName}.py — {student?.status ?? "error"}
-        {envelope.error ? `: ${envelope.error}` : ""}
       </p>
       <p className="mt-2 text-xs">Fix Python/{moduleName}.py and run again.</p>
+      <button type="button" onClick={onRetry} className="mt-2 text-xs font-semibold underline">
+        Retry
+      </button>
     </div>
   );
 }
@@ -80,12 +88,12 @@ export default function Scheduling() {
 
   const statusQuery = useQuery({
     queryKey: ["scheduling", "status"],
-    queryFn: () => getPythonApi<null>("/api/scheduling/status"),
+    queryFn: ({ signal }) => getPythonApi<null>("/api/scheduling/status", { signal }),
     enabled: !!user,
   });
   const overviewQuery = useQuery({
     queryKey: ["scheduling", "overview"],
-    queryFn: () => getPythonApi<SchedulingOverview>("/api/scheduling/overview"),
+    queryFn: ({ signal }) => getPythonApi<SchedulingOverview>("/api/scheduling/overview", { signal }),
     enabled: !!user,
   });
 
@@ -105,7 +113,7 @@ export default function Scheduling() {
       setSuggestion(result);
     } catch (error) {
       setSuggestion(null);
-      setSuggestError(error instanceof Error ? error.message : String(error));
+      setSuggestError(apiErrorMessage(error));
     } finally {
       setIsSuggesting(false);
     }
@@ -125,6 +133,7 @@ export default function Scheduling() {
   }
 
   const module = statusQuery.data?.student_module;
+  const statusOk = envelopeSucceeded(statusQuery.data);
   const overviewOk = envelopeSucceeded(overviewQuery.data);
   const topSlots = overviewOk && Array.isArray(overviewQuery.data?.data?.topSlots)
     ? overviewQuery.data.data.topSlots
@@ -150,28 +159,36 @@ export default function Scheduling() {
           {module && (
             <span
               className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-                module.importable
+                statusOk
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                   : "bg-red-50 text-red-700 border-red-200"
               }`}
             >
-              {module.importable ? "importable" : module.status ?? "unavailable"}
+              {statusOk ? "importable" : module.status ?? "unavailable"}
             </span>
           )}
         </div>
         {statusQuery.isLoading ? (
           <div className="h-10 rounded-xl bg-muted animate-pulse" />
         ) : statusQuery.error ? (
-          <p className="text-sm text-red-700">
-            {statusQuery.error instanceof Error ? statusQuery.error.message : String(statusQuery.error)}
-          </p>
+          <div className="text-sm text-red-700" role="alert">
+            <p>{apiErrorMessage(statusQuery.error)}</p>
+            <button type="button" onClick={() => void statusQuery.refetch()} className="mt-2 text-xs font-semibold underline">
+              Retry
+            </button>
+          </div>
+        ) : statusQuery.data && !statusOk ? (
+          <PythonErrorBox
+            envelope={statusQuery.data}
+            fallbackModule="scheduling"
+            onRetry={() => void statusQuery.refetch()}
+          />
         ) : (
           <div className="text-sm text-muted-foreground space-y-1">
             <p>
               <span className="font-medium text-foreground">Available functions:</span>{" "}
               {(module?.available_functions ?? []).join(", ") || "none detected"}
             </p>
-            {module?.error && <p className="text-red-700">Error: {module.error}</p>}
           </div>
         )}
       </section>
@@ -200,11 +217,18 @@ export default function Scheduling() {
         {overviewQuery.isLoading ? (
           <div className="h-32 rounded-xl bg-muted animate-pulse" />
         ) : overviewQuery.error ? (
-          <p className="text-sm text-red-700">
-            {overviewQuery.error instanceof Error ? overviewQuery.error.message : String(overviewQuery.error)}
-          </p>
+          <div className="text-sm text-red-700" role="alert">
+            <p>{apiErrorMessage(overviewQuery.error)}</p>
+            <button type="button" onClick={() => void overviewQuery.refetch()} className="mt-2 text-xs font-semibold underline">
+              Retry
+            </button>
+          </div>
         ) : overviewQuery.data && !overviewOk ? (
-          <PythonErrorBox envelope={overviewQuery.data} fallbackModule="scheduling" />
+          <PythonErrorBox
+            envelope={overviewQuery.data}
+            fallbackModule="scheduling"
+            onRetry={() => void overviewQuery.refetch()}
+          />
         ) : topSlots.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Python returned no availability data.
@@ -271,14 +295,24 @@ export default function Scheduling() {
         </div>
 
         {suggestError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            role="alert"
+          >
             {suggestError}
+            <button type="button" onClick={() => void runSuggest()} className="ml-2 font-semibold underline">
+              Retry
+            </button>
           </div>
         )}
 
         {suggestion && !suggestOk && (
           <div className="mt-5">
-            <PythonErrorBox envelope={suggestion} fallbackModule="scheduling" />
+            <PythonErrorBox
+              envelope={suggestion}
+              fallbackModule="scheduling"
+              onRetry={() => void runSuggest()}
+            />
           </div>
         )}
 

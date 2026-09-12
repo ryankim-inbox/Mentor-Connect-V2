@@ -1,0 +1,348 @@
+{
+  "evidence": "disposable-local-https-python-smoke",
+  "providerVerified": false,
+  "provenance": {
+    "smokeScriptSha256": "592c188cef7441c8ee8733949e66a062af3d19625080a1496e07e09db53e470e",
+    "digestAlgorithm": "sha256(sorted(relative-path + NUL + file-sha256 + LF))",
+    "gatewayDistSha256": "ae63c3b58ac46f68d3b352dd04ca659292e3619281ee8d215a23e2f479fb4848",
+    "frontendDistSha256": "99818861cbd772e6b530f2d66170130ed0d8ca5e1e51df00fa6a535d18688465",
+    "sourceCommit": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+    "gatewayReleaseSha": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+    "gatewayEntrypointSha256": "0798c546cc4df0bb813acd51eaf14264168a0b3676ca8470df4653d3a1205f86",
+    "frontendManifestSha256": "5e1f890e9ea46cbf9a14bfbac51c5e63a54f709eeff218853369a49bde0013d2"
+  },
+  "trust": "ephemeral-certificate-SPKI-only",
+  "recordedAt": "2026-09-11T08:59:29.514Z",
+  "records": [
+    {
+      "task": "login.mentor",
+      "status": "pass",
+      "requestId": "e49c3cce-3c32-4be4-9189-90f0919ac84e",
+      "httpStatus": 200,
+      "elapsedMs": 938
+    },
+    {
+      "task": "login.mentee",
+      "status": "pass",
+      "requestId": "b3d5b730-7bd2-4f75-b7ec-98cf648053a3",
+      "httpStatus": 200,
+      "elapsedMs": 1213
+    },
+    {
+      "task": "profile.session",
+      "status": "pass",
+      "requestId": "2c9f14db-3892-4cfe-a392-a2a3919fa642",
+      "httpStatus": 200,
+      "elapsedMs": 20
+    },
+    {
+      "task": "profile.own-summary",
+      "status": "pass",
+      "requestId": "5ad44425-e3d2-425c-93f7-2d9ae018ccd0",
+      "httpStatus": 200,
+      "elapsedMs": 15
+    },
+    {
+      "task": "profile.other-summary",
+      "status": "pass",
+      "requestId": "78ff6b5d-2162-4c0a-9f6b-2344a86d82f2",
+      "httpStatus": 200,
+      "elapsedMs": 15
+    },
+    {
+      "task": "profile.self-patch",
+      "status": "pass",
+      "requestId": "ac09ad5e-860e-4906-a45f-545f97eb4497",
+      "httpStatus": 200,
+      "elapsedMs": 16
+    },
+    {
+      "task": "districts.list",
+      "status": "pass",
+      "requestId": "0933be42-b1f5-4b5f-a7ef-21dedb7f58b2",
+      "httpStatus": 200,
+      "elapsedMs": 11
+    },
+    {
+      "task": "requests.list",
+      "status": "pass",
+      "requestId": "e362f9cf-528b-488d-bb87-2572c6393534",
+      "httpStatus": 200,
+      "elapsedMs": 17
+    },
+    {
+      "task": "requests.create",
+      "status": "pass",
+      "requestId": "0ec2d842-8c55-4c45-aeb4-10d84fb7fbc5",
+      "httpStatus": 201,
+      "elapsedMs": 20
+    },
+    {
+      "task": "requests.read-created",
+      "status": "pass",
+      "requestId": "30dacf64-cc23-4f01-909a-905f2bb7a6b1",
+      "httpStatus": 200,
+      "elapsedMs": 17
+    },
+    {
+      "task": "requests.cleanup-created",
+      "status": "pass",
+      "requestId": "096178d2-890e-444e-b098-afdb121263fa",
+      "httpStatus": 204,
+      "elapsedMs": 19
+    },
+    {
+      "task": "chat.rooms",
+      "status": "pass",
+      "requestId": "ca457952-7fbf-4a21-a69b-af5d23231bd3",
+      "httpStatus": 200,
+      "elapsedMs": 17
+    },
+    {
+      "task": "chat.room-rest-send",
+      "status": "pass",
+      "requestId": "c1a5831d-0ca2-41e8-a0f6-256d843bb8b7",
+      "httpStatus": 201,
+      "elapsedMs": 18
+    },
+    {
+      "task": "chat.room-rest-other-read",
+      "status": "pass",
+      "requestId": "17c21c55-2624-4b9d-b7d6-66d39c683289",
+      "httpStatus": 200,
+      "elapsedMs": 15
+    },
+    {
+      "task": "chat.mission-4-room-ws",
+      "status": "pass",
+      "requestId": "88af831a-3dfa-4acc-976f-d57d6ddd725c",
+      "httpStatus": null,
+      "elapsedMs": 29
+    },
+    {
+      "task": "chat.room-ws-other-read-once",
+      "status": "pass",
+      "requestId": "6507c6e4-0796-43bc-b3da-ee39417351ea",
+      "httpStatus": 200,
+      "elapsedMs": 14
+    },
+    {
+      "task": "chat.dm-start",
+      "status": "pass",
+      "requestId": "cd4e5343-d72d-48c6-b927-7394f5e6f8dd",
+      "httpStatus": 200,
+      "elapsedMs": 17
+    },
+    {
+      "task": "chat.mission-7-dm-history",
+      "status": "learning-incomplete",
+      "envelope": {
+        "status": "todo",
+        "mission": 7
+      },
+      "requestId": "72f12fc5-5f0a-46bf-84e4-15fde2f5ed1a",
+      "httpStatus": 200,
+      "elapsedMs": 10
+    },
+    {
+      "task": "chat.mission-8-dm-ws",
+      "status": "learning-incomplete",
+      "envelope": {
+        "status": "todo",
+        "mission": 8
+      },
+      "requestId": "fe92aa0b-e7ca-4b6c-a25f-4f502b3ce5a3",
+      "httpStatus": null,
+      "elapsedMs": 11
+    },
+    {
+      "task": "matching.find_matches",
+      "status": "pass",
+      "envelope": {
+        "success": true,
+        "student_module": {}
+      },
+      "requestId": "bcea930d-303b-48d6-8c52-b086aaff3004",
+      "httpStatus": 200,
+      "elapsedMs": 148
+    },
+    {
+      "task": "analysis.status",
+      "status": "pass",
+      "envelope": {
+        "ok": true,
+        "success": true,
+        "source": "python",
+        "student_module": {
+          "module": "analysis",
+          "status": "import ok",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "3930b915-b1d8-4ab5-b897-5e367e6fffc9",
+      "httpStatus": 200,
+      "elapsedMs": 12
+    },
+    {
+      "task": "analysis.weekly-matches",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "analysis",
+          "status": "missing function",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "1d0d656e-9f50-48e5-99d7-96449a58f67f",
+      "httpStatus": 200,
+      "elapsedMs": 12
+    },
+    {
+      "task": "analysis.popular-subjects",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "analysis",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "a5d3f918-331d-4856-ac80-9bb1314a3fe0",
+      "httpStatus": 200,
+      "elapsedMs": 14
+    },
+    {
+      "task": "scheduling.popular-time-slots",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "scheduling",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "54b4183c-4e15-4c28-9785-e5fd48f2ec95",
+      "httpStatus": 200,
+      "elapsedMs": 15
+    },
+    {
+      "task": "analysis.mentor-response-rates",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "analysis",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "3b1b8a24-193f-4b7e-9ef7-59a72feb1ee7",
+      "httpStatus": 200,
+      "elapsedMs": 14
+    },
+    {
+      "task": "scheduling.status",
+      "status": "pass",
+      "envelope": {
+        "ok": true,
+        "success": true,
+        "source": "python",
+        "student_module": {
+          "module": "scheduling",
+          "status": "import ok",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "12b5a054-5b6f-4acd-aefb-dbc2841ff15f",
+      "httpStatus": 200,
+      "elapsedMs": 12
+    },
+    {
+      "task": "scheduling.overview",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "scheduling",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "2eaacaf6-97ff-4ef9-88af-2bdb11f8c000",
+      "httpStatus": 200,
+      "elapsedMs": 14
+    },
+    {
+      "task": "scheduling.suggest",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": false,
+        "success": false,
+        "source": "python",
+        "student_module": {
+          "module": "scheduling",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "8a2255ca-1cd3-4fc3-b0f8-06e50521ea29",
+      "httpStatus": 200,
+      "elapsedMs": 16
+    },
+    {
+      "task": "reports.summary",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": true,
+        "source": "adapter-fallback",
+        "student_module": {
+          "module": "reports",
+          "status": "syntax error",
+          "importable": false,
+          "called": false
+        }
+      },
+      "requestId": "45273ccc-d9ff-47e5-96fa-601703f3dd06",
+      "httpStatus": 200,
+      "elapsedMs": 17
+    },
+    {
+      "task": "reports.flagged-users",
+      "status": "learning-incomplete",
+      "envelope": {
+        "ok": true,
+        "source": "adapter-fallback",
+        "student_module": {
+          "module": "get_blocks",
+          "status": "runtime error",
+          "importable": true,
+          "called": false
+        }
+      },
+      "requestId": "0ac5634f-1973-4d9d-981f-18d51dbcb8b8",
+      "httpStatus": 200,
+      "elapsedMs": 18
+    }
+  ]
+}
