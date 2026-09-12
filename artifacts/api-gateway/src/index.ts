@@ -1,4 +1,12 @@
-import { createGatewayServer } from "./gateway.js";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { createGatewayServer, type GatewayServer } from "./gateway.js";
+import {
+  createReadinessChecker,
+  loadReleaseMetadata,
+  type ReadinessChecker,
+} from "./readiness.js";
 
 function resolvePort(value: string | undefined): number {
   const port = Number(value ?? "8080");
@@ -10,19 +18,67 @@ function resolvePort(value: string | undefined): number {
   return port;
 }
 
-const port = resolvePort(process.env.PORT);
-const server = createGatewayServer();
-
-server.listen(port, "0.0.0.0", () => {
-  console.info(JSON.stringify({ event: "gateway.listening", port }));
-});
-
-function shutdown(signal: string): void {
-  console.info(JSON.stringify({ event: "gateway.shutdown", signal }));
-  server.close(() => process.exit(0));
-
-  setTimeout(() => process.exit(1), 10_000).unref();
+export async function shutdownGateway(
+  server: GatewayServer,
+  readiness: ReadinessChecker,
+): Promise<void> {
+  readiness.setDraining();
+  server.closeWebSockets();
+  const httpClosed = new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  await Promise.all([httpClosed, readiness.close()]);
 }
 
-process.once("SIGINT", () => shutdown("SIGINT"));
-process.once("SIGTERM", () => shutdown("SIGTERM"));
+async function main(): Promise<void> {
+  const port = resolvePort(process.env.PORT);
+  const readiness = createReadinessChecker();
+  const server = createGatewayServer({
+    checkReadiness: readiness.checkReadiness,
+  });
+  const releaseMetadata = await loadReleaseMetadata();
+
+  server.listen(port, "0.0.0.0", () => {
+    console.info(
+      JSON.stringify({
+        event: "gateway.listening",
+        port,
+        releaseSha: releaseMetadata?.releaseSha ?? "unknown",
+      }),
+    );
+  });
+
+  let shuttingDown = false;
+  function shutdown(signal: string): void {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.info(JSON.stringify({ event: "gateway.shutdown", signal }));
+    const deadline = setTimeout(() => {
+      server.closeAllConnections();
+      process.exit(1);
+    }, 10_000);
+    deadline.unref();
+
+    void shutdownGateway(server, readiness).then(
+      () => {
+        clearTimeout(deadline);
+        process.exit(0);
+      },
+      () => {
+        clearTimeout(deadline);
+        server.closeAllConnections();
+        process.exit(1);
+      },
+    );
+  }
+
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+if (
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+) {
+  await main();
+}

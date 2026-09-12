@@ -1,0 +1,136 @@
+{
+  "evidence": "classroom-repository-final-verification",
+  "recordedAt": "2026-09-11T09:04:01.040Z",
+  "branch": "codex/learning-tasks-21-24",
+  "finalRuntimeSourceCommit": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+  "fullCommonPipeline": {
+    "command": "pnpm verify:release",
+    "sourceCommit": "0849c2f49654b9536c9deac157436fb46c442714",
+    "localReviewBase": "5fb771b43832f7fdf75199c52d534a396f72e912",
+    "originalFreezeBase": "98e1b04c292302bd25365ed7db4c5675671df337",
+    "node": "24.21.0",
+    "pnpm": "10.33.0",
+    "runs": [
+      {
+        "environment": "macOS",
+        "postgres": "16.13",
+        "exitCode": 0,
+        "browserPassed": 42
+      },
+      {
+        "environment": "Linux amd64 isolated clone",
+        "postgres": "16.15",
+        "exitCode": 0,
+        "browserPassed": 42
+      }
+    ],
+    "checks": {
+      "frozenInstall": true,
+      "typecheck": true,
+      "releaseBuild": true,
+      "runtimeAndFreezeSelfTests": 16,
+      "gatewayTests": 87,
+      "shieldTests": 8,
+      "dbPassed": 56,
+      "dbOptionalPythonSkipped": 1,
+      "disposableOperatorCommands": 4,
+      "frontendUnitTests": 3,
+      "generatedFileDrift": 0,
+      "restOperations": 48,
+      "websocketOperations": 2,
+      "boundaryChecks": 154,
+      "trackedSecretScanFiles": 487,
+      "secretAndMigrationPolicyTests": true,
+      "smokeSelfTests": 4,
+      "originalAndLocalReviewFreeze": true
+    }
+  },
+  "finalCorrectionVerification": {
+    "sourceCommit": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+    "changedScope": "ChatWidget and four browser fixture/test files; gateway, database, contracts, dependencies and CI unchanged",
+    "local": {
+      "typecheck": true,
+      "releaseBuild": true,
+      "browserPassed": 44,
+      "browserFailed": 0,
+      "duration": "1.2m"
+    },
+    "linux": {
+      "typecheck": true,
+      "releaseBuild": true,
+      "frontendUnitPassed": 3,
+      "browserPassed": 44,
+      "browserFailed": 0,
+      "duration": "1.7m",
+      "bothLocalFreezeChecks": true,
+      "clientAndGeneratedDrift": 0
+    }
+  },
+  "separateActualPythonDatabaseSuite": {
+    "passed": 57,
+    "skipped": 0,
+    "restoredTables": 13,
+    "localRestoreElapsedMs": 60
+  },
+  "actualPythonHttpsSmoke": {
+    "evidenceFile": "2026-09-11-classroom-python-smoke.json",
+    "counts": {
+      "pass": 20,
+      "learning-incomplete": 10,
+      "transport-failure": 0
+    },
+    "provenance": {
+      "smokeScriptSha256": "592c188cef7441c8ee8733949e66a062af3d19625080a1496e07e09db53e470e",
+      "digestAlgorithm": "sha256(sorted(relative-path + NUL + file-sha256 + LF))",
+      "gatewayDistSha256": "ae63c3b58ac46f68d3b352dd04ca659292e3619281ee8d215a23e2f479fb4848",
+      "frontendDistSha256": "99818861cbd772e6b530f2d66170130ed0d8ca5e1e51df00fa6a535d18688465",
+      "sourceCommit": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+      "gatewayReleaseSha": "b7c409c827b33e15e2880a6da68fb0d7b0817071",
+      "gatewayEntrypointSha256": "0798c546cc4df0bb813acd51eaf14264168a0b3676ca8470df4653d3a1205f86",
+      "frontendManifestSha256": "5e1f890e9ea46cbf9a14bfbac51c5e63a54f709eeff218853369a49bde0013d2"
+    },
+    "providerVerified": false
+  },
+  "protectedFiles": {
+    "count": 70,
+    "changed": 0
+  },
+  "releaseRecord": {
+    "currentMigrationId": "0002_integrity_constraints_indexes",
+    "runtimeLockSha256": "6bac2bf38641d479a031988307bdffaa4b28e1cdf28ebaaced9deeb572ec16ec",
+    "gatewayPolicySha256": "912bbaaee4e1e870c728ae66c23598ca5aaf21f382430da7cabbe414042a2944",
+    "migration0001Sha256": "0b02984bba7f186a5a6f99b49695110c2b023b001cdd207f84d2ed82646a5dab",
+    "migration0002Sha256": "53adbe10adee136e6217515201288a7c992234a19cc8b82368ea662364443e24",
+    "ledgerSha256": "23e2bcc624a19a9e66243ef1698de909b8e8fd649991f0d41162e68e23406333",
+    "origin": null,
+    "providerBackupReference": null,
+    "previousHostedReleaseReference": null
+  },
+  "review": {
+    "broadReviews": 1,
+    "consolidatedFinalFixWaves": 1,
+    "scopedFinalRereviews": 1,
+    "openCritical": 0,
+    "openImportant": 0,
+    "openMinor": 0,
+    "repositorySpec": "PASS",
+    "quality": "PASS"
+  },
+  "external": {
+    "actualPrBaseVerified": false,
+    "githubActionsRunVerified": false,
+    "providerVerified": false,
+    "mainIntegration": "pending; inherited Python/routers/chat_Answer.py differs at local origin/main merge-base 2fbf0a93374594b0f56dcc4e48a31c5db9970d7a",
+    "hostedOriginAndCredentials": "not supplied"
+  },
+  "notes": [
+    "Historical 40-test browser JSON retains its original d9dc8b07 provenance.",
+    "Actual Python learning-incomplete results are retained assignments, not fabricated business success.",
+    "Final documentation commit does not change runtime source."
+  ],
+  "finalTrackedSecretScan": {
+    "files": 493,
+    "passed": true,
+    "historyIncluded": false
+  }
+}

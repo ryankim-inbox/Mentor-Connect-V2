@@ -23,3 +23,10 @@ export const UpdateRequestBody = api.UpdateRequestBody;
 export type UpdateRequestBody = types.UpdateRequestBody;
 export const UpdateUserBody = api.UpdateUserBody;
 export type UpdateUserBody = types.UpdateUserBody;
+
+export const GetMatchesParams = api.GetMatchesParams;
+export type GetMatchesParams = types.GetMatchesParams;
+export const GetPracticeMatchingParams = api.GetPracticeMatchingParams;
+export type GetPracticeMatchingParams = types.GetPracticeMatchingParams;
+export const TestPracticeLocationsBody = api.TestPracticeLocationsBody;
+export type TestPracticeLocationsBody = types.TestPracticeLocationsBody;

@@ -1,126 +1,160 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  QUARANTINED_ROUTE_FAMILIES,
-  classifyQuarantinedRoute,
-  normalizeInboundPath,
-} from "../src/route-policy.js";
+import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
 
-test("normalizes encoded, matrix, dot-segment, slash, and case variants", () => {
-  const adminTargets = [
-    "/api/admin",
-    "/api/admin/",
-    "/api/admin/flagged-users",
-    "/api/admin%2Fflagged-users",
-    "/api/admin%252Fflagged-users",
-    "/api/a%64min/flagged-users",
-    "/api//admin//flagged-users",
-    "/api/safe/../admin/flagged-users",
-    "/api/admin;version=1/flagged-users",
-    "/API/ADMIN/FLAGGED-USERS",
-    "/api%5cadmin%5cflagged-users",
-  ];
+test("registers the complete 48-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 48);
+  assert.equal(
+    publicRoutes.filter((route) => route.authentication === "cookie").length,
+    1,
+  );
+  assert.equal(
+    publicRoutes.find((route) => route.template === "/api/auth/me")
+      ?.authentication,
+    "cookie",
+  );
+});
 
-  for (const target of adminTargets) {
-    assert.equal(classifyQuarantinedRoute(target), QUARANTINED_ROUTE_FAMILIES.admin, target);
+test("resolves every operation in the approved REST contract", () => {
+  const operations = [
+    ["POST", "/api/auth/register"],
+    ["POST", "/api/auth/login"],
+    ["POST", "/api/auth/logout"],
+    ["GET", "/api/auth/me"],
+    ["GET", "/api/users/1"],
+    ["PATCH", "/api/users/1"],
+    ["GET", "/api/districts?type=high_school&search=North"],
+    ["GET", "/api/districts/1"],
+    ["GET", "/api/tags"],
+    ["GET", "/api/requests?districtId=1&role=mentor&status=open&tagId=2"],
+    ["POST", "/api/requests"],
+    ["GET", "/api/requests/1"],
+    ["PATCH", "/api/requests/1"],
+    ["DELETE", "/api/requests/1"],
+    ["POST", "/api/requests/1/match"],
+    ["POST", "/api/reports"],
+    ["GET", "/api/blocks"],
+    ["POST", "/api/blocks"],
+    ["DELETE", "/api/blocks/1"],
+    ["GET", "/api/stats/overview"],
+    ["GET", "/api/stats/district/1"],
+    ["GET", "/api/matches/1?limit=20"],
+    ["POST", "/api/matches"],
+    ["GET", "/api/chat/rooms"],
+    ["GET", "/api/chat/rooms/1/messages"],
+    ["POST", "/api/chat/rooms/1/messages"],
+    ["GET", "/api/dms"],
+    ["POST", "/api/dms/start"],
+    ["GET", "/api/dms/1/messages"],
+    ["POST", "/api/dms/1/messages"],
+    ["GET", "/api/practice/status"],
+    ["GET", "/api/practice/matching/1?limit=1"],
+    ["GET", "/api/practice/locations/status"],
+    ["POST", "/api/practice/locations/test"],
+    ["GET", "/api/practice/blocks/status"],
+    ["GET", "/api/practice/raw/find_matches"],
+    ["GET", "/api/analysis/status"],
+    ["GET", "/api/analytics/weekly-matches"],
+    ["GET", "/api/analytics/popular-subjects"],
+    ["GET", "/api/analytics/popular-time-slots"],
+    ["GET", "/api/analytics/mentor-response-rates"],
+    ["GET", "/api/python-reports/status"],
+    ["GET", "/api/python-reports/summary"],
+    ["GET", "/api/scheduling/status"],
+    ["GET", "/api/scheduling/overview"],
+    ["GET", "/api/scheduling/suggest?user_a=1&user_b=2"],
+    ["GET", "/api/admin/flagged-users"],
+    ["GET", "/api/healthz"],
+  ] as const;
+
+  for (const [method, target] of operations) {
+    assert.ok(resolvePublicRoute(method, target), `${method} ${target}`);
   }
+});
 
-  const reportTargets = [
-    "/api/python-reports",
-    "/api/python-reports/",
-    "/api/python-reports%2Fsummary",
-    "/api/python%2Dreports/summary",
-    "/api/python-reports;preview=true/summary",
-    "/api/one/../python-reports/status",
+test("resolves literal and parameterized learning routes", () => {
+  assert.equal(
+    resolvePublicRoute("GET", "/api/requests?status=open&districtId=2")
+      ?.upstreamPath,
+    "/api/requests?status=open&districtId=2",
+  );
+  assert.equal(
+    resolvePublicRoute("DELETE", "/api/requests/2")?.family,
+    "requests",
+  );
+  assert.equal(
+    resolvePublicRoute("GET", "/api/practice/matching/1?limit=5")?.family,
+    "practice",
+  );
+  assert.equal(
+    resolvePublicRoute("GET", "/api/scheduling/suggest?user_a=1&user_b=2")
+      ?.family,
+    "scheduling",
+  );
+  assert.equal(resolvePublicRoute("GET", "/api/not-a-route"), undefined);
+  assert.throws(
+    () => resolvePublicRoute("GET", "/api/requests?status=open&status=closed"),
+    /invalid_query/,
+  );
+});
+
+test("preserves validated encoded query values using canonical serialization", () => {
+  assert.equal(
+    resolvePublicRoute(
+      "GET",
+      "/api/districts?search=San%20Jos%C3%A9&type=unified",
+    )?.upstreamPath,
+    "/api/districts?search=San+Jos%C3%A9&type=unified",
+  );
+  assert.equal(
+    resolvePublicRoute("GET", "/api/requests")?.upstreamPath,
+    "/api/requests",
+  );
+});
+
+test("rejects malformed, duplicate, unknown, and route-specific invalid query values", () => {
+  const invalidTargets = [
+    "/api/districts?search=%ZZ",
+    "/api/districts?unknown=1",
+    "/api/requests?districtId=0",
+    "/api/requests?districtId=01",
+    "/api/requests?tagId=9007199254740992",
+    "/api/requests?role=admin",
+    "/api/requests?status=pending",
+    "/api/matches/1?limit=0",
+    "/api/matches/1?limit=21",
+    "/api/districts?type=county",
+    "/api/districts?search=" + "é".repeat(101),
+    "/api/scheduling/suggest?user_a=1",
+    "/api/scheduling/suggest?user_b=2",
+    "/api/scheduling/suggest?user_a=1&user_b=2&user_b=3",
   ];
 
-  for (const target of reportTargets) {
-    assert.equal(classifyQuarantinedRoute(target), QUARANTINED_ROUTE_FAMILIES.pythonReports, target);
-  }
-
-  const matchTargets = [
-    "/api/matches",
-    "/api/matches/",
-    "/api/matches/42",
-    "/api/matches%2F42",
-    "/api/matches%252F42",
-    "/API/MATCHES/42",
-    "/api/matches;preview=true/42",
-    "/api/safe/../matches/42",
-  ];
-
-  for (const target of matchTargets) {
-    assert.equal(classifyQuarantinedRoute(target), QUARANTINED_ROUTE_FAMILIES.matches, target);
-  }
-
-  const practiceTargets = [
-    "/api/practice",
-    "/api/practice/",
-    "/api/practice/matching/42?limit=1000",
-    "/api/practice%2Fmatching%2F42",
-    "/api/practice%252Fmatching%252F42",
-    "/API/PRACTICE/MATCHING/42",
-    "/api/practice;preview=true/matching/42",
-    "/api/safe/../practice/matching/42",
-  ];
-
-  for (const target of practiceTargets) {
-    assert.equal(classifyQuarantinedRoute(target), QUARANTINED_ROUTE_FAMILIES.practice, target);
-  }
-
-  const requestMatchTargets = [
-    "/api/requests/42/match",
-    "/api/requests/42/match/",
-    "/api/requests/blocked-mentor/match",
-    "/api/requests%2F42%2Fmatch",
-    "/api/requests%252F42%252Fmatch",
-    "/API/REQUESTS/42/MATCH",
-    "/api/requests/42;preview=true/match",
-    "/api/requests/safe/../42/match",
-    "/api/requests/42/match/extra",
-  ];
-
-  for (const target of requestMatchTargets) {
-    assert.equal(
-      classifyQuarantinedRoute(target),
-      QUARANTINED_ROUTE_FAMILIES.requestMatch,
+  for (const target of invalidTargets) {
+    assert.throws(
+      () => resolvePublicRoute("GET", target),
+      /invalid_query/,
       target,
     );
   }
 });
 
-test("rejects malformed percent encodings before they can be proxied", () => {
-  assert.equal(normalizeInboundPath("/api/admin%2"), undefined);
-  assert.equal(normalizeInboundPath("/api/%25"), undefined);
-  assert.equal(normalizeInboundPath("/api/%00admin"), undefined);
-});
-
-test("does not over-block neighboring route names", () => {
-  assert.equal(classifyQuarantinedRoute("/api/administrator/flagged-users"), undefined);
-  assert.equal(classifyQuarantinedRoute("/api/python-reports-archive"), undefined);
-  assert.equal(classifyQuarantinedRoute("/api/matches-archive/42"), undefined);
-  assert.equal(classifyQuarantinedRoute("/api/practice-data/matching/42"), undefined);
-  assert.equal(classifyQuarantinedRoute("/api/requests/42/matching"), undefined);
-});
-
-test("classifies chat, direct-message, and WebSocket route-family variants", () => {
-  const cases: ReadonlyArray<readonly [string, string]> = [
-    ["/api/chat/rooms", "chat"],
-    ["/api/chat%2Frooms", "chat"],
-    ["/API/CHAT/ROOMS", "chat"],
-    ["/api/safe/../chat/rooms", "chat"],
-    ["/api/dms/1", "dms"],
-    ["/api/dms%2F1", "dms"],
-    ["/API/DMS/1", "dms"],
-    ["/api/safe/../dms/1", "dms"],
-    ["/ws/chat/1", "websocket"],
-    ["/ws%2Fchat%2F1", "websocket"],
-    ["/WS/CHAT/1", "websocket"],
-    ["/safe/../ws/chat/1", "websocket"],
-  ];
-
-  for (const [target, expectedFamily] of cases) {
-    assert.equal(classifyQuarantinedRoute(target), expectedFamily, target);
-  }
+test("accepts only canonical positive safe identifiers and raw module names", () => {
+  assert.equal(resolvePublicRoute("GET", "/api/users/1")?.resourceId, 1);
+  assert.equal(
+    resolvePublicRoute("GET", "/api/practice/raw/find_matches")?.family,
+    "practice",
+  );
+  assert.equal(resolvePublicRoute("GET", "/api/users/0"), undefined);
+  assert.equal(resolvePublicRoute("GET", "/api/users/01"), undefined);
+  assert.equal(
+    resolvePublicRoute("GET", "/api/users/9007199254740992"),
+    undefined,
+  );
+  assert.equal(
+    resolvePublicRoute("GET", "/api/practice/raw/not_a_module"),
+    undefined,
+  );
+  assert.equal(resolvePublicRoute("POST", "/api/healthz"), undefined);
 });
