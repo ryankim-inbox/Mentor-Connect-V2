@@ -1,3 +1,5 @@
+import { customFetch } from "@workspace/api-client-react";
+
 // Small fetch helper for the non-quarantined Python adapter endpoints.
 //
 // Those endpoints wrap the student practice files in Python/ and answer with
@@ -33,37 +35,27 @@ function isEnvelope(payload: unknown): payload is PyEnvelope<unknown> {
     typeof payload === "object" &&
     !Array.isArray(payload) &&
     "data" in payload &&
-    "source" in payload
+    typeof (payload as { ok?: unknown }).ok === "boolean" &&
+    typeof (payload as { feature?: unknown }).feature === "string" &&
+    ["python", "student-module", "adapter-fallback"].includes(
+      String((payload as { source?: unknown }).source),
+    ) &&
+    (!("success" in payload) ||
+      typeof (payload as { success?: unknown }).success === "boolean")
   );
 }
 
 export async function getPythonApi<T>(path: string, init?: RequestInit): Promise<PyEnvelope<T>> {
-  const response = await fetch(path, { credentials: "include", ...init });
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const detail =
-      payload !== null && typeof payload === "object" && "detail" in payload
-        ? String((payload as { detail: unknown }).detail)
-        : `HTTP ${response.status}`;
-    throw new Error(detail);
-  }
+  const payload = await customFetch<unknown>(path, {
+    ...init,
+    responseType: "json",
+    credentials: "include",
+  });
 
   if (isEnvelope(payload)) {
     return payload as PyEnvelope<T>;
   }
-
-  // Defensive: accept bare arrays/objects from endpoints that skip the envelope.
-  return {
-    ok: true,
-    success: true,
-    feature: path,
-    source: "python",
-    student_module: null,
-    student_result: null,
-    error: null,
-    data: payload as T,
-  };
+  throw new TypeError("Unexpected Python API response");
 }
 
 export function relativeTime(iso: string | null | undefined): string {

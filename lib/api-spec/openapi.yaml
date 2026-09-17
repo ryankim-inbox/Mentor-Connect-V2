@@ -24,19 +24,15 @@ tags:
   - name: stats
     description: Statistics and dashboard operations
   - name: chat
-    description: |
-      Chat learning scaffold (rooms + direct messages). Every endpoint in this
-      group is a student TODO in Python/routers/chat.py: until implemented it
-      returns a ScaffoldTodo envelope instead of the documented data shape,
-      and the auth checks described here do not exist yet. Companion
-      WebSocket stubs live at /ws/chat/rooms/{roomId} and
-      /ws/dms/{conversationId} (WebSockets cannot be modeled in OpenAPI).
-      See docs/STUDENT_CHAT_BACKEND_GUIDE.md for the mission-by-mission plan.
+    description: Python chat learning routes preserve both implemented
+      room/conversation results and unfinished ScaffoldTodo responses. WebSocket
+      contracts are documented separately in docs/runbooks/api-gateway.md.
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
+      tags:
+        - health
       summary: Health check
       responses:
         "200":
@@ -45,11 +41,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security: []
   /auth/register:
     post:
       operationId: register
-      tags: [auth]
+      tags:
+        - auth
       summary: Register with school email
       requestBody:
         required: true
@@ -64,17 +72,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          $ref: "#/components/responses/Error400"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security: []
   /auth/login:
     post:
       operationId: login
-      tags: [auth]
+      tags:
+        - auth
       summary: Login with school email
       requestBody:
         required: true
@@ -89,17 +107,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security: []
   /auth/logout:
     post:
       operationId: logout
-      tags: [auth]
+      tags:
+        - auth
       summary: Logout current user
       responses:
         "200":
@@ -108,11 +136,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /auth/me:
     get:
       operationId: getMe
-      tags: [auth]
+      tags:
+        - auth
       summary: Get current user
       responses:
         "200":
@@ -121,23 +164,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "401":
-          description: Not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /users/{id}:
     get:
       operationId: getUser
-      tags: [users]
-      summary: Get the authenticated user's minimum profile
-      description: |
-        The gateway accepts this operation only when the authenticated session
-        user id exactly equals the canonical path id. It returns 401 when no
-        valid session exists and 404 for another user's id, without forwarding
-        the profile request upstream.
+      tags:
+        - users
+      summary: Get a minimum profile summary
+      description:
+        A signed-in user may request any canonical user id. The gateway
+        exposes only id, name, subjects, and createdAt; the self-only rule
+        applies to PATCH.
       parameters:
         - name: id
           in: path
@@ -146,27 +197,32 @@ paths:
             type: integer
       responses:
         "200":
-          description: Minimum self profile
+          description: Minimum profile summary
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SelfProfile"
+                $ref: "#/components/schemas/ProfileSummary"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "401":
-          description: Not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Error401"
         "404":
-          description: Not found or not owned by the authenticated session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     patch:
       operationId: updateUser
-      tags: [users]
+      tags:
+        - users
       summary: Update the authenticated user's allowed profile fields
       description: |
         The gateway accepts only name, bio, and subjects for the authenticated
@@ -190,37 +246,42 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SelfProfile"
+                $ref: "#/components/schemas/ProfileSummary"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "400":
-          description: Invalid or disallowed profile update
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Error400"
         "401":
-          description: Not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Error401"
         "404":
-          description: Not found or not owned by the authenticated session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /districts:
     get:
       operationId: listDistricts
-      tags: [districts]
+      tags:
+        - districts
       summary: List all school districts
       parameters:
         - name: type
           in: query
           schema:
             type: string
-            enum: [high_school, all]
+            enum:
+              - high_school
+              - all
         - name: search
           in: query
           schema:
@@ -234,11 +295,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/District"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security: []
   /districts/{id}:
     get:
       operationId: getDistrict
-      tags: [districts]
+      tags:
+        - districts
       summary: Get a district channel
       parameters:
         - name: id
@@ -253,11 +326,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/District"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /requests:
     get:
       operationId: listRequests
-      tags: [requests]
+      tags:
+        - requests
       summary: List mentorship requests
       parameters:
         - name: districtId
@@ -272,12 +362,17 @@ paths:
           in: query
           schema:
             type: string
-            enum: [mentor, mentee]
+            enum:
+              - mentor
+              - mentee
         - name: status
           in: query
           schema:
             type: string
-            enum: [open, matched, closed]
+            enum:
+              - open
+              - matched
+              - closed
       responses:
         "200":
           description: List of requests
@@ -287,10 +382,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MentorshipRequest"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     post:
       operationId: createRequest
-      tags: [requests]
+      tags:
+        - requests
       summary: Post a mentorship request
       requestBody:
         required: true
@@ -305,11 +415,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MentorshipRequest"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /requests/{id}:
     get:
       operationId: getRequest
-      tags: [requests]
+      tags:
+        - requests
       summary: Get a mentorship request
       parameters:
         - name: id
@@ -324,10 +451,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MentorshipRequest"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     patch:
       operationId: updateRequest
-      tags: [requests]
+      tags:
+        - requests
       summary: Update a mentorship request
       parameters:
         - name: id
@@ -348,10 +492,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MentorshipRequest"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     delete:
       operationId: deleteRequest
-      tags: [requests]
+      tags:
+        - requests
       summary: Delete a mentorship request
       parameters:
         - name: id
@@ -362,11 +527,30 @@ paths:
       responses:
         "204":
           description: Deleted
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /requests/{id}/match:
     post:
       operationId: matchRequest
-      tags: [requests]
+      tags:
+        - requests
       summary: Match/respond to a mentorship request
       parameters:
         - name: id
@@ -381,11 +565,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MentorshipRequest"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /tags:
     get:
       operationId: listTags
-      tags: [tags]
+      tags:
+        - tags
       summary: List all tags
       responses:
         "200":
@@ -396,11 +597,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Tag"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /reports:
     post:
       operationId: createReport
-      tags: [reports]
+      tags:
+        - reports
       summary: Report a user
       requestBody:
         required: true
@@ -415,11 +631,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /blocks:
     get:
       operationId: listBlocks
-      tags: [reports]
+      tags:
+        - reports
       summary: List blocked users
       responses:
         "200":
@@ -430,10 +663,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/BlockedUser"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     post:
       operationId: blockUser
-      tags: [reports]
+      tags:
+        - reports
       summary: Block a user
       requestBody:
         required: true
@@ -448,11 +696,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /blocks/{blockedUserId}:
     delete:
       operationId: unblockUser
-      tags: [reports]
+      tags:
+        - reports
       summary: Unblock a user
       parameters:
         - name: blockedUserId
@@ -463,11 +728,28 @@ paths:
       responses:
         "204":
           description: Unblocked
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /stats/overview:
     get:
       operationId: getStatsOverview
-      tags: [stats]
+      tags:
+        - stats
       summary: Platform statistics overview
       responses:
         "200":
@@ -476,11 +758,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StatsOverview"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security: []
   /stats/district/{id}:
     get:
       operationId: getDistrictStats
-      tags: [stats]
+      tags:
+        - stats
       summary: Stats for a specific district
       parameters:
         - name: id
@@ -495,11 +789,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DistrictStats"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /chat/rooms:
     get:
       operationId: listChatRooms
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) List the current user's chat rooms
       description: |
         Student TODO — intended contract: the global room plus the current
@@ -515,11 +826,28 @@ paths:
                     items:
                       $ref: "#/components/schemas/ChatRoom"
                   - $ref: "#/components/schemas/ScaffoldTodo"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /chat/rooms/{roomId}/messages:
     get:
       operationId: listChatRoomMessages
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) Message history for a chat room
       description: |
         Student TODO — intended contract: recent messages (oldest first,
@@ -542,9 +870,29 @@ paths:
                     items:
                       $ref: "#/components/schemas/ChatMessage"
                   - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     post:
       operationId: sendChatRoomMessage
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) Post a message into a chat room
       description: |
         Student TODO — intended contract: validate membership + body text,
@@ -568,18 +916,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ScaffoldTodo"
+                oneOf:
+                  - $ref: "#/components/schemas/ChatMessage"
+                  - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "201":
           description: Message created (once the student implements it)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatMessage"
-
+                oneOf:
+                  - $ref: "#/components/schemas/ChatMessage"
+                  - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /dms:
     get:
       operationId: listDmConversations
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) List the current user's DM conversations
       description: |
         Student TODO — intended contract: every conversation the current user
@@ -596,11 +972,30 @@ paths:
                     items:
                       $ref: "#/components/schemas/DmConversation"
                   - $ref: "#/components/schemas/ScaffoldTodo"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /dms/start:
     post:
       operationId: startDmConversation
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) Start (or reuse) a DM conversation
       description: |
         Student TODO — intended contract: return the existing conversation
@@ -621,11 +1016,32 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/DmConversation"
                   - $ref: "#/components/schemas/ScaffoldTodo"
-
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
   /dms/{conversationId}/messages:
     get:
       operationId: listDmMessages
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) Message history for a DM conversation
       description: |
         Student TODO — intended contract: participants only (403 otherwise),
@@ -648,9 +1064,29 @@ paths:
                     items:
                       $ref: "#/components/schemas/DmMessage"
                   - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
     post:
       operationId: sendDmMessage
-      tags: [chat]
+      tags:
+        - chat
       summary: (scaffold) Send a DM
       description: |
         Student TODO — intended contract: participants only, validate body
@@ -674,14 +1110,650 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ScaffoldTodo"
+                oneOf:
+                  - $ref: "#/components/schemas/DmMessage"
+                  - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
         "201":
           description: Message created (once the student implements it)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DmMessage"
-
+                oneOf:
+                  - $ref: "#/components/schemas/DmMessage"
+                  - $ref: "#/components/schemas/ScaffoldTodo"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /matches/{questionId}:
+    get:
+      operationId: getMatches
+      tags:
+        - matches
+      summary: getMatches
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchingResult"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+      security:
+        - cookieAuth: []
+  /matches:
+    post:
+      operationId: postMatches
+      tags:
+        - matches
+      summary: postMatches
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchingResult"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchRequest"
+      security:
+        - cookieAuth: []
+  /practice/status:
+    get:
+      operationId: getPracticeStatus
+      tags:
+        - practice
+      summary: getPracticeStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeStatus"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /practice/matching/{questionId}:
+    get:
+      operationId: getPracticeMatching
+      tags:
+        - practice
+      summary: getPracticeMatching
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchingResult"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+      security:
+        - cookieAuth: []
+  /practice/locations/status:
+    get:
+      operationId: getPracticeLocationsStatus
+      tags:
+        - practice
+      summary: getPracticeLocationsStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeStatus"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /practice/locations/test:
+    post:
+      operationId: testPracticeLocations
+      tags:
+        - practice
+      summary: testPracticeLocations
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeStatus"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: JSON object; gateway limits body to 16 KiB.
+      security:
+        - cookieAuth: []
+  /practice/blocks/status:
+    get:
+      operationId: getPracticeBlocksStatus
+      tags:
+        - practice
+      summary: getPracticeBlocksStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeStatus"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /practice/raw/{moduleName}:
+    get:
+      operationId: getPracticeRawModule
+      tags:
+        - practice
+      summary: getPracticeRawModule
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeStatus"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      parameters:
+        - name: moduleName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - find_matches
+              - locations
+              - get_blocks
+      security:
+        - cookieAuth: []
+  /analysis/status:
+    get:
+      operationId: getAnalysisStatus
+      tags:
+        - analysis
+      summary: getAnalysisStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /analytics/weekly-matches:
+    get:
+      operationId: getWeeklyMatches
+      tags:
+        - analytics
+      summary: getWeeklyMatches
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /analytics/popular-subjects:
+    get:
+      operationId: getPopularSubjects
+      tags:
+        - analytics
+      summary: getPopularSubjects
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /analytics/popular-time-slots:
+    get:
+      operationId: getPopularTimeSlots
+      tags:
+        - analytics
+      summary: getPopularTimeSlots
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /analytics/mentor-response-rates:
+    get:
+      operationId: getMentorResponseRates
+      tags:
+        - analytics
+      summary: getMentorResponseRates
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /python-reports/status:
+    get:
+      operationId: getPythonReportsStatus
+      tags:
+        - python-reports
+      summary: getPythonReportsStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /python-reports/summary:
+    get:
+      operationId: getPythonReportsSummary
+      tags:
+        - python-reports
+      summary: getPythonReportsSummary
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /scheduling/status:
+    get:
+      operationId: getSchedulingStatus
+      tags:
+        - scheduling
+      summary: getSchedulingStatus
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /scheduling/overview:
+    get:
+      operationId: getSchedulingOverview
+      tags:
+        - scheduling
+      summary: getSchedulingOverview
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /scheduling/suggest:
+    get:
+      operationId: getSchedulingSuggestions
+      tags:
+        - scheduling
+      summary: getSchedulingSuggestions
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PyEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      parameters:
+        - name: user_a
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: user_b
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      security:
+        - cookieAuth: []
+  /admin/flagged-users:
+    get:
+      operationId: getFlaggedUsers
+      tags:
+        - admin
+      summary: getFlaggedUsers
+      responses:
+        "200":
+          description: Python learning result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEnvelope"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
 components:
   schemas:
     HealthStatus:
@@ -689,22 +1761,24 @@ components:
       properties:
         status:
           type: string
-      required: [status]
-
+      required:
+        - status
     ErrorResponse:
       type: object
       properties:
-        error:
+        error: &a1
           type: string
-      required: [error]
-
+          minLength: 1
+      required:
+        - error
+      additionalProperties: false
     MessageResponse:
       type: object
       properties:
         message:
           type: string
-      required: [message]
-
+      required:
+        - message
     RegisterBody:
       type: object
       properties:
@@ -717,11 +1791,18 @@ components:
           type: string
         role:
           type: string
-          enum: [mentor, mentee, both]
+          enum:
+            - mentor
+            - mentee
+            - both
         districtId:
           type: integer
-      required: [email, name, password, role, districtId]
-
+      required:
+        - email
+        - name
+        - password
+        - role
+        - districtId
     LoginBody:
       type: object
       properties:
@@ -729,8 +1810,9 @@ components:
           type: string
         password:
           type: string
-      required: [email, password]
-
+      required:
+        - email
+        - password
     AuthResponse:
       type: object
       properties:
@@ -738,8 +1820,9 @@ components:
           $ref: "#/components/schemas/User"
         message:
           type: string
-      required: [user, message]
-
+      required:
+        - user
+        - message
     User:
       type: object
       properties:
@@ -751,13 +1834,20 @@ components:
           type: string
         role:
           type: string
-          enum: [mentor, mentee, both]
+          enum:
+            - mentor
+            - mentee
+            - both
         districtId:
           type: integer
         districtName:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
         bio:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
         subjects:
           type: array
           items:
@@ -766,33 +1856,20 @@ components:
           type: boolean
         createdAt:
           type: string
-      required: [id, email, name, role, districtId, isVerified, createdAt, subjects]
-
-    SelfProfile:
-      type: object
-      description: |
-        Gateway-redacted response for GET/PATCH /users/{id}. This schema is
-        never a public directory profile: only the session owner can receive it.
-      additionalProperties: false
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-          maxLength: 120
-        subjects:
-          type: array
-          maxItems: 20
-          items:
-            type: string
-            maxLength: 80
-        createdAt:
-          type: string
-      required: [id, name, subjects, createdAt]
-
+      required:
+        - id
+        - email
+        - name
+        - role
+        - districtId
+        - isVerified
+        - createdAt
+        - subjects
     UpdateUserBody:
       type: object
-      description: Allowlisted self-profile fields. Other fields are rejected by the gateway.
+      description:
+        Allowlisted self-profile fields. Other fields are rejected by the
+        gateway.
       additionalProperties: false
       minProperties: 1
       properties:
@@ -801,7 +1878,9 @@ components:
           minLength: 1
           maxLength: 120
         bio:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
           maxLength: 2000
         subjects:
           type: array
@@ -810,7 +1889,6 @@ components:
             type: string
             minLength: 1
             maxLength: 80
-
     District:
       type: object
       properties:
@@ -822,13 +1900,22 @@ components:
           type: string
         type:
           type: string
-          enum: [high_school, unified, elementary, other]
+          enum:
+            - high_school
+            - unified
+            - elementary
+            - other
         memberCount:
           type: integer
         openRequestCount:
           type: integer
-      required: [id, name, county, type, memberCount, openRequestCount]
-
+      required:
+        - id
+        - name
+        - county
+        - type
+        - memberCount
+        - openRequestCount
     Tag:
       type: object
       properties:
@@ -840,8 +1927,11 @@ components:
           type: string
         requestCount:
           type: integer
-      required: [id, name, color, requestCount]
-
+      required:
+        - id
+        - name
+        - color
+        - requestCount
     MentorshipRequest:
       type: object
       properties:
@@ -853,7 +1943,9 @@ components:
           type: string
         authorRole:
           type: string
-          enum: [mentor, mentee]
+          enum:
+            - mentor
+            - mentee
         districtId:
           type: integer
         districtName:
@@ -868,20 +1960,39 @@ components:
             $ref: "#/components/schemas/Tag"
         status:
           type: string
-          enum: [open, matched, closed]
+          enum:
+            - open
+            - matched
+            - closed
         matchedUserId:
-          type: ["integer", "null"]
+          type:
+            - integer
+            - "null"
         matchedUserName:
-          type: ["string", "null"]
+          type:
+            - string
+            - "null"
         createdAt:
           type: string
         preferredTimes:
-          description: Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').
+          description:
+            Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings
+            (e.g. 'Mon 17:00').
           type: array
           items:
             type: string
-      required: [id, authorId, authorName, authorRole, districtId, districtName, title, description, tags, status, createdAt]
-
+      required:
+        - id
+        - authorId
+        - authorName
+        - authorRole
+        - districtId
+        - districtName
+        - title
+        - description
+        - tags
+        - status
+        - createdAt
     CreateRequestBody:
       type: object
       properties:
@@ -897,16 +2008,24 @@ components:
             type: integer
         role:
           type: string
-          enum: [mentor, mentee]
+          enum:
+            - mentor
+            - mentee
         preferredTimes:
-          description: Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
+          description:
+            Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun
+            23:00), no duplicates.
           type: array
           maxItems: 30
           items:
             type: string
-            pattern: "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$"
-      required: [districtId, title, description, tagIds, role]
-
+            pattern: ^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$
+      required:
+        - districtId
+        - title
+        - description
+        - tagIds
+        - role
     UpdateRequestBody:
       type: object
       properties:
@@ -920,8 +2039,10 @@ components:
             type: integer
         status:
           type: string
-          enum: [open, matched, closed]
-
+          enum:
+            - open
+            - matched
+            - closed
     CreateReportBody:
       type: object
       properties:
@@ -929,18 +2050,26 @@ components:
           type: integer
         reason:
           type: string
-          enum: [spam, harassment, inappropriate, fake_account, other]
+          enum:
+            - spam
+            - harassment
+            - inappropriate
+            - fake_account
+            - other
         description:
-          type: ["string", "null"]
-      required: [reportedUserId, reason]
-
+          type:
+            - string
+            - "null"
+      required:
+        - reportedUserId
+        - reason
     BlockUserBody:
       type: object
       properties:
         blockedUserId:
           type: integer
-      required: [blockedUserId]
-
+      required:
+        - blockedUserId
     BlockedUser:
       type: object
       properties:
@@ -952,8 +2081,11 @@ components:
           type: string
         createdAt:
           type: string
-      required: [id, blockedUserId, blockedUserName, createdAt]
-
+      required:
+        - id
+        - blockedUserId
+        - blockedUserName
+        - createdAt
     StatsOverview:
       type: object
       properties:
@@ -973,8 +2105,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Tag"
-      required: [totalUsers, totalMentors, totalMentees, totalDistricts, openRequests, successfulMatches, topTags]
-
+      required:
+        - totalUsers
+        - totalMentors
+        - totalMentees
+        - totalDistricts
+        - openRequests
+        - successfulMatches
+        - topTags
     DistrictStats:
       type: object
       properties:
@@ -996,8 +2134,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Tag"
-      required: [districtId, districtName, memberCount, mentorCount, menteeCount, openRequests, matchedRequests, topTags]
-
+      required:
+        - districtId
+        - districtName
+        - memberCount
+        - mentorCount
+        - menteeCount
+        - openRequests
+        - matchedRequests
+        - topTags
     ScaffoldTodo:
       type: object
       description: |
@@ -1006,87 +2151,427 @@ components:
       properties:
         status:
           type: string
-          enum: [todo]
+          enum:
+            - todo
         mission:
           type: integer
           description: Mission number in docs/STUDENT_CHAT_BACKEND_GUIDE.md
         message:
           type: string
+          maxLength: 1000
         guide:
           type: string
-      required: [status, message]
-
+          maxLength: 500
+      required:
+        - status
+        - message
     ChatRoom:
       type: object
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         type:
           type: string
-          enum: [global, district]
+          enum:
+            - global
+            - district
         districtId:
-          type: ["integer", "null"]
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 9007199254740991
         name:
           type: string
-      required: [id, type, districtId, name]
-
+          minLength: 1
+      required:
+        - id
+        - type
+        - districtId
+        - name
     ChatMessage:
       type: object
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         roomId:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         senderId:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         senderName:
           type: string
+          minLength: 1
         body:
           type: string
         createdAt:
           type: string
-      required: [id, roomId, senderId, senderName, body, createdAt]
-
+          minLength: 1
+          maxLength: 128
+      required:
+        - id
+        - roomId
+        - senderId
+        - senderName
+        - body
+        - createdAt
     SendChatMessageBody:
       type: object
       properties:
         body:
           type: string
-      required: [body]
-
+      required:
+        - body
     DmConversation:
       type: object
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         otherUserId:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         otherUserName:
           type: string
+          minLength: 1
         createdAt:
           type: string
-      required: [id, otherUserId, otherUserName, createdAt]
-
+          minLength: 1
+          maxLength: 128
+      required:
+        - id
+        - otherUserId
+        - otherUserName
+        - createdAt
     StartDmBody:
       type: object
       properties:
         toUserId:
           type: integer
-      required: [toUserId]
-
+      required:
+        - toUserId
     DmMessage:
       type: object
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         conversationId:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         senderId:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         body:
           type: string
         createdAt:
           type: string
+          minLength: 1
+          maxLength: 128
         readAt:
-          type: ["string", "null"]
-      required: [id, conversationId, senderId, body, createdAt, readAt]
+          type:
+            - string
+            - "null"
+          minLength: 1
+          maxLength: 128
+      required:
+        - id
+        - conversationId
+        - senderId
+        - body
+        - createdAt
+        - readAt
+    ProfileSummary:
+      type: object
+      description: Minimum profile summary for any signed-in user; PATCH is self only.
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        name:
+          type: string
+          maxLength: 120
+          minLength: 1
+        subjects:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 80
+            minLength: 1
+        createdAt:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+        - id
+        - name
+        - subjects
+        - createdAt
+    StudentModule:
+      type: object
+      properties:
+        module: *a1
+        attempted_function: &a3
+          type:
+            - string
+            - "null"
+          minLength: 1
+          maxLength: 128
+        importable: &a2
+          type: boolean
+        called: *a2
+        status: *a1
+        error: *a3
+        available_functions:
+          type: array
+          items: *a1
+      required:
+        - module
+        - status
+    PyEnvelope:
+      type: object
+      properties:
+        ok: *a2
+        success: *a2
+        feature: *a1
+        source: &a8
+          type: string
+          enum:
+            - python
+            - student-module
+            - adapter-fallback
+        student_module: &a9
+          anyOf:
+            - $ref: "#/components/schemas/StudentModule"
+            - type: "null"
+        error: *a3
+        data: {}
+      required: &a10
+        - ok
+        - source
+        - student_module
+        - data
+    PracticeStatus:
+      type: object
+      properties:
+        success: *a2
+        feature: *a1
+        module_name: *a1
+        status: *a1
+        message: *a1
+        error: *a3
+        available_functions: &a4
+          type: array
+          items: *a1
+        is_todo: *a2
+        is_real: *a2
+        function_called: *a1
+        result: &a5 {}
+        engines: &a6
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PracticeStatus"
+      required:
+        - success
+        - status
+    MatchingResult:
+      type: object
+      properties:
+        success: *a2
+        feature: *a1
+        module_name: *a1
+        status: *a1
+        message: *a1
+        error: *a3
+        available_functions: *a4
+        is_todo: *a2
+        is_real: *a2
+        function_called: *a1
+        result: *a5
+        engines: *a6
+        question_id: &a7
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 20
+        matches:
+          type: array
+          items: {}
+      required:
+        - success
+        - status
+        - question_id
+        - limit
+        - matches
+    MatchRequest:
+      type: object
+      properties:
+        question_id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+      required:
+        - question_id
+    FlaggedUser:
+      type: object
+      properties:
+        userId: *a7
+        name: *a1
+        reportCount: *a7
+        blockCount: *a7
+        status: *a1
+        lastReportedAt: *a3
+        topReasons:
+          type: array
+          items: *a1
+      required:
+        - userId
+        - name
+        - reportCount
+        - blockCount
+        - status
+        - lastReportedAt
+        - topReasons
+      additionalProperties: false
+    AdminEnvelope:
+      type: object
+      properties:
+        ok: *a2
+        success: *a2
+        feature: *a1
+        source: *a8
+        student_module: *a9
+        error: *a3
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlaggedUser"
+      required: *a10
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: peerbridge_session
+  headers:
+    X-Request-Id:
+      description: Gateway correlation identifier.
+      schema: *a1
+    Retry-After:
+      description: Seconds until a rate-limited client may retry.
+      schema: *a1
+  responses:
+    Error400:
+      description: Invalid input
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error401:
+      description: Unauthorized
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error403:
+      description: Forbidden
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error404:
+      description: Not found
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error409:
+      description: Conflict
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error422:
+      description: Invalid input
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error429:
+      description: Rate limited
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error502:
+      description: Invalid or unavailable upstream
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error503:
+      description: Maintenance or unavailable
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Error504:
+      description: Upstream timeout
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

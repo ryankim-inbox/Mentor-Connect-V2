@@ -1,0 +1,30 @@
+{
+  "evidence": "production-bundle-loopback-fixture-browser-suite",
+  "recordedAt": "2026-09-11T08:31:52.247Z",
+  "provenance": {
+    "digestAlgorithm": "sha256(sorted(relative-path + NUL + file-sha256 + LF))",
+    "gatewayDistSha256": "f81d8407770d1a7b1954b98977fe639e11f03e977c526519f1533ef6917630d5",
+    "frontendDistSha256": "c8b4b836839b25310bd5d55d77fde9fd839bbaf149bad01d1439fe6d61665fbb",
+    "sourceCommit": "d9dc8b073526c51f3c882cd00a6206b32ec97f6d",
+    "gatewayReleaseSha": "d9dc8b073526c51f3c882cd00a6206b32ec97f6d",
+    "gatewayEntrypointSha256": "0798c546cc4df0bb813acd51eaf14264168a0b3676ca8470df4653d3a1205f86",
+    "frontendManifestSha256": "2c30041ec7fb984b873b7d6161139407f6a4af35d674c0a35878fd649df23ace"
+  },
+  "command": "pnpm e2e",
+  "passed": 40,
+  "failed": 0,
+  "retries": 0,
+  "workers": 1,
+  "suites": {
+    "auth": 19,
+    "classroomFlow": 5,
+    "learningStates": 9,
+    "learningSurface": 7
+  },
+  "duration": "1.2m",
+  "smokeSelfTests": {
+    "command": "node --test scripts/smoke-classroom.test.mjs",
+    "passed": 3,
+    "failed": 0
+  }
+}

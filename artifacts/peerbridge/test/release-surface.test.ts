@@ -6,7 +6,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { getFeatureForAppLocation } from "../src/lib/release-flags";
+import { featureFlags, releaseSurface } from "../src/lib/release-flags";
 
 const execFile = promisify(execFileCallback);
 const rootDir = path.resolve(
@@ -14,7 +14,7 @@ const rootDir = path.resolve(
   "../../..",
 );
 
-test("production bundle omits every endpoint outside the reduced release surface", async () => {
+test("production bundle has valid emitted references and no private markers", async () => {
   const result = await execFile(
     process.execPath,
     [path.join(rootDir, "scripts/verify-peerbridge-release-bundle.mjs")],
@@ -23,7 +23,7 @@ test("production bundle omits every endpoint outside the reduced release surface
   assert.match(result.stdout, /peerbridge release bundle check passed/);
 });
 
-test("disabled chat code retains no browser message draft", async () => {
+test("chat retains no browser message draft", async () => {
   const chatWidgetSource = await readFile(
     new URL("../src/components/ChatWidget.tsx", import.meta.url),
     "utf8",
@@ -31,22 +31,18 @@ test("disabled chat code retains no browser message draft", async () => {
   assert.doesNotMatch(chatWidgetSource, /(?:localStorage|sessionStorage)/);
 });
 
-test("production route classifier closes every core deep link before auth", () => {
-  for (const location of [
-    "/register",
-    "/dashboard",
-    "/districts",
-    "/districts/17",
-    "/requests",
-    "/requests/new",
-    "/requests/42?view=detail",
-  ]) {
-    assert.equal(getFeatureForAppLocation(location), "core", location);
-  }
-  assert.equal(
-    getFeatureForAppLocation("/dashboard?tab=practice-lab"),
-    "practice",
-  );
-  assert.equal(getFeatureForAppLocation("/profile"), undefined);
-  assert.equal(getFeatureForAppLocation("/districtship"), undefined);
+test("the complete learning surface is public", () => {
+  assert.deepEqual(Object.values(featureFlags), Array(8).fill(true));
+  assert.deepEqual(releaseSurface.appRoutes, {
+    register: "/register",
+    dashboard: "/dashboard",
+    districts: "/districts",
+    requests: "/requests",
+    admin: "/admin/reports",
+    matching: "/recommendations",
+    practice: "/practice-lab",
+    dashboardPractice: "/dashboard/practice-lab",
+    analytics: "/analytics",
+    scheduling: "/scheduling",
+  });
 });

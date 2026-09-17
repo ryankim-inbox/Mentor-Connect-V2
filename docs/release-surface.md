@@ -1,249 +1,136 @@
 # PeerBridge release surface
 
-Status: Slice 03 admin/report quarantine, Slice 04 self-only profile policy,
-Slice 05 matching/practice/Connect kill switch, and Slice 06 chat/DM/WebSocket
-kill switch implemented (2026-09-02)
+Status: the gateway exposes the approved 48-operation learning REST contract. Production UI feature
+flags and shared desktop/mobile navigation are open, and Task 20 verifies the learning screens in
+Chromium against the production bundle with intercepted API fixtures. The two exact WebSocket
+endpoints now use a session/Origin-checked native gateway tunnel. Gateway-local liveness and bounded
+Python/database/schema readiness are implemented. CI now targets the complete classroom release
+command and retains production and full-toolchain dependency audits. This state does not claim a
+public Replit origin, live-provider headers, instance count, or remote smoke evidence.
 
-This document fixes the intended reduced release surface. The production
-product currently supports sign-in, sign-out, session lookup, and self-profile
-view/update for existing accounts. Account creation, landing statistics,
-Dashboard, Districts, Requests, New Request, matching, practice, analytics,
-scheduling, and messaging are unavailable. The client flags
-reduce UI exposure; the TypeScript API Shield is the server-side boundary. A
-staging deployment still needs to prove that the Python backend has no public
-route before release approval.
+## Runtime boundary
 
-## Feature flags
+The browser uses the same-origin gateway for `/api` and `/ws`; Vite dev/preview proxy both to the
+same gateway target. ChatWidget continues REST polling.
+The existing Python application remains the main backend on `127.0.0.1:8181`; the gateway validates
+and forwards requests and does not replace Python matching, authorization, chat, scheduling, reports,
+or database logic. Student-module success, error, empty, and incomplete responses pass through as real
+learning outcomes rather than synthesized success data.
 
-The single source of truth is
-`artifacts/peerbridge/src/lib/release-flags.ts`.
+`GET /livez` is gateway-local and remains 200 independently of dependencies. `GET /readyz` is also
+gateway-owned and returns only ready/not_ready with 200/503 after checking Python health, a read-only
+PostgreSQL transaction, and the built schema-tail metadata. The gateway artifact owns exactly
+`/api`, `/livez`, `/readyz`, and `/ws`; its startup probe is `/readyz`. The REST allowlist contains
+exactly the operations in the approved full-learning design:
 
-All eight quarantined client features default to `false`. An explicit `true` value is
-honored only by a Vite development server. Production builds ignore every
-`VITE_FEATURE_*` value and remain closed.
+- auth and account: register, login, logout, current account, and user profile GET/PATCH;
+- discovery and requests: districts, tags, requests, Connect, reports, blocks, and statistics;
+- learning features: matches, practice, analysis, analytics, Python reports, and scheduling;
+- messaging REST: chat room/message and DM list/start/message operations;
+- learning report: `GET /api/admin/flagged-users`;
+- backend process health: `GET /api/healthz`.
 
-| Feature                    | Development opt-in                      | Production default | Client exposure                                            | Data sensitivity                               | Server control                                                                                                                                | Owner                                         | Re-enable condition                                                                                                                                          |
-| -------------------------- | --------------------------------------- | -----------------: | ---------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| District/request workspace | `VITE_FEATURE_CORE=true`                |              false | `/register`, `/dashboard`, `/districts/**`, `/requests/**` | Student identity, districts, and help requests | Only registration itself is allowlisted; required district/stats/request endpoints are denied, so the dependent UI is quarantined as one unit | Product API owner — assignment required       | Review and allowlist every required endpoint with authentication, authorization, response-schema, and data-sensitivity tests                                 |
-| Admin tools                | Not supported; source and route removed |              false | Disabled `/admin/reports` deep link only                   | Moderation and PII                             | Gateway quarantines every route-family variant with a fixed 404 before auth or upstream                                                       | Release manager — assignment required         | Server-side admin identity, least privilege, audit log, and role E2E pass                                                                                    |
-| Mentor matching            | `VITE_FEATURE_MATCHING=true`            |              false | `/recommendations`                                         | Student profile and eligibility data           | Gateway quarantines `/api/matches/**` before auth or upstream                                                                                 | Matching owner — assignment required          | Bidirectional block exclusion, report policy, verified-mentor filter, self-match prevention, atomic state transitions, concurrency, and tie-break tests pass |
-| Practice lab               | `VITE_FEATURE_PRACTICE=true`            |              false | `/practice-lab`, `/dashboard/practice-lab`                 | Matching, location, and block test data        | Gateway quarantines `/api/practice/**` before auth or upstream                                                                                | Learning-platform owner — assignment required | The matching safety checklist and quarantine-removal review pass                                                                                             |
-| Connect                    | `VITE_FEATURE_CONNECT=true`             |              false | Request-detail match action                                | Match state and contact information            | Gateway quarantines `/api/requests/*/match` before auth or upstream                                                                           | Matching owner — assignment required          | Safe match authorization, state-transition, concurrency, and rollback E2E pass                                                                               |
-| Chat                       | `VITE_FEATURE_CHAT=true`                |              false | No production widget, navigation, or background work       | Messages, participants, and presence           | Gateway quarantines `/api/chat/**`, `/api/dms/**`, and `/ws/**` before upstream; upgrades receive 403                                         | Messaging owner — assignment required         | Authenticated room creation, participant-only reads, WS session verification, persistence, XSS, spam, rate-limit, and E2E pass                               |
-| Analytics                  | `VITE_FEATURE_ANALYTICS=true`           |              false | `/analytics`                                               | Aggregate and mentor response data             | None yet; Slice 02 required                                                                                                                   | Analytics owner — assignment required         | Approved aggregate schema, access policy, and response redaction pass                                                                                        |
-| Scheduling                 | `VITE_FEATURE_SCHEDULING=true`          |              false | `/scheduling`                                              | Student availability data                      | None yet; Slice 02 required                                                                                                                   | Scheduling owner — assignment required        | Self-only / approved matching access policy and response schema pass                                                                                         |
+The complete method/path/authentication/body/query table is maintained as the literal `publicRoutes`
+array in `artifacts/api-gateway/src/route-policy.ts` and documented for operators in
+`docs/runbooks/api-gateway.md`. Unregistered paths and methods have no forwarding fallback.
 
-An unassigned owner is a release blocker for re-enabling that feature.
+## Authentication and profile exposure
 
-## Enforced external API policy
+Public operations are register, login, district search/list, overview statistics, and health.
+`GET /api/auth/me` requires a Cookie and is forwarded directly so it cannot recursively call itself.
+Every other REST operation requires the gateway to verify the same Cookie against private
+`/api/auth/me` before forwarding.
 
-Client route classification is defined in `release-flags.ts`. The runtime API
-allowlist and quarantine live in `artifacts/api-gateway/src/gateway.ts` and
-`route-policy.ts`, so endpoint names for quarantined data are not emitted in
-the production browser bundle.
+Any signed-in user may read another canonical `/api/users/{id}` profile. The gateway returns only
+`id`, `name`, `subjects`, and `createdAt`; upstream email, bio, role, district, and verification fields
+are removed. PATCH is still self-only, accepts only `name`, `bio`, and `subjects`, and returns an
+existence-hiding 404 before the profile endpoint when the session id differs from the path id.
+The authenticated user's own account response from `/api/auth/me` may include email; that does not
+expand the cross-user profile contract.
 
-### Enforced allowlist
+## Canonical route and query policy
 
-- `GET /livez` (gateway local response)
-- `GET /api/healthz`
-- `POST /api/auth/register` (the dependent production registration UI remains quarantined)
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `POST /api/auth/logout`
-- `GET/PATCH /api/users/{self}` after gateway session/identity validation
+Dynamic ids are canonical positive safe integers. Practice raw module names are limited to
+`find_matches`, `locations`, and `get_blocks`. Path percent encoding, backslashes, repeated slashes,
+dot segments, uppercase variants, and trailing slashes are rejected before forwarding.
 
-Authentication-dependent GET outcomes are gateway-forced to
-`Cache-Control: no-store` and a de-duplicated `Vary` containing `Cookie`,
-independent of upstream cache headers.
+Only these query keys are accepted:
 
-### Denylist
+| Route                         | Contract                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/districts`          | optional `type` is `high_school` or `unified`; optional `search` is no longer than 200 UTF-8 bytes                                       |
+| `GET /api/requests`           | optional positive `districtId` and `tagId`; optional `role` is `mentor` or `mentee`; optional `status` is `open`, `matched`, or `closed` |
+| matching GET routes           | optional `limit` from 1 through 20                                                                                                       |
+| `GET /api/scheduling/suggest` | required positive `user_a` and `user_b`                                                                                                  |
 
-- `/api/admin/**`
-- `/api/python-reports/**`
-- `/api/matches/**`
-- `/api/practice/**`
-- `/api/requests/*/match`
-- `/api/chat/**`
-- `/api/dms/**`
-- `/ws/**`
-- `/api/users/{id}` when `id` is not the session user
-- Every route absent from the approved API contract
+Malformed encoding, duplicates, unknown keys, empty numbers, zero, noncanonical integers, unsafe
+integers, and out-of-range values return 400. Accepted queries are serialized and forwarded; omitted
+optional values stay omitted so Python defaults apply.
 
-### Slice 03 admin/report quarantine
+JSON routes require `application/json`. Logout, Connect, and DELETE requests are forwarded without a
+body. An upstream 204 is returned with no response body. General request bodies are limited to 1 MiB,
+and `/api/practice/locations/test` is limited to 16 KiB.
 
-- Every method for the admin and Python-report route families is classified
-  before URL parsing, header validation, authentication, request-body reading,
-  or an upstream request. Encoded separators, repeated decoding, trailing
-  slashes, matrix parameters, dot segments, backslashes, and case variants are
-  included in the comparison.
-- The external response is the constant `404 {"error":"not_found"}` with
-  `Cache-Control: no-store`; response body and size do not vary by session,
-  user existence, or flagged-row count. The correlation value is available only
-  in the `X-Request-Id` header.
-- The `gateway.quarantine_denied` security metric contains only `routeFamily`,
-  `correlationId`, `outcome`, and `status`. It does not receive the raw path,
-  cookie, authorization header, request body, or user data.
-- `AdminReports.tsx`, its router entry, its analytics navigation entry, and its
-  queries are removed. The production bundle therefore contains no calls to
-  either quarantined API family.
+## WebSocket transport and retained controls
 
-Verification:
+Only `/ws/chat/rooms/{id}` and `/ws/dms/{id}` accept upgrades, with canonical positive safe IDs, no
+query, the exact configured Origin, and a Cookie verified against private `/api/auth/me`. The native
+tunnel validates the upstream handshake and transfers opaque bytes with stream backpressure.
+It limits handshakes to five seconds, idle time to 120 seconds, pending/active tunnels to 40 per
+process and two per verified user, and closes registered sockets during shutdown. Per-frame
+moderation and participant authorization remain Python responsibilities. The production browser
+now exposes the learning screens and shared navigation. Task 20 verifies those built pages with
+successful and failing intercepted fixtures and aborts every unknown API request; it does not prove
+live-provider behavior, readiness, or known incomplete DM behavior. Native gateway transport tests
+cover both WS paths, including actual session lookup, cancellation, non-101 responses and cleanup.
 
-```sh
-pnpm --filter @workspace/api-gateway test
-pnpm --filter @workspace/peerbridge run build
-rg -n "/api/admin|/api/python-reports" artifacts/peerbridge/dist
-```
+Unknown routes, wrong methods, invalid queries, malformed paths, duplicate headers, oversized bodies,
+maintenance mode, unauthenticated session routes, and cross-user PATCH remain negative regressions.
+Authentication-dependent GET responses use `Cache-Control: no-store` and `Vary: Cookie`.
 
-### Slice 04 profile PII self-only policy
+## Readiness, release identity, and drain
 
-- The API Shield accepts GET and PATCH only for the exact canonical
-  /api/users/{id} form, after the session user id from /api/auth/me matches
-  the path id. Anonymous requests receive 401; a different session user's id
-  receives the existence-hiding 404. In both cases the profile endpoint is not
-  called upstream.
-- The self profile response is explicitly redacted to id, name, subjects, and
-  createdAt. Email, district data, bio, role, and verification fields never
-  leave the gateway through this route, including after PATCH.
-- PATCH reads and validates JSON before session verification so forbidden keys
-  such as id, email, role, is_verified, and arbitrary extra fields produce a
-  400 without any upstream request. Only name, bio, and subjects are sanitized
-  and forwarded.
-- The browser has one self-profile route, /profile. Former routes and links
-  that accepted another user's identifier have been removed, and the settings
-  form no longer presents a role mutation or requests the block-list endpoint.
-- The public OpenAPI contract names the response SelfProfile and removes role
-  from UpdateUserBody. Generated React and Zod clients therefore describe the
-  gateway contract rather than the broader internal Python response.
+The readiness pool has one connection, one-second connection and statement timeouts, a two-second
+overall probe deadline, and a two-second result cache shared by concurrent callers. Its only SQL is
+a read-only transaction containing `SELECT 1` and the migration-ledger tail query. A separately
+provisioned `READINESS_DATABASE_URL` is required for a ready result; it never falls through to an
+ambient `DATABASE_URL`, and its absence does not prevent process startup.
 
-Verification:
+Gateway builds write `dist/release.json` from `database/schema/version.json` and the supplied
+`RELEASE_SHA` (or local checkout HEAD). The built SHA appears once in the startup event. Source-mode
+development without the colocated asset reports `unknown`, which is not release-verification proof;
+missing or malformed production metadata remains not_ready. HTTP logs expose only a fixed family,
+outcome, status, gateway-generated request id, duration, and upstream duration when applicable.
 
-    pnpm --filter @workspace/api-gateway test
-    pnpm --filter @workspace/api-gateway typecheck
-    pnpm --filter @workspace/api-spec run codegen
-    pnpm --filter @workspace/peerbridge typecheck
-    ! rg -n "/profile/" artifacts/peerbridge/src --glob "*.tsx"
+SIGINT/SIGTERM marks readiness draining, closes native WebSocket tunnels, drains HTTP, and ends the
+PostgreSQL pool within a hard ten-second process deadline. Local synthetic HTTP/WS and disposable
+PostgreSQL 16 checks verify this implementation, but do not replace staging evidence.
 
-### Slice 05 matching, practice, and Connect kill switch
-
-- Every HTTP method for `/api/matches/**`, `/api/practice/**`, and
-  `/api/requests/*/match` receives the same fixed 404 before URL parsing,
-  authentication, request-body reads, or an upstream request. The route policy
-  resolves repeated percent encoding, slash and backslash variants, matrix
-  parameters, dot segments, trailing slashes, and case variants before it
-  classifies a route family.
-- The coarse `routeFamily` metric is one of `matches`, `practice`, or
-  `request-match`; it intentionally excludes IDs, query values, cookies, and
-  candidate data. A request containing a blocked mentor ID is therefore
-  indistinguishable from any other quarantined request and cannot reveal a
-  candidate list or existence.
-- Recommendations, Practice Lab, and the Connect mutation are imported only
-  behind Vite's compile-time development branch. Production emits no matching
-  page chunk or `/api/matches`, `/api/practice`, or `/match` request string.
-  A disabled Connect control says only that the feature is temporarily
-  unavailable; it never reveals a user's blocked, reported, or verification
-  state. Existing match records are not deleted or changed.
-
-Re-enable checklist:
-
-- Prove bidirectional block exclusion and the report policy.
-- Filter to verified mentors and prohibit self-matches.
-- Define and test valid state transitions, including atomicity, concurrency,
-  rollback, and deterministic tie-break behavior.
-- Remove the gateway quarantine only in a separately reviewed release with
-  matching authorization and end-to-end regression tests.
-
-Verification:
+## Verification
 
 ```sh
 pnpm --filter @workspace/api-gateway test
 pnpm --filter @workspace/api-gateway test:shield
-pnpm --filter @workspace/peerbridge typecheck
-pnpm --filter @workspace/peerbridge build
-rg -n "/api/(matches|practice)|/match" artifacts/peerbridge/dist
+pnpm --filter @workspace/api-gateway typecheck
+RELEASE_SHA=<deployment-commit-sha> pnpm --filter @workspace/api-gateway run build
+pnpm gateway:verify-boundary
+pnpm test:peerbridge-release
+pnpm e2e
 ```
 
-### Slice 06 chat, DM, and WebSocket kill switch
+`pnpm verify:release` is the CI/local release gate and preserves the complete ordered sequence,
+including frozen install, disposable PostgreSQL suites, generated-client drift, secret checks, smoke
+self-tests, Chromium, and the two Python freeze bases for this non-Python track. The operational
+provider checklist, release-record fields, external port checks, and rollback procedure are in
+[`docs/runbooks/classroom-release.md`](runbooks/classroom-release.md).
 
-- Every ordinary HTTP method for `/api/chat/**`, `/api/dms/**`, and `/ws/**` is
-  classified before URL parsing, header validation, authentication,
-  request-body reads, or an upstream request. Encoded separators, repeated
-  decoding, slash and backslash variants, matrix parameters, dot segments,
-  trailing slashes, and case variants use the same normalization as the other
-  quarantined families. Upgrade requests take the separate unconditional 403
-  path before any upstream connection can be created.
-- Anonymous and authenticated HTTP requests receive the fixed 404
-  `{"error":"not_found"}`. The `gateway.quarantine_denied` metric records only
-  the coarse `chat`, `dms`, or `websocket` family plus its normal correlation
-  fields. The gateway tests assert that the upstream request/connection count
-  for every chat, DM, and non-upgrade WebSocket request is zero.
-- Every HTTP Upgrade request ends as `403 {"error":"websocket_unavailable",…}`
-  before an upstream connection is possible. It emits `gateway.upgrade_denied`
-  with the coarse `websocket` route family; it never negotiates a WebSocket
-  session or forwards credentials upstream.
-- `ChatWidget` is loaded only through a Vite development-only lazy import.
-  Consequently production has no chat widget or navigation, no chat polling or
-  reconnect loop, and no chat module to emit console errors or requests. The
-  disabled UI has no `localStorage` or `sessionStorage` use, so it cannot retain
-  a browser message draft.
-- This kill switch does not delete or alter any chat room, DM, or message data.
-  Feature disablement is not a data-retention or deletion policy; any retention
-  change requires its own reviewed, approved data operation.
+The static artifact rewrites only declared SPA route families to `index.html`. It leaves unknown paths
+and missing assets to return 404 instead of applying a site-wide catch-all fallback.
 
-Re-enable checklist:
-
-- Authenticated room creation and participant-only room/DM reads pass.
-- WebSocket session verification and message persistence pass.
-- XSS handling, spam controls, rate limiting, and end-to-end coverage pass.
-- A separately reviewed change removes the gateway quarantine and restores the
-  production module only after the preceding checks have evidence.
-
-Verification:
-
-```sh
-pnpm --filter @workspace/api-gateway test
-pnpm --filter @workspace/api-gateway test:shield
-pnpm --filter @workspace/peerbridge typecheck
-pnpm run test:peerbridge-release
-pnpm --filter @workspace/api-gateway exec tsx --test ../peerbridge/test/release-surface.test.ts
-```
-
-## Client behavior while a feature is disabled
-
-- Risky routes are classified before the global authentication provider mounts.
-  They show a "being prepared" message with a return-to-home link; neither the
-  feature page nor the global `/api/auth/me` query mounts for a direct visit.
-- The navigation hides disabled feature links. The development-only dashboard
-  omits the practice tab and successful-match metric unless those features are
-  explicitly enabled; production does not load Dashboard at all.
-- The former admin page is not in the router or production build. Its disabled
-  deep link is classified before `AuthProvider` mounts, so it cannot create an
-  admin/report query.
-- Matching and practice deep links are likewise classified before
-  `AuthProvider` mounts. Their production routes show the same safe
-  unavailable state, while the development-only page modules and Connect
-  mutation are excluded from the production bundle.
-- The chat widget is absent from the production build, so it cannot start
-  polling, reconnecting, navigating, or storing a draft in browser storage.
-- The Connect action and recommendation match-request entry point are absent
-  from production.
-- Core district/request/registration pages and analytics/scheduling pages use
-  development-only imports, so their denied endpoint strings are absent from
-  the production artifact. Dashboard, Districts, Requests, New Request, and
-  registration direct links show the same pre-auth unavailable state.
-- The landing page makes no stats/district/request call and describes only the
-  usable reduced product. Successful login and authenticated home navigation
-  go to `/profile`; production navigation exposes only profile, settings, and
-  logout for a signed-in account.
-
-The repeatable `pnpm run test:peerbridge-release` gate rebuilds production and
-scans the emitted artifact for every endpoint outside this reduced client
-surface. `.github/workflows/release-surface.yml` runs the same gate for pull
-requests and pushes to main.
-
-## Release constraints and rollback
-
-This implementation does not by itself authorize a release. If a regression is
-found, retain the gateway's maintenance-deny posture and rebuild from a commit
-where every `VITE_FEATURE_*` value remains disabled. Staging must additionally
-verify that the Python process is reachable only over its private loopback port.
+Release approval also requires staging evidence that only the gateway is public, maintenance mode
+fail-closes REST and WebSocket forwarding, the Python port cannot be reached externally, the actual
+public Origin/TLS values are correct, and provider startup retries readiness while Python starts.
+Live-provider and real-Python WebSocket behavior (Task 23), production credentials, and final CI
+evidence remain separate release checks and are not implied by local readiness or Task 20 browser
+fixtures. The current DM exercise sends its learning message and closes; the tunnel preserves that
+behavior instead of replacing it.

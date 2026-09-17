@@ -28,11 +28,9 @@ export function SourceBadge({ envelope }: { envelope: PyEnvelope<unknown> | unde
     label = `Adapter data (${moduleLabel} unavailable)`;
   }
 
-  const title = student?.error
-    ? `${student.module}.py — ${student.status ?? "error"}: ${student.error}`
-    : student
-      ? `${student.module}.py — ${student.status ?? "status unknown"}`
-      : undefined;
+  const title = student
+    ? `${student.module}.py — ${student.status ?? "status unknown"}`
+    : undefined;
 
   return (
     <span

@@ -13,17 +13,20 @@ paths = []
 # The backend source of truth moved to the repo-root Python/ folder.
 # artifacts/api-server/python/ is kept only as legacy reference.
 [services.development]
-run = "cd ../../Python && python -m uvicorn main:app --host 127.0.0.1 --port 8181"
+run = "cd ../.. && PYTHONDONTWRITEBYTECODE=1 python -B -m uvicorn main:app --app-dir Python --host 127.0.0.1 --port 8181"
 
 [services.production]
 
 [services.production.build]
-args = ["echo", "no-build"]
+args = [
+  "sh", "-c",
+  "test \"$(node --version)\" = \"v$(cat .node-version)\" && RELEASE_RUNTIME_DIR=\"$PWD/.release-runtime\" sh ops/build-python-runtime.sh",
+]
 
 [services.production.build.env]
 NODE_ENV = "production"
 
-# Start uvicorn directly rather than via `python Python/main.py`.
+# Start uvicorn from the frozen runtime rather than via `python Python/main.py`.
 #
 # That entrypoint's __main__ block calls uvicorn.run(..., reload=True), so
 # production booted the autoreloader: verified locally, it logs
@@ -36,7 +39,7 @@ NODE_ENV = "production"
 # sync with localPort above and with PORT below.
 [services.production.run]
 args = [
-  "python", "-m", "uvicorn", "main:app",
+  ".release-runtime/venv/bin/python", "-B", "-m", "uvicorn", "main:app",
   "--host", "127.0.0.1",
   "--port", "8181",
   "--app-dir", "Python",
@@ -45,6 +48,7 @@ args = [
 [services.production.run.env]
 PORT = "8181"
 NODE_ENV = "production"
+PYTHONDONTWRITEBYTECODE = "1"
 
 [services.production.health.startup]
 path = "/api/healthz"

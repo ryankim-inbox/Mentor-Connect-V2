@@ -5,9 +5,25 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import type { Duplex } from "node:stream";
+import { createWebSocketUpgradeHandler } from "./websocket.js";
 
-import { classifyQuarantinedRoute } from "./route-policy.js";
+import {
+  resolvePublicRoute,
+  type PublicRoute,
+  type PublicRouteMatch,
+} from "./route-policy.js";
+
+import {
+  publicError,
+  projectProfile,
+  projectPublicPayload,
+} from "./public-contract.js";
+import {
+  assertAllowedOrigin,
+  assertValidPublicOrigin,
+  createLimiter,
+  validateAuthBody,
+} from "./request-controls.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
 const DEFAULT_REQUEST_BODY_LIMIT_BYTES = 1_048_576;
@@ -16,6 +32,7 @@ const DEFAULT_UPSTREAM_TIMEOUT_MS = 5_000;
 const DEFAULT_REQUEST_BODY_TIMEOUT_MS = 10_000;
 const MAX_REQUEST_TARGET_LENGTH = 8_192;
 const SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES = 16 * 1024;
+const PRACTICE_LOCATION_TEST_BODY_LIMIT_BYTES = 16 * 1024;
 
 const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   "connection",
@@ -47,74 +64,6 @@ const FORWARDED_REQUEST_HEADERS = [
   "user-agent",
 ] as const;
 
-type AuthenticationRequirement = "none" | "cookie" | "session";
-
-interface RoutePolicy {
-  readonly method: "GET" | "POST" | "PATCH";
-  readonly path: string;
-  readonly authentication: AuthenticationRequirement;
-  readonly allowsBody: boolean;
-  readonly requiresJson?: boolean;
-  readonly allowsQuery?: boolean;
-}
-
-/**
- * This list is intentionally small. New endpoints must be reviewed and added
- * here with their method, canonical path, authentication policy, and body
- * policy before the gateway can reach the Python service.
- */
-export const gatewayAllowlist: readonly RoutePolicy[] = Object.freeze([
-  {
-    method: "GET",
-    path: "/api/healthz",
-    authentication: "none",
-    allowsBody: false,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/register",
-    authentication: "none",
-    allowsBody: true,
-    requiresJson: true,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/login",
-    authentication: "none",
-    allowsBody: true,
-    requiresJson: true,
-  },
-  {
-    method: "GET",
-    path: "/api/auth/me",
-    authentication: "cookie",
-    allowsBody: false,
-  },
-  {
-    method: "POST",
-    path: "/api/auth/logout",
-    authentication: "session",
-    allowsBody: false,
-  },
-]);
-
-// These dynamic paths are intentionally kept out of the literal route array:
-// both the canonical path id and the session id must be evaluated together.
-const selfProfileGetPolicy: RoutePolicy = {
-  method: "GET",
-  path: "/api/users/{self}",
-  authentication: "session",
-  allowsBody: false,
-};
-
-const selfProfilePatchPolicy: RoutePolicy = {
-  method: "PATCH",
-  path: "/api/users/{self}",
-  authentication: "session",
-  allowsBody: true,
-  requiresJson: true,
-};
-
 export interface GatewayLogger {
   info(
     event: string,
@@ -124,22 +73,36 @@ export interface GatewayLogger {
 
 export interface GatewayOptions {
   readonly upstreamOrigin?: string;
+  readonly publicOrigin?: string;
+  readonly allowLoopbackPublicOrigin?: boolean;
+  readonly rateLimitNow?: () => number;
   readonly requestBodyLimitBytes?: number;
   readonly responseBodyLimitBytes?: number;
   readonly upstreamTimeoutMs?: number;
   readonly requestBodyTimeoutMs?: number;
   readonly maintenanceMode?: boolean;
+  readonly checkReadiness?: () => Promise<boolean>;
   readonly logger?: GatewayLogger;
 }
 
 interface GatewayConfig {
   readonly upstreamOrigin: URL;
+  readonly publicOrigin: string;
+  readonly limiter: ReturnType<typeof createLimiter>;
   readonly requestBodyLimitBytes: number;
   readonly responseBodyLimitBytes: number;
   readonly upstreamTimeoutMs: number;
   readonly requestBodyTimeoutMs: number;
   readonly maintenanceMode: boolean;
+  readonly checkReadiness: () => Promise<boolean>;
   readonly logger: GatewayLogger;
+}
+
+interface RequestTrace {
+  family: string;
+  readonly startedAt: number;
+  upstreamCalls: number;
+  upstreamDurationMs: number;
 }
 
 interface RequestTarget {
@@ -161,6 +124,7 @@ class GatewayHttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly retryAfter?: number,
   ) {
     super(code);
   }
@@ -173,14 +137,17 @@ class UpstreamResponseTooLargeError extends Error {}
 
 const defaultLogger: GatewayLogger = {
   info(event, fields) {
-    // Only fixed event names, canonical paths, method, status, and correlation
-    // IDs are supplied to this logger. Request bodies and credential headers
-    // never enter the logging surface.
+    // Only fixed families/outcomes, status, timings, and generated correlation
+    // IDs enter this surface. Request targets, bodies, and credentials do not.
     console.info(JSON.stringify({ event, ...fields }));
   },
 };
 
-export function createGatewayServer(options: GatewayOptions = {}): Server {
+export type GatewayServer = Server & { closeWebSockets(): void };
+
+export function createGatewayServer(
+  options: GatewayOptions = {},
+): GatewayServer {
   const config = resolveGatewayConfig(options);
   const server = createServer((request, response) => {
     void handleRequest(request, response, config);
@@ -192,11 +159,16 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
     void handleRequest(request, response, config);
   });
 
-  // WebSocket support is deliberately absent until Slice 06. Reject every
-  // upgrade before an upstream connection can be created.
-  server.on("upgrade", (request, socket) => {
-    rejectUpgrade(request, socket, config);
+  const upgrade = createWebSocketUpgradeHandler({
+    upstreamOrigin: config.upstreamOrigin,
+    verifySession: (request, signal, requestId) =>
+      verifySession(request, config, requestId, signal),
+    assertOrigin: (request) =>
+      assertAllowedOrigin(request.headers.origin, config.publicOrigin),
+    maintenanceMode: config.maintenanceMode,
+    logger: config.logger,
   });
+  server.on("upgrade", upgrade);
 
   server.on("clientError", (_error, socket) => {
     socket.end(
@@ -206,7 +178,12 @@ export function createGatewayServer(options: GatewayOptions = {}): Server {
     );
   });
 
-  return server;
+  server.headersTimeout = 10_000;
+  server.requestTimeout = 15_000;
+  server.keepAliveTimeout = 5_000;
+  server.maxHeadersCount = 64;
+
+  return Object.assign(server, { closeWebSockets: upgrade.closeWebSockets });
 }
 
 export function resolveGatewayConfig(
@@ -220,8 +197,22 @@ export function resolveGatewayConfig(
 
   assertPrivateUpstream(upstreamOrigin);
 
+  const publicOrigin =
+    options.publicOrigin ?? process.env.GATEWAY_PUBLIC_ORIGIN;
+  if (!publicOrigin) {
+    throw new Error("GATEWAY_PUBLIC_ORIGIN is required.");
+  }
+  const allowLoopbackPublicOrigin =
+    process.env.NODE_ENV !== "production" &&
+    (options.allowLoopbackPublicOrigin === true ||
+      process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "test");
+  assertValidPublicOrigin(publicOrigin, allowLoopbackPublicOrigin);
+
   return {
     upstreamOrigin,
+    publicOrigin,
+    limiter: createLimiter(options.rateLimitNow ?? Date.now),
     requestBodyLimitBytes: resolvePositiveInteger(
       options.requestBodyLimitBytes,
       process.env.GATEWAY_MAX_BODY_BYTES,
@@ -249,6 +240,7 @@ export function resolveGatewayConfig(
     maintenanceMode:
       options.maintenanceMode ??
       process.env.GATEWAY_MAINTENANCE_MODE === "true",
+    checkReadiness: options.checkReadiness ?? (async () => false),
     logger: options.logger ?? defaultLogger,
   };
 }
@@ -259,23 +251,12 @@ async function handleRequest(
   config: GatewayConfig,
 ): Promise<void> {
   const requestId = randomUUID();
-  const quarantinedRoute = classifyQuarantinedRoute(request.url ?? "");
-
-  // This check stays ahead of URL parsing, header validation, authentication,
-  // and all upstream work. It catches encoded separators, trailing slashes,
-  // matrix parameters, and dot-segment spellings of the quarantined families.
-  if (quarantinedRoute) {
-    drainRequest(request);
-    sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.quarantine_denied", {
-      correlationId: requestId,
-      outcome: "denied",
-      routeFamily: quarantinedRoute,
-      status: 404,
-    });
-    return;
-  }
-
+  const trace: RequestTrace = {
+    family: "unknown",
+    startedAt: Date.now(),
+    upstreamCalls: 0,
+    upstreamDurationMs: 0,
+  };
   const clientAbortController = new AbortController();
   let clientDisconnected = false;
 
@@ -300,43 +281,52 @@ async function handleRequest(
     const method = request.method?.toUpperCase() ?? "GET";
 
     if (method === "GET" && target.pathname === "/livez" && !target.hasQuery) {
+      trace.family = "liveness";
       drainRequest(request);
       sendJson(response, 200, { status: "ok" }, requestId);
-      log(config, "gateway.livez", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 200,
-      });
+      logRequest(config, trace, requestId, "ok", 200);
       return;
     }
 
-    const selfProfileUserId = target.hasQuery
-      ? undefined
-      : parseCanonicalSelfProfileUserId(target.pathname);
-    if (selfProfileUserId !== undefined) {
+    if (method === "GET" && target.pathname === "/readyz" && !target.hasQuery) {
+      trace.family = "readiness";
+      drainRequest(request);
+      let ready = false;
+      if (!config.maintenanceMode) {
+        try {
+          ready = await config.checkReadiness();
+        } catch {
+          // Probe details stay internal; readiness is a boolean public contract.
+        }
+      }
+      const status = ready ? 200 : 503;
+      const outcome = ready ? "ready" : "not_ready";
+      sendJson(response, status, { status: outcome }, requestId);
+      logRequest(config, trace, requestId, outcome, status);
+      return;
+    }
+
+    const policy = resolveGatewayRoute(method, request.url ?? "");
+    if (!policy) {
+      drainRequest(request);
+      sendGatewayError(response, 404, "not_found", requestId);
+      logRequest(config, trace, requestId, "not_found", 404);
+      return;
+    }
+    trace.family = policy.family;
+
+    assertRequestOrigin(request, method, config);
+
+    if (policy.family === "users" && policy.resourceId !== undefined) {
       await handleSelfProfileRequest(
         request,
         response,
         config,
         requestId,
-        method,
-        selfProfileUserId,
+        policy,
         clientAbortController.signal,
+        trace,
       );
-      return;
-    }
-
-    const policy = findRoutePolicy(method, target);
-    if (!policy) {
-      drainRequest(request);
-      sendGatewayError(response, 404, "not_found", requestId);
-      log(config, "gateway.denied", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 404,
-      });
       return;
     }
 
@@ -352,26 +342,17 @@ async function handleRequest(
     if (config.maintenanceMode) {
       drainRequest(request);
       sendGatewayError(response, 503, "maintenance", requestId);
-      log(config, "gateway.maintenance_denied", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 503,
-      });
+      logRequest(config, trace, requestId, "maintenance", 503);
       return;
     }
 
-    validateRouteHeaders(request, policy, config);
+    const routeBodyLimit = getRouteBodyLimit(policy, config);
+    validateRouteHeaders(request, policy, routeBodyLimit);
 
     if (policy.authentication !== "none" && !hasCookie(request)) {
       drainRequest(request);
       sendGatewayError(response, 401, "unauthorized", requestId);
-      log(config, "gateway.unauthorized", {
-        method,
-        path: target.pathname,
-        requestId,
-        status: 401,
-      });
+      logRequest(config, trace, requestId, "unauthorized", 401);
       return;
     }
 
@@ -382,25 +363,66 @@ async function handleRequest(
         config,
         requestId,
         clientAbortController.signal,
+        trace,
       );
     }
 
-    const body = await readRequestBody(
+    if (sessionVerification) {
+      if (method !== "GET") {
+        takeRateLimit(
+          config,
+          "session:" + String(sessionVerification.userId) + ":mutation",
+          60,
+        );
+      }
+      if (isExpensiveRequest(policy)) {
+        takeRateLimit(
+          config,
+          "session:" + String(sessionVerification.userId) + ":expensive",
+          12,
+        );
+      }
+    }
+
+    let body = await readRequestBody(
       request,
-      policy.allowsBody ? config.requestBodyLimitBytes : 0,
+      policy.allowsBody ? routeBodyLimit : 0,
       policy.allowsBody,
       config.requestBodyTimeoutMs,
       clientAbortController.signal,
     );
 
+    if (
+      policy.template === "/api/auth/login" ||
+      policy.template === "/api/auth/register"
+    ) {
+      let validated: ReturnType<typeof validateAuthBody>;
+      try {
+        validated = validateAuthBody(
+          policy.template === "/api/auth/login" ? "login" : "register",
+          body,
+        );
+      } catch {
+        throw new GatewayHttpError(400, "invalid_input");
+      }
+      body = validated.body;
+      if (policy.template === "/api/auth/login") {
+        takeRateLimit(config, "login:global", 120);
+        takeRateLimit(config, "login:account:" + validated.accountKey, 10);
+      } else {
+        takeRateLimit(config, "register:global", 30);
+      }
+    }
+
     const upstream = await fetchUpstream(
       request,
       method,
-      target.pathname,
+      policy.upstreamPath,
       body,
       config,
       requestId,
       clientAbortController.signal,
+      trace,
     );
 
     if (clientDisconnected) {
@@ -413,92 +435,85 @@ async function handleRequest(
       requestId,
       sessionVerification?.setCookies,
       authenticationDependentGet,
+      policy,
     );
-    log(config, "gateway.proxied", {
-      method,
-      path: target.pathname,
-      requestId,
-      status: upstream.response.status,
-    });
+    logRequest(config, trace, requestId, "proxied", response.statusCode);
   } catch (error) {
     if (clientDisconnected || error instanceof ClientDisconnectedError) {
-      log(config, "gateway.client_disconnected", { requestId });
+      logRequest(config, trace, requestId, "client_disconnected", 499);
       return;
     }
 
     if (error instanceof GatewayHttpError) {
       drainRequest(request);
+      if (error.retryAfter !== undefined) {
+        response.setHeader("retry-after", String(error.retryAfter));
+      }
       sendGatewayError(response, error.status, error.code, requestId);
-      log(config, "gateway.rejected", {
-        requestId,
-        status: error.status,
-        reason: error.code,
-      });
+      logRequest(config, trace, requestId, error.code, error.status);
       return;
     }
 
     if (error instanceof UpstreamTimeoutError) {
       sendGatewayError(response, 504, "upstream_timeout", requestId);
-      log(config, "gateway.upstream_timeout", { requestId, status: 504 });
+      logRequest(config, trace, requestId, "upstream_timeout", 504);
       return;
     }
 
     if (error instanceof UpstreamResponseTooLargeError) {
       sendGatewayError(response, 502, "upstream_response_too_large", requestId);
-      log(config, "gateway.upstream_response_too_large", {
-        requestId,
-        status: 502,
-      });
+      logRequest(config, trace, requestId, "upstream_response_too_large", 502);
       return;
     }
 
     if (error instanceof UpstreamFailureError) {
       sendGatewayError(response, 502, "upstream_unavailable", requestId);
-      log(config, "gateway.upstream_unavailable", { requestId, status: 502 });
+      logRequest(config, trace, requestId, "upstream_unavailable", 502);
       return;
     }
 
     sendGatewayError(response, 500, "gateway_error", requestId);
-    log(config, "gateway.unexpected_error", { requestId, status: 500 });
+    logRequest(config, trace, requestId, "gateway_error", 500);
   } finally {
     request.removeListener("aborted", abortForDisconnectedClient);
     response.removeListener("close", abortForClosedResponse);
   }
 }
 
-function rejectUpgrade(
+function assertRequestOrigin(
   request: IncomingMessage,
-  socket: Duplex,
+  method: string,
   config: GatewayConfig,
 ): void {
-  const requestId = randomUUID();
-  // Upgrades never join an upstream connection. Keep their external response
-  // distinct from ordinary HTTP quarantine requests: the WebSocket handshake
-  // must always terminate with 403 before an upgrade can be established.
-  const body = Buffer.from(
-    JSON.stringify({ error: "websocket_unavailable", requestId }),
-  );
+  if (method === "GET") {
+    return;
+  }
 
-  socket.write(
-    "HTTP/1.1 403 Forbidden\r\n" +
-      "Content-Type: application/json; charset=utf-8\r\n" +
-      "Cache-Control: no-store\r\n" +
-      "Connection: close\r\n" +
-      "Content-Length: " +
-      body.length +
-      "\r\n" +
-      "X-Request-Id: " +
-      requestId +
-      "\r\n\r\n",
-  );
-  socket.end(body);
+  try {
+    assertAllowedOrigin(getHeader(request, "origin"), config.publicOrigin);
+  } catch {
+    throw new GatewayHttpError(403, "forbidden");
+  }
+}
 
-  log(config, "gateway.upgrade_denied", {
-    method: request.method?.toUpperCase() ?? "GET",
-    requestId,
-    routeFamily: "websocket",
-    status: 403,
-  });
+function takeRateLimit(
+  config: GatewayConfig,
+  key: string,
+  limit: number,
+): void {
+  const result = config.limiter.take(key, limit);
+  if (!result.allowed) {
+    throw new GatewayHttpError(429, "rate_limited", result.retryAfter);
+  }
+}
+
+function isExpensiveRequest(policy: PublicRoute): boolean {
+  return (
+    policy.template === "/api/matches/{questionId}" ||
+    policy.template === "/api/matches" ||
+    policy.template === "/api/practice/matching/{questionId}" ||
+    policy.template === "/api/practice/locations/test"
+  );
 }
 
 function assertPrivateUpstream(upstreamOrigin: URL): void {
@@ -565,7 +580,7 @@ function parseRequestTarget(rawTarget: string | undefined): RequestTarget {
     rawPath.includes("%") ||
     rawPath.includes("//") ||
     rawPath.split("/").some((segment) => segment === "." || segment === "..") ||
-    !/^\/[a-z0-9/-]*$/.test(rawPath)
+    !/^\/[a-z0-9_/-]*$/.test(rawPath)
   ) {
     throw new GatewayHttpError(400, "malformed_url");
   }
@@ -630,8 +645,8 @@ function validateGenericRequestHeaders(
 
 function validateRouteHeaders(
   request: IncomingMessage,
-  policy: RoutePolicy,
-  config: GatewayConfig,
+  policy: PublicRoute,
+  bodyLimitBytes: number,
 ): void {
   const contentLength = getHeader(request, "content-length");
   const bytes = contentLength === undefined ? 0 : Number(contentLength);
@@ -640,16 +655,25 @@ function validateRouteHeaders(
     throw new GatewayHttpError(400, "request_body_not_allowed");
   }
 
-  if (bytes > config.requestBodyLimitBytes) {
+  if (bytes > bodyLimitBytes) {
     throw new GatewayHttpError(413, "request_body_too_large");
   }
 
-  if (policy.requiresJson) {
+  if (policy.requiresJson && bytes > 0) {
     const contentType = getHeader(request, "content-type");
     if (!contentType || !isJsonContentType(contentType)) {
       throw new GatewayHttpError(415, "json_content_type_required");
     }
   }
+}
+
+function getRouteBodyLimit(policy: PublicRoute, config: GatewayConfig): number {
+  return policy.template === "/api/practice/locations/test"
+    ? Math.min(
+        config.requestBodyLimitBytes,
+        PRACTICE_LOCATION_TEST_BODY_LIMIT_BYTES,
+      )
+    : config.requestBodyLimitBytes;
 }
 
 function hasDuplicateHeaders(rawHeaders: readonly string[]): boolean {
@@ -686,16 +710,18 @@ function isJsonContentType(contentType: string): boolean {
   return mediaType?.trim().toLowerCase() === "application/json";
 }
 
-function findRoutePolicy(
+function resolveGatewayRoute(
   method: string,
-  target: RequestTarget,
-): RoutePolicy | undefined {
-  return gatewayAllowlist.find(
-    (policy) =>
-      policy.method === method &&
-      policy.path === target.pathname &&
-      (policy.allowsQuery === true || !target.hasQuery),
-  );
+  target: string,
+): PublicRouteMatch | undefined {
+  try {
+    return resolvePublicRoute(method, target);
+  } catch (error) {
+    if (error instanceof TypeError && error.message === "invalid_query") {
+      throw new GatewayHttpError(400, "invalid_query");
+    }
+    throw error;
+  }
 }
 
 function hasCookie(request: IncomingMessage): boolean {
@@ -708,10 +734,14 @@ async function handleSelfProfileRequest(
   response: ServerResponse,
   config: GatewayConfig,
   requestId: string,
-  method: string,
-  requestedUserId: number,
+  policy: PublicRouteMatch,
   clientSignal: AbortSignal,
+  trace: RequestTrace,
 ): Promise<void> {
+  const { method, resourceId: requestedUserId } = policy;
+  if (requestedUserId === undefined) {
+    throw new GatewayHttpError(404, "not_found");
+  }
   if (method === "GET") {
     response.setHeader(
       "vary",
@@ -721,36 +751,11 @@ async function handleSelfProfileRequest(
   if (config.maintenanceMode) {
     drainRequest(request);
     sendGatewayError(response, 503, "maintenance", requestId);
-    log(config, "gateway.maintenance_denied", {
-      method,
-      requestId,
-      routeFamily: "self-profile",
-      status: 503,
-    });
+    logRequest(config, trace, requestId, "maintenance", 503);
     return;
   }
 
-  const policy =
-    method === "GET"
-      ? selfProfileGetPolicy
-      : method === "PATCH"
-        ? selfProfilePatchPolicy
-        : undefined;
-
-  if (!policy) {
-    drainRequest(request);
-    sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.self_profile_denied", {
-      method,
-      outcome: "method_not_allowed",
-      requestId,
-      routeFamily: "self-profile",
-      status: 404,
-    });
-    return;
-  }
-
-  validateRouteHeaders(request, policy, config);
+  validateRouteHeaders(request, policy, config.requestBodyLimitBytes);
 
   let body: Buffer | undefined;
   if (method === "PATCH") {
@@ -769,12 +774,7 @@ async function handleSelfProfileRequest(
     if (!hasCookie(request)) {
       drainRequest(request);
       sendGatewayError(response, 401, "unauthorized", requestId);
-      log(config, "gateway.unauthorized", {
-        method,
-        requestId,
-        routeFamily: "self-profile",
-        status: 401,
-      });
+      logRequest(config, trace, requestId, "unauthorized", 401);
       return;
     }
 
@@ -789,36 +789,39 @@ async function handleSelfProfileRequest(
 
   if (!hasCookie(request)) {
     sendGatewayError(response, 401, "unauthorized", requestId);
-    log(config, "gateway.unauthorized", {
-      method,
-      requestId,
-      routeFamily: "self-profile",
-      status: 401,
-    });
+    logRequest(config, trace, requestId, "unauthorized", 401);
     return;
   }
 
-  const session = await verifySession(request, config, requestId, clientSignal);
-  if (session.userId !== requestedUserId) {
+  const session = await verifySession(
+    request,
+    config,
+    requestId,
+    clientSignal,
+    trace,
+  );
+  if (method !== "GET") {
+    takeRateLimit(
+      config,
+      "session:" + String(session.userId) + ":mutation",
+      60,
+    );
+  }
+  if (method === "PATCH" && session.userId !== requestedUserId) {
     sendGatewayError(response, 404, "not_found", requestId);
-    log(config, "gateway.self_profile_denied", {
-      method,
-      outcome: "id_mismatch",
-      requestId,
-      routeFamily: "self-profile",
-      status: 404,
-    });
+    logRequest(config, trace, requestId, "id_mismatch", 404);
     return;
   }
 
   const upstream = await fetchUpstream(
     request,
     method,
-    "/api/users/" + String(requestedUserId),
+    policy.upstreamPath,
     body,
     config,
     requestId,
     clientSignal,
+    trace,
   );
 
   sendSelfProfileResponse(
@@ -829,24 +832,7 @@ async function handleSelfProfileRequest(
     requestId,
     session.setCookies,
   );
-  log(config, "gateway.self_profile_proxied", {
-    method,
-    requestId,
-    routeFamily: "self-profile",
-    status: upstream.response.status,
-  });
-}
-
-function parseCanonicalSelfProfileUserId(pathname: string): number | undefined {
-  const match = /^\/api\/users\/([1-9]\d*)$/.exec(pathname);
-  if (!match) {
-    return undefined;
-  }
-
-  const id = Number(match[1]);
-  return Number.isSafeInteger(id) && id > 0 && String(id) === match[1]
-    ? id
-    : undefined;
+  logRequest(config, trace, requestId, "proxied", response.statusCode);
 }
 
 function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
@@ -913,37 +899,27 @@ function sendSelfProfileResponse(
   requestId: string,
   sessionSetCookies: readonly string[],
 ): void {
-  if (upstream.response.status === 404) {
-    sendGatewayError(response, 404, "not_found", requestId);
+  const setCookies = [
+    ...sessionSetCookies,
+    ...getSetCookies(upstream.response.headers),
+  ];
+  if (setCookies.length > 0) response.setHeader("set-cookie", setCookies);
+  if (upstream.response.status >= 400) {
+    sendJson(
+      response,
+      upstream.response.status,
+      publicError(upstream.response.status),
+      requestId,
+    );
     return;
   }
-
-  if (!upstream.response.ok) {
-    if (upstream.response.status >= 400 && upstream.response.status < 500) {
-      sendGatewayError(
-        response,
-        method === "PATCH" ? 400 : 404,
-        method === "PATCH" ? "invalid_profile_update" : "not_found",
-        requestId,
-      );
-      return;
-    }
-
-    throw new UpstreamFailureError();
-  }
+  if (!upstream.response.ok) throw new UpstreamFailureError();
 
   const profile = sanitizeSelfProfile(upstream.body, expectedUserId);
   if (!profile) {
     throw new UpstreamFailureError();
   }
 
-  const setCookies = [
-    ...sessionSetCookies,
-    ...getSetCookies(upstream.response.headers),
-  ];
-  if (setCookies.length > 0) {
-    response.setHeader("set-cookie", setCookies);
-  }
   response.setHeader("vary", "Cookie");
   sendJson(response, 200, profile, requestId);
 }
@@ -959,23 +935,11 @@ function sanitizeSelfProfile(
     return undefined;
   }
 
-  if (!isJsonRecord(payload) || payload.id !== expectedUserId) {
+  try {
+    return projectProfile(payload, expectedUserId);
+  } catch {
     return undefined;
   }
-
-  const name = readBoundedString(payload.name, 120);
-  const subjects = sanitizeSubjects(payload.subjects);
-  const createdAt = readBoundedString(payload.createdAt, 128);
-  if (!name || !subjects || !createdAt) {
-    return undefined;
-  }
-
-  return {
-    id: expectedUserId,
-    name,
-    subjects,
-    createdAt,
-  };
 }
 
 function sanitizeSubjects(value: unknown): string[] | undefined {
@@ -1024,6 +988,7 @@ async function verifySession(
   config: GatewayConfig,
   requestId: string,
   clientSignal: AbortSignal,
+  trace?: RequestTrace,
 ): Promise<SessionVerification> {
   const upstream = await fetchUpstream(
     request,
@@ -1033,6 +998,7 @@ async function verifySession(
     config,
     requestId,
     clientSignal,
+    trace,
   );
 
   if (upstream.response.status === 401 || upstream.response.status === 403) {
@@ -1150,7 +1116,9 @@ async function fetchUpstream(
   config: GatewayConfig,
   requestId: string,
   clientSignal: AbortSignal,
+  trace?: RequestTrace,
 ): Promise<UpstreamResponse> {
+  const startedAt = Date.now();
   const timeoutAbortController = new AbortController();
   let timedOut = false;
   const abortForClientDisconnect = () => timeoutAbortController.abort();
@@ -1196,6 +1164,10 @@ async function fetchUpstream(
   } finally {
     clearTimeout(timeout);
     clientSignal.removeEventListener("abort", abortForClientDisconnect);
+    if (trace) {
+      trace.upstreamCalls += 1;
+      trace.upstreamDurationMs += Date.now() - startedAt;
+    }
   }
 }
 
@@ -1264,6 +1236,7 @@ function sendUpstreamResponse(
   requestId: string,
   additionalSetCookies: readonly string[] | undefined,
   authenticationDependentGet: boolean,
+  policy: PublicRouteMatch,
 ): void {
   if (response.writableEnded || response.destroyed) {
     return;
@@ -1274,7 +1247,7 @@ function sendUpstreamResponse(
     if (
       normalizedName === "set-cookie" ||
       STRIPPED_RESPONSE_HEADERS.has(normalizedName) ||
-      normalizedName.startsWith("access-control-")
+      !["content-type", "retry-after", "vary"].includes(normalizedName)
     ) {
       continue;
     }
@@ -1298,11 +1271,33 @@ function sendUpstreamResponse(
     );
   }
 
-  response.statusCode = upstream.response.status;
-  response.setHeader("content-length", upstream.body.length);
-  response.setHeader("x-content-type-options", "nosniff");
-  response.setHeader("x-request-id", requestId);
-  response.end(upstream.body);
+  response.setHeader("cache-control", "no-store");
+  if (upstream.response.status >= 400) {
+    sendJson(
+      response,
+      upstream.response.status,
+      publicError(upstream.response.status),
+      requestId,
+    );
+    return;
+  }
+  if (upstream.response.status === 204) {
+    response.writeHead(204, { "x-request-id": requestId });
+    response.end();
+    return;
+  }
+  let payload: unknown;
+  try {
+    payload = projectPublicPayload(
+      JSON.parse(upstream.body.toString("utf8")),
+      policy.template,
+      policy.method,
+    );
+  } catch {
+    sendGatewayError(response, 502, "backend_error", requestId);
+    return;
+  }
+  sendJson(response, upstream.response.status, payload, requestId);
 }
 
 function mergeVaryHeader(
@@ -1373,10 +1368,21 @@ function drainRequest(request: IncomingMessage): void {
   }
 }
 
-function log(
+function logRequest(
   config: GatewayConfig,
-  event: string,
-  fields: Readonly<Record<string, boolean | number | string>>,
+  trace: RequestTrace,
+  requestId: string,
+  outcome: string,
+  status: number,
 ): void {
-  config.logger.info(event, fields);
+  config.logger.info("gateway_http", {
+    family: trace.family,
+    outcome,
+    status,
+    requestId,
+    durationMs: Date.now() - trace.startedAt,
+    ...(trace.upstreamCalls > 0
+      ? { upstreamDurationMs: trace.upstreamDurationMs }
+      : {}),
+  });
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
 import { TagBadge } from "@/components/TagBadge";
+import { apiErrorMessage } from "@/lib/api-error-message";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -100,12 +102,15 @@ function getStringArray(record: JsonRecord, keys: string[]) {
 
 function normalizeEngine(value: unknown): EngineStatus {
   const record = asRecord(value);
+  const status = getString(record, ["status"], "unavailable");
   return {
     success: getBoolean(record, ["success"], false),
-    status: getString(record, ["status"], "unavailable"),
+    status,
     message: getString(record, ["message"], "No message returned."),
     error: getString(record, ["error"]),
-    isTodo: getBoolean(record, ["is_todo", "isTodo"], false),
+    isTodo:
+      getBoolean(record, ["is_todo", "isTodo"], false) ||
+      status.toLowerCase().includes("todo"),
     isReal: getBoolean(record, ["is_real", "isReal"], false),
     availableFunctions: getStringArray(record, ["available_functions", "availableFunctions"]),
   };
@@ -222,18 +227,19 @@ function MatchCard({ match }: { match: MentorMatch }) {
 }
 
 async function getJson(url: string, init?: RequestInit) {
-  const response = await fetch(url, init);
-  const payload: unknown = await response.json().catch(() => ({
-    success: false,
-    status: "runtime error",
-    message: "Response was not valid JSON.",
-  }));
-
-  if (!response.ok) {
-    const record = asRecord(payload);
-    throw new Error(getString(record, ["message"], `HTTP ${response.status}`));
+  const payload = await customFetch<unknown>(url, {
+    ...init,
+    responseType: "json",
+    credentials: "include",
+  });
+  const record = asRecord(payload);
+  if (
+    typeof record.success !== "boolean" ||
+    typeof record.status !== "string" ||
+    typeof record.message !== "string"
+  ) {
+    throw new TypeError("Unexpected practice API response");
   }
-
   return payload;
 }
 
@@ -282,7 +288,7 @@ export default function PracticeLab() {
       setLocationsStatusRaw(locations);
       setBlocksRaw(blocks);
     } catch (error) {
-      setFrontendError(error instanceof Error ? error.message : String(error));
+      setFrontendError(apiErrorMessage(error));
     } finally {
       setIsLoadingStatus(false);
     }
@@ -310,7 +316,7 @@ export default function PracticeLab() {
         success: false,
         status: "unavailable",
         message: "Could not connect to the Python matching endpoint.",
-        error: error instanceof Error ? error.message : String(error),
+        error: apiErrorMessage(error),
       });
     } finally {
       setIsRunningMatching(false);
@@ -321,8 +327,8 @@ export default function PracticeLab() {
     let parsedInput: JsonRecord;
     try {
       parsedInput = asRecord(JSON.parse(locationInput));
-    } catch (error) {
-      setFrontendError(`Location test input is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      setFrontendError("Location test input is not valid JSON.");
       return;
     }
 
@@ -340,7 +346,7 @@ export default function PracticeLab() {
         success: false,
         status: "unavailable",
         message: "Could not connect to the Python location test endpoint.",
-        error: error instanceof Error ? error.message : String(error),
+        error: apiErrorMessage(error),
       });
     } finally {
       setIsRunningLocation(false);
@@ -391,7 +397,10 @@ export default function PracticeLab() {
       </div>
 
       {frontendError && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div
+          className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
+        >
           {frontendError}
         </div>
       )}
@@ -486,10 +495,23 @@ export default function PracticeLab() {
         <p className="mt-2 text-sm text-muted-foreground">{matchingEngine.message}</p>
         {matchingEngine.error && <p className="mt-2 text-sm text-red-700">Error: {matchingEngine.error}</p>}
 
-        {matches.length === 0 ? (
+        {!matchingEngine.success && !matchingEngine.isTodo ? (
+          <div
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            role="alert"
+          >
+            <p>Python matching failed. {matchingEngine.error}</p>
+            <button type="button" onClick={() => void runMatching()} className="mt-2 font-semibold underline">
+              Retry
+            </button>
+          </div>
+        ) : matchingEngine.isTodo ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Python service is connected or reachable, but the student matching function has not
-            returned matches yet.
+            This matching mission is not implemented yet. {matchingEngine.message}
+          </div>
+        ) : matches.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            Python returned a real result with no matches.
           </div>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
