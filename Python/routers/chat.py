@@ -652,7 +652,7 @@ async def dm_socket(websocket: WebSocket, conversation_id: int):
     # Retrieve current user/participant from session, token, or context
     user = await get_current_user_from_ws(websocket)  # Helper assumed from context/Mission 4
 
-    # Check if the user is one of the two participants in this conversation
+    # Check if the user is one of the two participants in this conversationa
     participants = await get_conversation_participants(conversation_id)
     if not user or user.id not in participants:
         await websocket.close(code=4403)
@@ -660,7 +660,7 @@ async def dm_socket(websocket: WebSocket, conversation_id: int):
 
     await websocket.accept()
 
-    # Register connection using conversation_id as the key
+    # Register connection using conversation_id as the keys
     manager.connect(conversation_id, websocket)
     try:
         while True:
