@@ -1,6 +1,7 @@
 import { ApiError } from "@workspace/api-client-react";
 
 const publicCodes = new Set([
+  "email_already_registered",
   "unauthorized",
   "forbidden",
   "not_found",
@@ -24,6 +25,9 @@ export function apiErrorMessage(error: unknown): string {
   }
 
   const code = publicCode(error);
+  if (error.status === 400 && code === "email_already_registered") {
+    return "This email address is already registered. Log in instead.";
+  }
   if (error.status === 401 || code === "unauthorized") {
     return "Please sign in to continue.";
   }
