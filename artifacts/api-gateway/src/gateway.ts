@@ -1273,12 +1273,27 @@ function sendUpstreamResponse(
 
   response.setHeader("cache-control", "no-store");
   if (upstream.response.status >= 400) {
-    sendJson(
-      response,
-      upstream.response.status,
-      publicError(upstream.response.status),
-      requestId,
-    );
+    const error = publicError(upstream.response.status);
+    if (
+      policy.method === "POST" &&
+      policy.template === "/api/auth/register" &&
+      upstream.response.status === 400
+    ) {
+      try {
+        const payload: unknown = JSON.parse(upstream.body.toString("utf8"));
+        if (
+          payload !== null &&
+          typeof payload === "object" &&
+          "detail" in payload &&
+          payload.detail === "Email already registered"
+        ) {
+          error.error = "email_already_registered";
+        }
+      } catch {
+        // Unrecognized backend errors keep the generic public error.
+      }
+    }
+    sendJson(response, upstream.response.status, error, requestId);
     return;
   }
   if (upstream.response.status === 204) {

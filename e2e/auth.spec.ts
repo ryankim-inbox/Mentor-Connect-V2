@@ -35,6 +35,40 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
+test("duplicate registration explains the email is registered and offers sign in", async ({
+  page,
+}) => {
+  await fallback(page);
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ status: 401, json: { error: "unauthorized" } }),
+  );
+  await page.route("**/api/auth/register", (route) =>
+    route.fulfill({ status: 400, json: { error: "email_already_registered" } }),
+  );
+  await page.route("**/api/districts?**", (route) =>
+    route.fulfill({ json: [{ id: 1, name: "School", county: "Test" }] }),
+  );
+  await page.goto("/register");
+  await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+  await page.getByPlaceholder("Create a password").fill("password123");
+  await page.getByPlaceholder("Your name").fill(accountA.name);
+  await page.locator("select").selectOption("1");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  await expect(page.getByRole("alert")).toHaveText(
+    "This email address is already registered. Log in instead.",
+  );
+  await expect(page).toHaveURL(/\/register$/);
+  await expect(page.getByPlaceholder("you@school.edu")).toHaveValue(
+    accountA.email,
+  );
+  await expect(
+    page.getByRole("button", { name: "Create account", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("link", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("login cancels a late anonymous response and waits for verified session", async ({
   page,
 }) => {

@@ -211,6 +211,73 @@ async function listen(s: Server) {
   await new Promise<void>((r) => s.listen(0, "127.0.0.1", r));
   return `http://127.0.0.1:${(s.address() as { port: number }).port}`;
 }
+test("gateway identifies duplicate registration without exposing other backend errors", async (t) => {
+  let status = 400;
+  let body = "";
+  const upstream = createServer((_request, response) => {
+    response.writeHead(status, { "content-type": "application/json" });
+    response.end(body);
+  });
+  const origin = await listen(upstream);
+  const gateway = createGatewayServer({
+    upstreamOrigin: origin,
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
+    logger: { info() {} },
+  });
+  const url = await listen(gateway);
+  t.after(() => {
+    gateway.closeAllConnections();
+    upstream.closeAllConnections();
+    gateway.close();
+    upstream.close();
+  });
+  for (const [route, code, payload, expected] of [
+    [
+      "register", 400,
+      '{"detail":"Email already registered","debug":"audit-canary"}',
+      "email_already_registered",
+    ],
+    ["register", 400, '{"detail":"Invalid district"}', "invalid_input"],
+    [
+      "register", 400,
+      '{"detail":"Email already registered: audit-canary"}',
+      "invalid_input",
+    ],
+    ["register", 400, "not-json audit-canary", "invalid_input"],
+    ["register", 400, "null", "invalid_input"],
+    [
+      "register", 500,
+      '{"detail":"Email already registered"}',
+      "backend_error",
+    ],
+    ["login", 400, '{"detail":"Email already registered"}', "invalid_input"],
+  ] as const) {
+    status = code;
+    body = payload;
+    const response = await fetch(`${url}/api/auth/${route}`, {
+      method: "POST",
+      headers: {
+        origin: TEST_PUBLIC_ORIGIN,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email: "existing@school.edu",
+        password: "password123",
+        ...(route === "register"
+          ? { name: "Existing User", role: "mentee", districtId: 1 }
+          : {}),
+      }),
+    });
+    assert.equal(response.status, code);
+    assert.deepEqual(
+      await response.json(),
+      { error: expected },
+      `${route}: ${payload}`,
+    );
+  }
+});
+
 test("real gateway strips HTTP error bodies/debug headers, preserves cookies and rejects bad successes", async (t) => {
   let status = 422;
   let payload: unknown = { detail: [{ input: "audit-canary" }] };
