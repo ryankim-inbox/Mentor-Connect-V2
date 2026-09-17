@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 dist/
 dist-test/
+.release-runtime/
 *.tsbuildinfo
 .env
 .env.*

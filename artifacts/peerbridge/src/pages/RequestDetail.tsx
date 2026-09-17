@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useGetRequest,
@@ -10,42 +10,38 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
 import { sortTimeSlots } from "@/lib/timeSlots";
-import { isFeatureEnabled } from "@/lib/release-flags";
+import { apiErrorMessage } from "@/lib/api-error-message";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
   id: string;
 }
 
-// This import must remain behind Vite's compile-time DEV constant. It gives
-// developers an explicit opt-in path without emitting the match mutation in a
-// production bundle.
-const DevelopmentConnectAction = import.meta.env.DEV
-  ? lazy(() => import("@/components/DevelopmentConnectAction"))
-  : null;
+const ConnectAction = lazy(() => import("@/components/ConnectAction"));
 
 export default function RequestDetail({ id }: Props) {
   const requestId = Number(id);
-  const connectEnabled = isFeatureEnabled("connect");
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const [showReport, setShowReport] = useState(false);
-  const [justMatched, setJustMatched] = useState(false);
 
-  const { data: request, isLoading } = useGetRequest(requestId, {
+  const { data: request, error: requestError, isLoading, refetch } = useGetRequest(requestId, {
     query: { queryKey: getGetRequestQueryKey(requestId), enabled: !!requestId }
   });
 
   const isAuthor = user?.id === request?.authorId;
   const isMatched = user?.id === request?.matchedUserId;
-  const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched || justMatched);
+  const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched);
 
   const deleteMutation = useDeleteRequest();
 
   const handleMatched = () => {
-    setJustMatched(true);
-    queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
+    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
+  };
+
+  const handleMatchFailed = () => {
+    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
   };
 
   const handleDelete = () => {
@@ -66,6 +62,17 @@ export default function RequestDetail({ id }: Props) {
     );
   }
 
+  if (requestError && !request) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center" role="alert">
+        <p className="text-destructive">{apiErrorMessage(requestError)}</p>
+        <button type="button" onClick={() => void refetch()} className="mt-4 text-primary underline">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (!request) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
@@ -76,8 +83,6 @@ export default function RequestDetail({ id }: Props) {
   }
 
   const canMatch =
-    DevelopmentConnectAction !== null &&
-    connectEnabled &&
     user !== null &&
     user !== undefined &&
     !isAuthor &&
@@ -91,7 +96,7 @@ export default function RequestDetail({ id }: Props) {
         <span className="text-foreground truncate">{request.title}</span>
       </div>
 
-      {(showMatchedPanel || justMatched) && (
+      {showMatchedPanel && (
         <div className="mb-5 bg-green-50 border border-green-200 rounded-2xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
@@ -101,10 +106,10 @@ export default function RequestDetail({ id }: Props) {
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-green-800 text-base">
-                {justMatched ? "You're connected!" : "This request has been matched"}
+                This request has been matched
               </h3>
               <p className="text-green-700 text-sm mt-1">
-                Private participant profiles are unavailable while the release uses self-only profile access.
+                Minimum member profiles include names, subjects, and join dates.
               </p>
               <div className="mt-4 sm:w-52 bg-white border border-green-100 rounded-xl p-4">
                 <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Tips</p>
@@ -178,25 +183,12 @@ export default function RequestDetail({ id }: Props) {
           </div>
 
           <div className="flex gap-2">
-            {canMatch && DevelopmentConnectAction && (
-              <Suspense
-                fallback={(
-                  <button
-                    type="button"
-                    disabled
-                    className="px-5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold opacity-50"
-                  >
-                    Loading…
-                  </button>
-                )}
-              >
-                <DevelopmentConnectAction requestId={requestId} onMatched={handleMatched} />
-              </Suspense>
-            )}
-            {!connectEnabled && user && !isAuthor && request.status === "open" && (
-              <p className="self-center text-xs text-muted-foreground" role="status">
-                Connect is temporarily unavailable in this release.
-              </p>
+            {canMatch && (
+              <ConnectAction
+                requestId={requestId}
+                onMatched={handleMatched}
+                onFailed={handleMatchFailed}
+              />
             )}
             {!isAuthor && user && (
               <button
@@ -210,6 +202,7 @@ export default function RequestDetail({ id }: Props) {
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
+                aria-busy={deleteMutation.isPending}
                 className="px-3 py-2 border border-destructive/30 text-destructive rounded-lg text-sm hover:bg-destructive/5 transition-colors"
               >
                 Delete
@@ -218,6 +211,15 @@ export default function RequestDetail({ id }: Props) {
           </div>
         </div>
       </div>
+
+      {deleteMutation.isError && (
+        <p
+          className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
+        >
+          {apiErrorMessage(deleteMutation.error)} Try Delete again to retry.
+        </p>
+      )}
 
       {showReport && request && (
         <ReportModal

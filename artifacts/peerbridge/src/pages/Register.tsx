@@ -1,11 +1,49 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useRef, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { useRegister, useListDistricts } from "@workspace/api-client-react";
-import { useAuth } from "@/lib/auth-context";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth, sessionReturnPath } from "@/lib/auth-context";
+import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function Register() {
   const [, navigate] = useLocation();
   const { refetch } = useAuth();
+  const queryClient = useQueryClient();
+  const search = useSearch();
+  const destination = sessionReturnPath(
+    new URLSearchParams(search).get("returnTo"),
+  );
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
+  const confirmSession = async () => {
+    try {
+      const user = await refetch();
+      if (user) navigate(destination);
+      else
+        setError(
+          "Your session isn't active yet. Recheck your session or sign in again.",
+        );
+    } catch {
+      setError(
+        "Your account was accepted, but we couldn't verify the session. Please recheck it.",
+      );
+    }
+  };
+  const retrySession = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try {
+      await confirmSession();
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -36,8 +74,9 @@ export default function Register() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
     setError("");
 
     if (!form.email.toLowerCase().endsWith(".edu")) {
@@ -50,19 +89,25 @@ export default function Register() {
       return;
     }
 
-    registerMutation.mutate(
-      { data: form },
-      {
-        onSuccess: () => {
-          refetch();
-          navigate("/profile");
-        },
-        onError: (err: unknown) => {
-          const e = err as { data?: { error?: string } };
-          setError(e?.data?.error ?? "Registration failed. Please try again.");
-        },
-      },
-    );
+    busy.current = true;
+    setPending(true);
+    setNeedsConfirmation(false);
+    try {
+      await queryClient.cancelQueries({ queryKey: getGetMeQueryKey() });
+      const response = await registerMutation.mutateAsync({ data: form });
+      await queryClient.cancelQueries();
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],
+      });
+      queryClient.setQueryData(getGetMeQueryKey(), response.user);
+      setNeedsConfirmation(true);
+      await confirmSession();
+    } catch (error) {
+      setError(apiErrorMessage(error));
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
   };
 
   return (
@@ -78,13 +123,15 @@ export default function Register() {
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-8 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-busy={pending}>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-name" className="block text-sm font-medium text-foreground mb-1.5">
                 Full name
               </label>
               <input
+                id="register-name"
                 type="text"
+                autoComplete="name"
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
@@ -96,14 +143,16 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-email" className="block text-sm font-medium text-foreground mb-1.5">
                 School email{" "}
                 <span className="text-muted-foreground font-normal">
                   (must be .edu)
                 </span>
               </label>
               <input
+                id="register-email"
                 type="email"
+                autoComplete="username"
                 value={form.email}
                 onChange={handleEmailChange}
                 placeholder="you@school.edu"
@@ -111,16 +160,18 @@ export default function Register() {
                 className={`w-full px-3 py-2.5 border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition ${emailError ? "border-destructive" : "border-input"}`}
               />
               {emailError && (
-                <p className="text-xs text-destructive mt-1">{emailError}</p>
+                <p className="text-xs text-destructive mt-1" role="alert">{emailError}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="register-password" className="block text-sm font-medium text-foreground mb-1.5">
                 Password
               </label>
               <input
+                id="register-password"
                 type="password"
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
@@ -132,10 +183,10 @@ export default function Register() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+            <fieldset>
+              <legend className="block text-sm font-medium text-foreground mb-2">
                 I want to be a...
-              </label>
+              </legend>
               <div className="grid grid-cols-3 gap-2">
                 {(["mentee", "mentor", "both"] as const).map((r) => (
                   <button
@@ -164,20 +215,23 @@ export default function Register() {
                 {form.role === "both" &&
                   "You'll both give and receive guidance"}
               </p>
-            </div>
+            </fieldset>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
+              <label htmlFor="district-search" className="block text-sm font-medium text-foreground mb-1.5">
                 School district
               </label>
               <input
+                id="district-search"
                 type="text"
                 placeholder="Search districts..."
                 value={districtSearch}
                 onChange={(e) => setDistrictSearch(e.target.value)}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition mb-2"
               />
+              <label htmlFor="district-choice" className="sr-only">District choices</label>
               <select
+                id="district-choice"
                 value={form.districtId || ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, districtId: Number(e.target.value) }))
@@ -204,19 +258,28 @@ export default function Register() {
             </div>
 
             {error && (
-              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+              <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2" role="alert">
                 {error}
               </p>
             )}
 
+            {needsConfirmation && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void retrySession()}
+                className="w-full rounded-lg border px-3 py-2 disabled:opacity-50"
+              >
+                Recheck session
+              </button>
+            )}
+
             <button
               type="submit"
-              disabled={registerMutation.isPending || !!emailError}
+              disabled={pending || !!emailError}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {registerMutation.isPending
-                ? "Creating account..."
-                : "Create account"}
+              {pending ? "Creating account..." : "Create account"}
             </button>
           </form>
 
