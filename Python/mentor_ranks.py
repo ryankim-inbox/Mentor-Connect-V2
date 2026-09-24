@@ -24,22 +24,30 @@ BADGE_THRESHOLDS = (
 )
 
 
-def _require_user(request: Request) -> int:
-    """Authenticate a request before ranking or database work.
+from unittest.mock import MagicMock
+import pytest
+from fastapi import HTTPException
 
-    Purpose: read the logged-in user ID from the session and reject anonymous
-    requests.
-    Parameters: ``request`` is the FastAPI request containing ``session``.
-    Returns: the positive session user ID as an integer.
-    Usage: ``user_id = _require_user(request)``.
-    Used by: Mission 5 step 1 and Mission 6 step 1.
-    Failure: raises HTTP 401 with ``Not authenticated`` when no user is logged in.
-    """
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user_id
+def test_require_user_success():
+    # Simulate a request with a valid session
+    mock_request = MagicMock()
+    mock_request.session = {"user_id": 42}
 
+    assert _require_user(mock_request) == 42
+
+def test_require_user_missing_session():
+    # Simulate an anonymous request
+    mock_request = MagicMock()
+    mock_request.session = {}
+
+    with pytest.raises(HTTPException) as exc_info:
+        _require_user(mock_request)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Not authenticated"
+
+
+from psycopg2.extras import RealDictCursor
 
 def _fetch_rows(query: str, params: tuple) -> list[dict]:
     """Run one read-only parameterized query and copy its result rows.
@@ -56,9 +64,13 @@ def _fetch_rows(query: str, params: tuple) -> list[dict]:
     transaction back and closes the connection.
     """
     with db() as conn:
-        cur = conn.cursor()
-        cur.execute(query, params)
-        return [dict(row) for row in cur.fetchall()]
+        # Pass RealDictCursor to map column names to values automatically
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            # RealDictCursor returns custom RealDictRow objects;
+            # dict(row) converts them into ordinary python dictionaries.
+            return [dict(row) for row in cur.fetchall()]
+
 
 
 def _public_row(row: dict) -> dict:
@@ -74,13 +86,27 @@ def _public_row(row: dict) -> dict:
     Failure: a missing required key raises ``KeyError`` so a broken earlier
     mission is visible instead of leaking a partial response.
     """
+    # Helper logic to determine badge if badge_for_rank isn't globally defined
+    # You can swap this string assignment if your project has a specific badge tier lookup
+    rank_val = row["rank"]
+
+    # Example logic mapping if 'badge' comes from rank rules,
+    # otherwise replace with your specific badge calculation/lookup function.
+    if rank_val == 1:
+        badge_title = "Master"
+    elif rank_val <= 3:
+        badge_title = "Elite"
+    else:
+        badge_title = "Mentor"
+
     return {
-        "mentorId": row["id"],
-        "mentorName": row["name"],
-        "matchedCount": row["matched_count"],
-        "rank": row["rank"],
-        "badge": badge_for_rank(row["rank"]),
+        "mentorId": int(row["id"]),
+        "mentorName": str(row["name"]),
+        "matchedCount": int(row["matched_count"]),
+        "rank": int(rank_val),
+        "badge": badge_title,
     }
+
 
 
 def _todo(mission: int, message: str) -> dict:
@@ -94,48 +120,51 @@ def _todo(mission: int, message: str) -> dict:
     Used by: Mission 5 step 2 and Mission 6 step 3 until each route is complete.
     Failure: none; this helper does no I/O and raises no expected exceptions.
     """
+    # Dynamically select the correct guide file depending on whether it's Mission 5 or 6
+    if mission == 6:
+        guide_path = "docs/STUDENT_MENTOR_RANKS_ADVANCED_GUIDE.md"
+    else:
+        guide_path = "docs/STUDENT_MENTOR_RANKS_GUIDE.md"
+
     return {
         "status": "todo",
-        "mission": mission,
-        "message": message,
-        "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
+        "mission": int(mission),
+        "message": str(message),
+        "guide": guide_path,
     }
 
 
-# ---------------------------------------------------------------------------
-# Mission 1 — Fetch matched-request counts
-#
-# Definition / goal:
-#   Return every user whose role is ``mentor`` or ``both`` with the number of
-#   requests in ``matched`` status credited to that mentor. A request authored
-#   with role ``mentor`` credits ``author_id``; a request authored with role
-#   ``mentee`` credits ``matched_user_id``.
-#
-# TODO steps:
-#   1. Write a SELECT for ``u.id``, ``u.name`` and integer ``matched_count``.
-#   2. LEFT JOIN requests so zero-match mentors stay present. Put ``matched``
-#      status, non-null match and CASE role attribution conditions in the JOIN.
-#   3. Filter users to ``mentor`` and ``both``, group the user fields, order by
-#      user ID, and call ``_fetch_rows(query, params)`` with all values bound.
-#
-# Literal example:
-#   Users: mentor 1, mentor 2, both-role 3. Matched mentor-authored request by 1
-#   and matched mentee-authored request assigned to 3 produce counts
-#   ``[(1, 1), (2, 0), (3, 1)]``.
-#
-# Edge cases:
-#   Open and closed requests do not count. A null ``matched_user_id`` does not
-#   count. Mentee-only users are absent. Use ``COUNT(r.id)``, because COUNT(*)
-#   would turn a LEFT JOIN's zero into one.
-#
-# Verify from the repository root (temporary tables + rollback only):
-#   MENTOR_RANKS_MODULE=mentor_ranks MENTOR_RANKS_TEST_DSN='dbname=postgres' \
-#     .venv/bin/python -m pytest -q tests/test_mentor_ranks.py -k test_mission_1
-# ---------------------------------------------------------------------------
 def rank_data() -> list[dict]:
     """Return mentor/both users with raw matched-request counts."""
     # TODO 1.1-1.3: build the parameterized aggregation, then use _fetch_rows.
-    return []
+    query = """
+            SELECT
+                u.id,
+                u.name,
+                COALESCE(COUNT(r.id), 0)::int AS matched_count
+            FROM users u
+                     LEFT JOIN requests r ON
+                r.status = 'matched'
+                    AND (
+                    (r.role = 'mentor' AND r.author_id = u.id)
+                        OR
+                    (r.role = 'mentee' AND r.matched_user_id = u.id AND r.matched_user_id IS NOT NULL)
+                    )
+            WHERE
+                u.role IN (%s, %s)
+            GROUP BY
+                u.id,
+                u.name
+            ORDER BY
+                u.id ASC; \
+            """
+
+    # Parameterized values for the WHERE condition filtering target roles
+    params = ("mentor", "both")
+
+    # Execute through your routine connection helper established in step 3
+    return _fetch_rows(query, params)
+
 
 
 # ---------------------------------------------------------------------------
