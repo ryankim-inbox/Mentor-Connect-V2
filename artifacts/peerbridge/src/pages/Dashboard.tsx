@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useGetStatsOverview, useListRequests, useListDistricts } from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
-import { isFeatureEnabled, releaseSurface } from "@/lib/release-flags";
+import { releaseSurface } from "@/lib/release-flags";
 
 type DashboardTab = "overview" | "practice-lab";
 
@@ -26,8 +26,7 @@ function getDashboardTabFromUrl(practiceAvailable: boolean): DashboardTab {
 
 export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = {}) {
   const { user } = useAuth();
-  const practiceEnabled = isFeatureEnabled("practice");
-  const practiceAvailable = practiceEnabled && PracticeLab !== undefined;
+  const practiceAvailable = PracticeLab !== undefined;
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
     practiceAvailable ? initialTab ?? getDashboardTabFromUrl(practiceAvailable) : "overview",
   );
@@ -87,9 +86,7 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
 
   const overviewStats = [
     { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
-    ...(isFeatureEnabled("matching")
-      ? [{ label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" }]
-      : []),
+    { label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" },
     { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
   ];
 
@@ -123,7 +120,7 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
         <PracticeLab />
       ) : (
         <>
-          <div className={`grid gap-4 mb-8 ${overviewStats.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+          <div className="grid gap-4 mb-8 md:grid-cols-3">
             {overviewStats.map(({ label, value, color }) => (
               <div key={label} className="bg-card border border-card-border rounded-xl p-5">
                 <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
