@@ -352,7 +352,7 @@ def list_chat_rooms(request: Request):
 
 @router.get("/chat/rooms/{room_id}/messages")
 def list_room_messages(room_id: int, request: Request):
-    """Mission 2 — message history for one room, oldest -> newest."""
+    """Mission 2 — latest 50 visible room messages, oldest -> newest."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
@@ -364,12 +364,12 @@ def list_room_messages(room_id: int, request: Request):
                JOIN users u ON u.id = m.sender_id
                WHERE m.room_id = %s
                  AND m.deleted_at IS NULL
-               ORDER BY m.created_at
+               ORDER BY m.created_at DESC, m.id DESC
                LIMIT 50""",
             (room_id,),
         )
         messages = cur.fetchall()
-    return [_format_chat_message(message) for message in messages]
+    return [_format_chat_message(message) for message in reversed(messages)]
 
 
 @router.post("/chat/rooms/{room_id}/messages", status_code=201)

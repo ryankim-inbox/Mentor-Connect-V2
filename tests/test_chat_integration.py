@@ -198,6 +198,54 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
             assert stored_request["matchedUserId"] == successful_caller_id
 
 
+def test_room_history_returns_latest_visible_window(chat_server, chat_database):
+    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO districts (name, county, type) VALUES (%s, %s, %s) RETURNING id",
+                    ("History test district", "Test county", "high_school"))
+        district_id = cur.fetchone()[0]
+        cur.execute("INSERT INTO chat_rooms (type, district_id, name) VALUES (%s, %s, %s) RETURNING id",
+                    ("district", district_id, "History test room"))
+        room_id = cur.fetchone()[0]
+        cur.execute("UPDATE users SET district_id = %s WHERE id = %s", (district_id, 1))
+        conn.commit()
+
+    with chat_server() as base:
+        student, _ = login(base, "student001@test.edu")
+        history_path = f"/api/chat/rooms/{room_id}/messages"
+        assert api(student, base, "GET", history_path) == (200, [])
+        visible_ids = []
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            for number in range(60):
+                cur.execute(
+                    "INSERT INTO chat_messages (room_id, sender_id, body, created_at) "
+                    "VALUES (%s, %s, %s, %s) RETURNING id",
+                    (room_id, 1, f"Visible message {number + 1}", "2000-01-01 00:00:00+00"),
+                )
+                visible_ids.append(cur.fetchone()[0])
+            cur.execute(
+                "INSERT INTO chat_messages (room_id, sender_id, body, created_at, deleted_at) "
+                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (room_id, 1, "Deleted newer message", "2000-01-02 00:00:00+00", "2000-01-03 00:00:00+00"),
+            )
+            deleted_id = cur.fetchone()[0]
+            conn.commit()
+
+        status, history = api(student, base, "GET", history_path)
+        assert status == 200 and len(history) == 50
+        assert [message["id"] for message in history] == visible_ids[10:]
+        assert deleted_id not in [message["id"] for message in history]
+        ordering = [(message["createdAt"], message["id"]) for message in history]
+        assert ordering == sorted(ordering)
+
+        status, sent = api(student, base, "POST", history_path, {"body": "Visible message 61"})
+        assert status == 201 and sent["roomId"] == room_id
+        status, next_history = api(student, base, "GET", history_path)
+        assert status == 200 and len(next_history) == 50
+        assert [message["id"] for message in next_history] == visible_ids[11:] + [sent["id"]]
+        ordering = [(message["createdAt"], message["id"]) for message in next_history]
+        assert ordering == sorted(ordering)
+
+
 def test_rest_missions_privacy_validation_and_persistence(chat_server):
     with chat_server() as base:
         student, _ = login(base, "student001@test.edu")
@@ -218,6 +266,7 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         assert status == 200 and [r["id"] for r in rooms] == [1, 2]
         status, messages = api(student, base, "GET", "/api/chat/rooms/1/messages")
         assert status == 200 and len(messages) == 4
+        assert [message["id"] for message in messages] == [1, 2, 3, 4]
         assert all(m["senderName"] for m in messages)
         assert api(student, base, "GET", "/api/chat/rooms/3/messages")[0] == 403
         assert api(student, base, "GET", "/api/chat/rooms/99999/messages")[0] == 404

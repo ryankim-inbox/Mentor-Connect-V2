@@ -111,12 +111,19 @@ affected resources and record HTTP status evidence for:
 - `GET /api/auth/me` for each repaired member: 200 with the replacement name.
 - `GET /api/users/<id>` for every repaired ID: 200 with the replacement name.
 - `GET /api/chat/rooms/<room_id>/messages` for every room ID in the evidence: 200,
-  including history pages containing that member's messages and replacement sender name.
+  returning the latest 50 visible messages, displayed oldest to newest. Verify the
+  replacement sender name on any repaired member's messages in that window.
 - `GET /api/dms` for each participant in affected conversations: 200 with the
   replacement participant name, and `GET /api/dms/<conversation_id>/messages`: 200
   for every affected conversation using an authorized participant session.
 
 Respect room and DM access checks; never bypass authentication to perform verification.
+Room history has a fixed latest-visible window and no pagination. For repaired
+senders whose messages fall outside that window, use a read-only transaction through
+`db()` to join `chat_messages.sender_id` to `users.id`, scoped by the reviewed sender
+and room IDs with parameterized SQL. Save message IDs, `deleted_at`, and the joined
+replacement sender name in the protected evidence location; compare them with the
+approved backup. Never delete or alter messages to force them into an API response.
 Compare message counts/IDs against the protected evidence or approved backup to
 confirm histories were preserved. Retain preflight, reviewed IDs, transaction result,
 postflight, and endpoint status evidence. Code tests alone do not establish the state
