@@ -124,7 +124,18 @@ const fixtures: Record<string, unknown> = {
     requested_subject: "Math",
     requested_topic: "Derivatives",
     limit: 5,
-    matches: [],
+    matches: [{
+      rank: 1,
+      mentor_id: 3,
+      mentor_name: "Calculus Mentor",
+      score: 95,
+      reason: "Shared Math subject and Monday availability.",
+      matched_subjects: ["Math"],
+      district: "Classroom North",
+      availability: "Mon 17:00",
+      language: "English",
+      teaching_style: "Guided practice",
+    }],
   },
   "/api/analysis/status": pythonEnvelope("analysis", null),
   "/api/analytics/weekly-matches": pythonEnvelope("analysis", [
@@ -319,6 +330,30 @@ test("request detail Connect completes through the production control", async ({
       exact: true,
     }),
   ).toBeVisible();
+  expect(unknownRequests).toEqual([]);
+});
+
+test("recommendation action navigates to browse requests", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+
+  await page.goto("/recommendations");
+  await expect(page.getByText("Calculus Mentor", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Browse requests", exact: true })).toHaveAttribute("href", "/requests");
+  await expect(page.getByRole("button", { name: "Request match", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Browse requests", exact: true }).click();
+  await expect(page).toHaveURL(/\/requests$/);
+  await expect(page.getByRole("heading", { name: "Browse Mentorship Requests" })).toBeVisible();
+  expect(unknownRequests).toEqual([]);
+});
+
+test("dashboard shows matching stats and opens its available practice tab", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+
+  await page.goto("/dashboard");
+  await expect(page.getByText("Successful matches", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Python Practice Lab", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/practice-lab$/);
+  await expect(page.getByRole("heading", { name: "Python Practice Lab", exact: true })).toBeVisible();
   expect(unknownRequests).toEqual([]);
 });
 
