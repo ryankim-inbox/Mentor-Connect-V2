@@ -638,6 +638,7 @@ def test_mission_7_sends_validated_message(monkeypatch, text):
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
                   one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
         QueryStep("insert into dm_messages", params=(7, 1, text), one={"id": 42}),
         QueryStep("from dm_messages", params=(42,), one={
             "id": 42, "conversation_id": 7, "sender_id": 1,
@@ -682,6 +683,10 @@ def test_mission_8_persists_broadcasts_and_cleans_up(monkeypatch):
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
                   one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
+        QueryStep("from dm_conversations", params=(7,),
+                  one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
         QueryStep("insert into dm_messages", params=(7, 1, "hello"), one={"id": 42}),
         QueryStep("from dm_messages", params=(42,), one={
             "id": 42, "conversation_id": 7, "sender_id": 1,
