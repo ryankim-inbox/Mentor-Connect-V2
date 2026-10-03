@@ -67,21 +67,43 @@ PORT=8000
 
 ## 3. Run the app
 
-Backend:
+Run these commands in three separate terminals, all from the repository root.
+Use Node `24.21.0` (`nvm use 24.21.0`) and pnpm `10.33.0` in the Node terminals.
+The API requires `DATABASE_URL` and `SESSION_SECRET` in `Python/.env`, and the
+configured PostgreSQL server must be running. Keep an existing populated DB;
+starting the app does not require resetting or re-seeding it.
 
 ```bash
-cd Python
-source ../.venv/bin/activate
-python main.py
-curl http://localhost:8000/api/healthz   # {"status":"ok","backend":"python-fastapi"}
+# Terminal 1 — Python API (private upstream)
+.venv/bin/python -m uvicorn main:app --app-dir Python --reload --host 127.0.0.1 --port 8181
 ```
-
-Frontend:
 
 ```bash
-PORT=8080 BASE_PATH=/ pnpm --filter @workspace/peerbridge dev
-# open http://localhost:8080
+# Terminal 2 — API gateway
+NODE_ENV=development GATEWAY_PUBLIC_ORIGIN=http://localhost:5173 GATEWAY_UPSTREAM_ORIGIN=http://127.0.0.1:8181 PORT=8080 pnpm --filter @workspace/api-gateway dev
 ```
+
+```bash
+# Terminal 3 — frontend
+PORT=5173 BASE_PATH=/ pnpm --filter @workspace/peerbridge dev
+```
+
+Open **http://localhost:5173**. Use `localhost` to match the gateway's exact
+public origin. Vite proxies `/api` and `/ws` to the gateway on port 8080.
+
+```bash
+curl --fail http://127.0.0.1:8181/api/healthz
+curl --fail 'http://localhost:5173/api/districts?type=high_school'
+```
+
+Both checks should return HTTP 200; the second returns your DB's district list
+(32 high-school districts with the local mock dataset). A gateway `/livez` 200
+only confirms that process is running. Source-mode `/readyz` may stay 503
+without release metadata and the separate readiness DB credentials.
+
+If startup fails, read the final line of the Python traceback. The chat router
+uses the existing psycopg2 helpers; SQLAlchemy is not a required dependency.
+Stop each process with Ctrl+C.
 
 ## 4. Demo logins (password for every user: `Password123!`)
 

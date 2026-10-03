@@ -10,7 +10,6 @@
 
 **Spec:** 사용자의 2026-10-03 오류 보고와 이 문서의 [설계 기준](#설계-기준). 기존 흐름의 bounded 수정이며, 사용자가 계획 문서를 명시적으로 요청했다. 별도의 아키텍처 변경은 없다.
 
-**Status:** 검토용 계획. 제품 코드·의존성·DB는 수정하지 않았다. DM 처리 방법은 **기존 기능을 유지하며 복구**하는 추천안을 전제로 작성했다. 학습용 TODO 복원이 선택되면 Task 1의 기능·테스트 기준부터 변경한다. 실행 방식은 아직 선택되지 않았다.
 
 ## Global Constraints
 
@@ -96,12 +95,10 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 - Produces: `list_dm_messages(conversation_id: int, request: Request) -> list[dict]`; `send_dm_message(conversation_id: int, body: SendMessageBody, request: Request) -> dict`; `async dm_socket(websocket: WebSocket, conversation_id: int) -> None`.
 - Wire contract: `/api/dms/{conversation_id}/messages` GET/POST and `/ws/dms/{conversation_id}` retain their existing paths. Messages retain `id`, `conversationId`, `senderId`, `body`, `createdAt`, `readAt`, with ISO timestamp strings and nullable `readAt`.
 
-- [ ] **Step 1: Record the failing startup check.**
 
   Run `.venv/bin/python -m pytest -q tests/test_chat_integration.py::test_backend_starts_with_declared_dependencies`.
   Expected before repair: FAIL with `ModuleNotFoundError: No module named 'sqlalchemy'`. This was already reproduced while planning; rerun when execution begins to establish the then-current baseline.
 
-- [ ] **Step 2: Replace the two stale TODO tests with behavior tests using the existing `patch_db`, `QueryStep`, `request_for`, `FakeWebSocket`, and `STAMP` helpers.**
 
   Add these assertions in named tests; DB query steps must also verify bound parameters, so a membership bypass or string-interpolated user input fails the tests:
 
@@ -136,7 +133,6 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Preserve all Mission 1–6 assertions. Run `.venv/bin/python -m pytest -q tests/test_chat_missions_1_6.py`; the initial collection still fails at the broken import. Do not install SQLAlchemy to make collection pass.
 
-- [ ] **Step 3: Add `test_districts_are_available_before_login(chat_server)` to the existing integration file.**
 
   ```python
   def test_districts_are_available_before_login(chat_server):
@@ -156,11 +152,9 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   `CHAT_TEST_ADMIN_DSN` must identify a local PostgreSQL role permitted to create disposable databases. Existing `chat_database` creates/drops its own uniquely named DB; never load its legacy fixture into the developer's populated DB. Without the variable this test is skipped, which is not completion evidence.
 
-- [ ] **Step 4: Implement the three interfaces in `chat.py` using its existing helpers.**
 
   Remove the two SQLAlchemy imports, duplicated mid-file FastAPI imports, `Depends(get_db)` parameters and undefined model references. Adapt only the corresponding methods from `chat_Answer.py`. Use parameterized SQL with actual `user_a_id/user_b_id` membership, `ORDER BY created_at, id`, and `deleted_at IS NULL` on history/read-receipt updates. Preserve HTTP 201 on POST. Add `dm_connections: dict[int, list[WebSocket]] = {}` alongside the room registry and reuse `_register`, `_broadcast`, `_unregister` for the DM socket. Remove the undefined WebSocket helper/manager references. Update the file's Mission 7–8 comments to match completed behavior.
 
-- [ ] **Step 5: Run targeted backend verification.**
 
   ```bash
   .venv/bin/python -m pytest -q tests/test_chat_missions_1_6.py
@@ -169,7 +163,6 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Expected: no failures; no skips in the DB-backed selection after the disposable-DB prerequisite is configured. Existing integration checks exercise persistence, real HTTP status codes, privacy and both room/DM WebSockets. The unrelated recent-50 and concurrent-start tests are outside this targeted command; document any separately observed failures honestly.
 
-- [ ] **Step 6: Update both README run sections with the exact local commands below and expected health checks.**
 
   All three terminals start in the repository root. Document Node 24 selection for Node terminals, `Python/.env` requirements, and separate process startup. Replace outdated two-process examples; preserve the database fixture warnings and all existing data.
 
@@ -184,7 +177,6 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Verify `GET http://127.0.0.1:8181/api/healthz` and `GET http://localhost:5173/api/districts?type=high_school`. Expected: 200 for both, with 32 districts in the current local dataset. Use `/livez` only for gateway liveness; source-mode `/readyz` can remain 503 because deployment metadata/readiness credentials are separate requirements. Existing user-run processes must be reused or deliberately restarted, never killed indiscriminately.
 
-- [ ] **Step 7: Review the focused diff and commit this tested deliverable.**
 
   ```bash
   git add Python/routers/chat.py tests/test_chat_missions_1_6.py tests/test_chat_integration.py Python/README.md database/README.md
@@ -200,7 +192,6 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 - Produces: same Register component and registration body shape, with accessible query-state text, a `type="button"` retry action, and consistent `form.districtId` selection.
 - No changes to generated clients, gateway policies, district API, or global QueryClient settings.
 
-- [ ] **Step 1: Add deterministic browser tests with the existing Playwright route interception pattern.**
 
   Mock `/api/auth/me` as 401 and `**/api/districts?**` independently. Use a deferred promise for loading and out-of-order responses, rather than arbitrary sleeps. Fixture district: `{id: 1, name: 'School A', county: 'Test', type: 'high_school', memberCount: 0, openRequestCount: 0}`. Fill other registration fields with `Tester`, `tester@school.edu`, `Password123!` before asserting district-dependent submit state.
 
@@ -215,7 +206,6 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Intercept registration and count requests in disabled-state tests: `expect(registerCalls).toBe(0)`. Retry must not submit the form. For a background refresh failure after previously loaded data, assert stale options cannot still be selected while the error is shown.
 
-- [ ] **Step 2: Build the current browser test target and observe the new tests fail for the missing states.**
 
   ```bash
   pnpm --filter @workspace/api-gateway build
@@ -225,11 +215,9 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Expected before repair: missing loading/error/retry/empty-result UI and selection-state assertions fail. `playwright.config.ts` runs a fixture API and dedicated ports, so these tests do not prove the real Python backend starts.
 
-- [ ] **Step 3: Implement the states inside the existing Register component.**
 
   Read `isPending`, `isError`, `isFetching`, and `refetch` from the existing hook. Derive UI state directly; do not duplicate query state in new React state. Error takes precedence over cached results. Use the exact text from the design, `role="status"` for loading/empty results, `role="alert"` for errors, and `type="button"` for Retry districts. Disable select/submit while pending, fetching, or errored, and submit while districtId is zero. Retain the existing submit-time district guard. On search input change set search and reset `districtId: 0`; keep other form fields. Keep the existing query key and native select.
 
-- [ ] **Step 4: Rebuild and run the focused frontend checks.**
 
   ```bash
   pnpm --filter @workspace/peerbridge typecheck
@@ -239,11 +227,9 @@ DM WebSocket 정리는 학군 로딩 자체에는 필수가 아니며, 추천안
 
   Expected: typecheck/build succeed, new district tests and existing authentication tests pass. Rebuilding is required because the Playwright config serves the built frontend.
 
-- [ ] **Step 5: Verify the original screen against the real stack.**
 
   Open `http://localhost:5173/register`; confirm the actual 32 districts load, text search works, and a selected district is displayed. Confirm a healthy `/api/districts?type=high_school` response in the real stack. The automated intercepted tests supply failure/retry coverage without disrupting the user's running server. Verify that no database reset or new package was needed. Report separately which checks used mock API responses and which used real Python/PostgreSQL.
 
-- [ ] **Step 6: Review and commit this tested deliverable.**
 
   ```bash
   git add artifacts/peerbridge/src/pages/Register.tsx e2e/register-districts.spec.ts
