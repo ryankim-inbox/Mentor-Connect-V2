@@ -584,26 +584,121 @@ def test_mission_6_rejects_a_blocked_pair_with_403(monkeypatch):
     assert not cursor.steps
 
 
-def test_mission_7_rest_endpoints_remain_todo():
-    get_result = chat.list_dm_messages(7, request_for(1))
-    post_result = chat.send_dm_message(
-        7,
-        chat.SendMessageBody(body="Still a TODO"),
-        request_for(1),
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_mission_7_requires_authentication(method):
+    with pytest.raises(HTTPException) as error:
+        if method == "GET":
+            chat.list_dm_messages(7, request_for())
+        else:
+            chat.send_dm_message(7, chat.SendMessageBody(body="hello"), request_for())
+    assert error.value.status_code == 401
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("conversation,expected", [
+    (None, 404),
+    ({"id": 7, "user_a_id": 2, "user_b_id": 3}, 403),
+])
+def test_mission_7_checks_membership(monkeypatch, method, conversation, expected):
+    cursor = patch_db(monkeypatch, QueryStep(
+        "from dm_conversations", params=(7,), one=conversation,
+    ))
+    with pytest.raises(HTTPException) as error:
+        if method == "GET":
+            chat.list_dm_messages(7, request_for(1))
+        else:
+            chat.send_dm_message(7, chat.SendMessageBody(body="hello"), request_for(1))
+    assert error.value.status_code == expected
+    assert not cursor.steps
+
+
+def test_mission_7_reads_visible_messages(monkeypatch):
+    cursor = patch_db(
+        monkeypatch,
+        QueryStep("from dm_conversations", params=(7,),
+                  one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("update dm_messages", "sender_id <> %s", "read_at is null",
+                  "deleted_at is null", params=(7, 1)),
+        QueryStep("from dm_messages", "deleted_at is null", "order by created_at, id",
+                  params=(7,), all_rows=[{
+                      "id": 42, "conversation_id": 7, "sender_id": 2,
+                      "body": "hello", "created_at": STAMP, "read_at": STAMP,
+                  }]),
     )
+    assert chat.list_dm_messages(7, request_for(1)) == [{
+        "id": 42, "conversationId": 7, "senderId": 2, "body": "hello",
+        "createdAt": "2026-07-01T16:00:00+00:00", "readAt": "2026-07-01T16:00:00+00:00",
+    }]
+    assert not cursor.steps
 
-    assert get_result["status"] == "todo"
-    assert get_result["mission"] == 7
-    assert post_result["status"] == "todo"
-    assert post_result["mission"] == 7
+
+@pytest.mark.parametrize("text", ["hello", "x" * 2000])
+def test_mission_7_sends_validated_message(monkeypatch, text):
+    cursor = patch_db(
+        monkeypatch,
+        QueryStep("from dm_conversations", params=(7,),
+                  one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("insert into dm_messages", params=(7, 1, text), one={"id": 42}),
+        QueryStep("from dm_messages", params=(42,), one={
+            "id": 42, "conversation_id": 7, "sender_id": 1,
+            "body": text, "created_at": STAMP, "read_at": None,
+        }),
+    )
+    result = chat.send_dm_message(7, chat.SendMessageBody(body=f"  {text}  "), request_for(1))
+    assert result == {
+        "id": 42, "conversationId": 7, "senderId": 1, "body": text,
+        "createdAt": "2026-07-01T16:00:00+00:00", "readAt": None,
+    }
+    assert not cursor.steps
 
 
-def test_mission_8_websocket_remains_todo():
-    websocket = FakeWebSocket({"user_id": 1})
+@pytest.mark.parametrize("body", ["", "   ", "x" * 2001])
+def test_mission_7_rejects_invalid_body(body):
+    with pytest.raises(HTTPException) as error:
+        chat.send_dm_message(7, chat.SendMessageBody(body=body), request_for(1))
+    assert error.value.status_code == 400
 
+
+@pytest.mark.parametrize("user_id,conversation,expected", [
+    (None, None, 4401),
+    (1, None, 4403),
+    (1, {"id": 7, "user_a_id": 2, "user_b_id": 3}, 4403),
+])
+def test_mission_8_denies_access(monkeypatch, user_id, conversation, expected):
+    steps = [] if user_id is None else [
+        QueryStep("from dm_conversations", params=(7,), one=conversation),
+    ]
+    cursor = patch_db(monkeypatch, *steps)
+    websocket = FakeWebSocket({} if user_id is None else {"user_id": user_id})
     asyncio.run(dm_socket_endpoint()(websocket, 7))
+    assert websocket.accepted is False
+    assert websocket.close_codes == [expected]
+    assert websocket.sent_json == []
+    assert not cursor.steps
 
+
+def test_mission_8_persists_broadcasts_and_cleans_up(monkeypatch):
+    cursor = patch_db(
+        monkeypatch,
+        QueryStep("from dm_conversations", params=(7,),
+                  one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("insert into dm_messages", params=(7, 1, "hello"), one={"id": 42}),
+        QueryStep("from dm_messages", params=(42,), one={
+            "id": 42, "conversation_id": 7, "sender_id": 1,
+            "body": "hello", "created_at": STAMP, "read_at": None,
+        }),
+    )
+    peer, outsider = FakeWebSocket({"user_id": 2}), FakeWebSocket({"user_id": 3})
+    monkeypatch.setattr(chat, "dm_connections", {7: [peer], 8: [outsider]})
+    websocket = FakeWebSocket({"user_id": 1}, [" ", "x" * 2001, "  hello  "])
+    asyncio.run(dm_socket_endpoint()(websocket, 7))
+    expected = [{
+        "id": 42, "conversationId": 7, "senderId": 1, "body": "hello",
+        "createdAt": "2026-07-01T16:00:00+00:00", "readAt": None,
+    }]
     assert websocket.accepted is True
-    assert websocket.sent_json[0]["status"] == "todo"
-    assert websocket.sent_json[0]["mission"] == 8
-    assert websocket.close_codes == [1000]
+    assert websocket.sent_json == expected
+    assert peer.sent_json == expected
+    assert outsider.sent_json == []
+    assert chat.dm_connections == {7: [peer], 8: [outsider]}
+    assert not cursor.steps

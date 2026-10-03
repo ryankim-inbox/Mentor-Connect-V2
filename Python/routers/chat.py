@@ -1,8 +1,8 @@
-# chat.py — LEARNING SCAFFOLD (intentionally incomplete!)
+# chat.py — chat learning missions
 #
 # This router is the student's project: a messenger-style chat with a global
-# room, one room per district, and private DMs. Missions 1-6 are implemented;
-# Missions 7-8 deliberately remain as {"status": "todo"} practice endpoints.
+# room, one room per district, and private DMs. Missions 1-8 are implemented
+# using the shared psycopg2 helpers below.
 #
 # Start here:
 #   * The full mission list lives in docs/STUDENT_CHAT_BACKEND_GUIDE.md.
@@ -15,8 +15,7 @@
 #       - reject anonymous calls:  raise HTTPException(status_code=401, ...)
 #
 # The frontend chat popup (artifacts/peerbridge/src/components/ChatWidget.tsx)
-# already calls these endpoints. The remaining TODO responses keep the private
-# message thread in practice mode until Missions 7-8 are implemented.
+# already calls these endpoints, including the private message thread.
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
@@ -449,107 +448,46 @@ def start_dm_conversation(body: StartDmBody, request: Request):
         return _fetch_conversation(cur, new_id, user_id)
 
 
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-
-# Assumes `get_db` and your models/database setup are imported
-# from .database import get_db
-# from .models import Conversation, DMMessage, User
-
 @router.get("/dms/{conversation_id}/messages")
-def list_dm_messages(conversation_id: int, request: Request, db: Session = Depends(get_db)):
-    # 1. Read the current user from the session; 401 if not logged in.
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not logged in")
-
-    # 2. Load the conversation (404 if missing) and check if the current user is a participant (403 if not)
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    if conversation.user1_id != user_id and conversation.user2_id != user_id:
-        raise HTTPException(status_code=403, detail="Not a participant of this conversation")
-
-    # 5. Stretch goal: set read_at = now() on the other user's unread rows
-    now = datetime.utcnow()
-    db.query(DMMessage).filter(
-        DMMessage.conversation_id == conversation_id,
-        DMMessage.sender_id != user_id,
-        DMMessage.read_at.is_(None),
-        DMMessage.deleted_at.is_(None)
-    ).update({"read_at": now})
-    db.commit()
-
-    # 3. Query dm_messages for the conversation, skipping deleted rows, ordered by created_at
-    messages = db.query(DMMessage).filter(
-        DMMessage.conversation_id == conversation_id,
-        DMMessage.deleted_at.is_(None)
-    ).order_by(DMMessage.created_at.asc()).all()
-
-    # 4. Return a list of dicts shaped with camelCase keys
-    return [
-        {
-            "id": msg.id,
-            "conversationId": msg.conversation_id,
-            "senderId": msg.sender_id,
-            "body": msg.body,
-            "createdAt": msg.created_at,
-            "readAt": msg.read_at
-        }
-        for msg in messages
-    ]
+def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
+    """Mission 7a — visible message history for a conversation's participants."""
+    user_id = _require_user(request)
+    with db() as conn:
+        cur = conn.cursor()
+        _load_conversation_membership(cur, conversation_id, user_id)
+        cur.execute(
+            """UPDATE dm_messages SET read_at = now()
+               WHERE conversation_id = %s AND sender_id <> %s
+                 AND read_at IS NULL AND deleted_at IS NULL""",
+            (conversation_id, user_id),
+        )
+        cur.execute(
+            """SELECT id, conversation_id, sender_id, body, created_at, read_at
+               FROM dm_messages
+               WHERE conversation_id = %s AND deleted_at IS NULL
+               ORDER BY created_at, id""",
+            (conversation_id,),
+        )
+        messages = cur.fetchall()
+    return [_format_dm_message(message) for message in messages]
 
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
-# Assumes `get_db` and models are imported
-# from .database import get_db
-# from .models import Conversation, DMMessage
-# from .schemas import SendMessageBody
+@router.post("/dms/{conversation_id}/messages", status_code=201)
+def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request) -> dict:
+    """Mission 7b — validate and persist a participant's private message."""
+    user_id = _require_user(request)
+    text = _clean_body(body.body)
+    with db() as conn:
+        cur = conn.cursor()
+        _load_conversation_membership(cur, conversation_id, user_id)
+        cur.execute(
+            """INSERT INTO dm_messages (conversation_id, sender_id, body)
+               VALUES (%s, %s, %s) RETURNING id""",
+            (conversation_id, user_id, text),
+        )
+        message = _fetch_dm_message(cur, cur.fetchone()["id"])
+    return message
 
-@router.post("/dms/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
-def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request, db: Session = Depends(get_db)):
-    # 1. Read the current user from the session; 401 if not logged in.
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not logged in")
-
-    # 2. Same participant check as Mission 7a — never let a third user post
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    if conversation.user1_id != user_id and conversation.user2_id != user_id:
-        raise HTTPException(status_code=403, detail="Not a participant of this conversation")
-
-    # 3. Validate body.body like Mission 3.
-    # Assumes validation checks for non-empty text, stripping, or maximum lengths
-    message_text = body.body.strip() if body.body else ""
-    if not message_text:
-        raise HTTPException(status_code=400, detail="Message body cannot be empty")
-
-    # 4. INSERT INTO dm_messages ... RETURNING *, and return the new message
-    new_message = DMMessage(
-        conversation_id=conversation_id,
-        sender_id=user_id,
-        body=message_text
-    )
-
-    db.add(new_message)
-    db.commit()
-    db.refresh(new_message)
-
-    # Return shaped like Mission 7a's rows
-    return {
-        "id": new_message.id,
-        "conversationId": new_message.conversation_id,
-        "senderId": new_message.sender_id,
-        "body": new_message.body,
-        "createdAt": new_message.created_at,
-        "readAt": new_message.read_at
-    }
 
 # ---------------------------------------------------------------------------
 # WebSockets — the "real-time" part (Missions 4 and 8)
@@ -559,8 +497,7 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
 # server pushes every new message to everyone in the room the moment it
 # arrives — no polling.
 #
-# Mission 4 implements the room socket. Mission 8 still accepts, sends one TODO
-# notice, and closes politely. The live room implementation uses:
+# Missions 4 and 8 implement room and private conversation sockets. Both use:
 #   * auth: SessionMiddleware runs for WebSockets too, so
 #     websocket.session.get("user_id") works just like request.session
 #   * a connection registry, e.g. {room_id: [connected sockets]}
@@ -573,6 +510,7 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
 
 
 room_connections: dict[int, list[WebSocket]] = {}
+dm_connections: dict[int, list[WebSocket]] = {}
 
 
 async def _broadcast(sockets: list[WebSocket], message: dict) -> None:
@@ -647,27 +585,42 @@ async def chat_room_socket(websocket: WebSocket, room_id: int):
     finally:
         _unregister(room_connections, room_id, websocket)
 
-@ws_router.websocket("/ws/dms/{conversation_id}")
-async def dm_socket(websocket: WebSocket, conversation_id: int):
-    # Retrieve current user/participant from session, token, or context
-    user = await get_current_user_from_ws(websocket)  # Helper assumed from context/Mission 4
 
-    # Check if the user is one of the two participants in this conversation
-    participants = await get_conversation_participants(conversation_id)
-    if not user or user.id not in participants:
+@ws_router.websocket("/ws/dms/{conversation_id}")
+async def dm_socket(websocket: WebSocket, conversation_id: int) -> None:
+    """Mission 8 — save and broadcast messages only within an authorized DM."""
+    user_id = websocket.session.get("user_id")
+    if not user_id:
+        await websocket.close(code=4401)
+        return
+
+    try:
+        with db() as conn:
+            _load_conversation_membership(conn.cursor(), conversation_id, user_id)
+    except HTTPException:
         await websocket.close(code=4403)
         return
 
     await websocket.accept()
-
-    # Register connection using conversation_id as the key
-    manager.connect(conversation_id, websocket)
+    _register(dm_connections, conversation_id, websocket)
     try:
-        while True:
-            # Wait for incoming messages or handle live updates loop
-            data = await websocket.receive_json()
-            # Process chat message / broadcast to conversation participants
-            await manager.broadcast_to_conversation(conversation_id, data)
-    except WebSocketDisconnect:
-        manager.disconnect(conversation_id, websocket)
+        async for text in websocket.iter_text():
+            try:
+                clean = _clean_body(text)
+            except HTTPException:
+                continue
 
+            with db() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO dm_messages (conversation_id, sender_id, body)
+                       VALUES (%s, %s, %s) RETURNING id""",
+                    (conversation_id, user_id, clean),
+                )
+                message = _fetch_dm_message(cur, cur.fetchone()["id"])
+
+            await _broadcast(dm_connections.get(conversation_id, []), message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _unregister(dm_connections, conversation_id, websocket)
