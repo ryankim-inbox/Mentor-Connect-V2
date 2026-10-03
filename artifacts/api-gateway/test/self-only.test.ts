@@ -256,6 +256,40 @@ test("allowlisted PATCH fields are sanitized and forwarded only for the session 
   ]);
 });
 
+test("profile names retain the registration UTF-8 byte boundaries and trimming", async (context) => {
+  const harness = await createHarness();
+  context.after(harness.close);
+  const patch = (name: string) =>
+    fetch(harness.origin + "/api/users/1", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        cookie: "session=user-a",
+        origin: TEST_PUBLIC_ORIGIN,
+      },
+      body: JSON.stringify({ name }),
+    });
+  for (const name of [
+    "",
+    " \t\n",
+    "x".repeat(121),
+    "界".repeat(41),
+    " " + "x".repeat(120),
+  ]) {
+    assert.equal((await patch(name)).status, 400);
+  }
+  assert.equal(harness.calls.authMe, 0);
+  assert.equal(harness.calls.user, 0);
+  for (const name of ["x".repeat(120), "界".repeat(40), "  Ada  "]) {
+    assert.equal((await patch(name)).status, 200);
+  }
+  assert.deepEqual(harness.calls.patchedBodies, [
+    { name: "x".repeat(120) },
+    { name: "界".repeat(40) },
+    { name: "Ada" },
+  ]);
+});
+
 test("encoded, doubled, and query-string user paths do not bypass the allowlist", async (context) => {
   const harness = await createHarness();
   context.after(harness.close);

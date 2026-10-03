@@ -5,12 +5,22 @@ import bcrypt
 
 router = APIRouter()
 
+def normalize_display_name(value: str) -> str:
+    if len(value.encode("utf-8")) > 120 or not value.strip():
+        raise ValueError("Use a name of 1–120 UTF-8 bytes.")
+    return value.strip()
+
 class RegisterBody(BaseModel):
     email: str
     name: str
     password: str
     role: str
     districtId: int
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_valid(cls, value):
+        return normalize_display_name(value)
 
     @field_validator("email")
     @classmethod
