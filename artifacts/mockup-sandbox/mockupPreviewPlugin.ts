@@ -45,9 +45,11 @@ export function mockupPreviewPlugin(): Plugin {
       exclude: ["**/_*/**", "**/_*.tsx", "**/.*", "**/.*/**"],
       followSymlinks: true,
     };
-    const files = globSync(`${MOCKUPS_DIR}/**/*.tsx`, options).filter(
-      (file) => statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile(),
-    );
+    const files = globSync(`${MOCKUPS_DIR}/**/*.tsx`, options)
+      .filter(
+        (file) => statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile(),
+      )
+      .map((file) => file.split(path.sep).join("/"));
 
     return files.map((f) => ({
       globKey: "./" + f.slice("src/".length),
