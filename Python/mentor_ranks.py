@@ -136,35 +136,25 @@ def _todo(mission: int, message: str) -> dict:
 
 def rank_data() -> list[dict]:
     """Return mentor/both users with raw matched-request counts."""
-    # TODO 1.1-1.3: build the parameterized aggregation, then use _fetch_rows.
     query = """
             SELECT
                 u.id,
                 u.name,
-                COALESCE(COUNT(r.id), 0)::int AS matched_count
+                COUNT(r.id)::int AS matched_count
             FROM users u
-                     LEFT JOIN requests r ON
-                r.status = 'matched'
-                    AND (
-                    (r.role = 'mentor' AND r.author_id = u.id)
-                        OR
-                    (r.role = 'mentee' AND r.matched_user_id = u.id AND r.matched_user_id IS NOT NULL)
-                    )
-            WHERE
-                u.role IN (%s, %s)
-            GROUP BY
-                u.id,
-                u.name
-            ORDER BY
-                u.id ASC; \
+                     LEFT JOIN requests r
+                               ON r.status = %s
+                                   AND r.matched_user_id IS NOT NULL
+                                   AND u.id = CASE r.role
+                                                  WHEN %s THEN r.author_id
+                                                  WHEN %s THEN r.matched_user_id
+                                       END
+            WHERE u.role IN (%s, %s)
+            GROUP BY u.id, u.name
+            ORDER BY u.id \
             """
-
-    # Parameterized values for the WHERE condition filtering target roles
-    params = ("mentor", "both")
-
-    # Execute through your routine connection helper established in step 3
+    params = ("matched", "mentor", "mentee", "mentor", "both")
     return _fetch_rows(query, params)
-
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +183,8 @@ def rank_data() -> list[dict]:
 # ---------------------------------------------------------------------------
 def sort_mentors(mentors: list[dict]) -> list[dict]:
     """Return copied mentor rows in popularity/display order."""
-    # TODO 2.1-2.3: copy, sort by (-matched_count, id), and return.
-    return []
+    copied = [dict(row) for row in mentors]
+    return sorted(copied, key=lambda row: (-row["matched_count"], row["id"]))
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +214,21 @@ def sort_mentors(mentors: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 def assign_ranks(mentors: list[dict]) -> list[dict]:
     """Copy sorted rows and add competition ranks."""
-    # TODO 3.1-3.3: track the prior count/rank while walking positions.
-    return []
+    ranked = []
+    prev_count = None
+    prev_rank = None
+    for position, row in enumerate(mentors, start=1):
+        copied = dict(row)
+        count = copied["matched_count"]
+        if count <= 0:
+            copied["rank"] = None
+        elif count == prev_count:
+            copied["rank"] = prev_rank
+        else:
+            copied["rank"] = position
+            prev_count, prev_rank = count, position
+        ranked.append(copied)
+    return ranked
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +258,11 @@ def assign_ranks(mentors: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 def badge_for_rank(rank: int | None) -> str | None:
     """Return the badge for a positive competition rank."""
-    # TODO 4.1-4.3: validate the rank, scan BADGE_THRESHOLDS, return a badge.
+    if rank is None or rank <= 0:
+        return None
+    for upper_bound, badge in BADGE_THRESHOLDS:
+        if rank <= upper_bound:
+            return badge
     return None
 
 
@@ -292,8 +299,9 @@ def badge_for_rank(rank: int | None) -> str | None:
 def list_mentor_ranks(request: Request) -> list[dict] | dict:
     """Return rankings, or a safe Mission 5 TODO envelope while unfinished."""
     _require_user(request)
-    # TODO 5.2-5.4: compose Missions 1-4 and format every ranked row.
-    return _todo(5, "Complete Missions 1-5 to return mentor rankings.")
+    rows = rank_data()
+    ranked = assign_ranks(sort_mentors(rows))
+    return [_public_row(row) for row in ranked]
 
 
 # ---------------------------------------------------------------------------
