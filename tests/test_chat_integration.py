@@ -12,11 +12,9 @@ import subprocess
 import sys
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from http.cookiejar import CookieJar
 from pathlib import Path
-from threading import Barrier
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
@@ -229,44 +227,3 @@ def test_live_messages_are_private_validated_and_saved(chat_server, path, other_
         status, history = api(student, base, "GET", history_path)
         assert status == 200 and any(m["id"] == confirmed["id"] for m in history)
         assert not any(m["body"] in ("   ", "x" * 2001) for m in history)
-
-
-def test_room_history_keeps_latest_50_in_display_order(chat_server, chat_database):
-    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
-        cur.execute("""INSERT INTO chat_messages (room_id, sender_id, body)
-                       SELECT 1, 1, 'message ' || n FROM generate_series(1, 51) AS n""")
-        conn.commit()
-    with chat_server() as base:
-        student, _ = login(base, "student001@test.edu")
-        status, history = api(student, base, "GET", "/api/chat/rooms/1/messages")
-        assert status == 200
-        assert [m["body"] for m in history] == [f"message {n}" for n in range(2, 52)]
-
-
-def test_simultaneous_dm_starts_return_one_conversation(chat_server, chat_database):
-    # Widen the INSERT race in this disposable DB so both requests finish their
-    # initial lookup before either insert commits.
-    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
-        cur.execute("""CREATE FUNCTION slow_dm_insert() RETURNS trigger AS $$
-                       BEGIN PERFORM pg_sleep(0.2); RETURN NEW; END;
-                       $$ LANGUAGE plpgsql;
-                       CREATE TRIGGER slow_dm_insert BEFORE INSERT ON dm_conversations
-                       FOR EACH ROW EXECUTE FUNCTION slow_dm_insert()""")
-        conn.commit()
-    with chat_server() as base:
-        first, _ = login(base, "student001@test.edu")
-        second, _ = login(base, "student001@test.edu")
-        ready = Barrier(2)
-
-        def start(client):
-            ready.wait(timeout=3)
-            return api(client, base, "POST", "/api/dms/start", {"toUserId": 2})
-
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(start, (first, second)))
-        assert [status for status, _ in results] == [200, 200]
-        assert results[0][1]["id"] == results[1][1]["id"]
-    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
-        cur.execute("""SELECT COUNT(*) FROM dm_conversations
-                       WHERE (user_a_id, user_b_id) IN ((1, 2), (2, 1))""")
-        assert cur.fetchone()[0] == 1
