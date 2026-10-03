@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, contextmanager
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -126,6 +127,75 @@ def login(base, email):
     assert status == 200, result
     cookie = "; ".join(f"{item.name}={item.value}" for item in jar)
     return client, cookie
+
+
+def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
+    with chat_server() as base:
+        author, _ = login(base, "student001@test.edu")
+        mentor, _ = login(base, "mentor501@test.edu")
+        other, _ = login(base, "both951@test.edu")
+        anonymous = build_opener()
+        status, created = api(author, base, "POST", "/api/requests", {
+            "districtId": 1, "title": "Concurrent Connect", "description": "One match only",
+            "role": "mentee",
+        })
+        assert status == 201 and created["authorId"] == 1
+        request_id = created["id"]
+        match_path = f"/api/requests/{request_id}/match"
+        missing_path = "/api/requests/99999/match"
+        for client, path, expected in [
+            (author, match_path, 400), (anonymous, match_path, 401),
+            (mentor, missing_path, 404),
+        ]:
+            assert api(client, base, "POST", path)[0] == expected
+        _, unchanged = api(author, base, "GET", f"/api/requests/{request_id}")
+        assert unchanged["status"] == "open" and unchanged["matchedUserId"] is None
+
+        with closing(psycopg2.connect(chat_database)) as blocker, \
+             closing(psycopg2.connect(chat_database)) as observer, \
+             blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
+            observer.autocommit = True
+            lock_cursor.execute("SELECT id FROM requests WHERE id = %s FOR UPDATE", (request_id,))
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                callers = [(501, mentor), (951, other)]
+                futures = [workers.submit(api, client, base, "POST", match_path)
+                           for _, client in callers]
+                try:
+                    # Release only after both real backend transactions reach the held lock.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        activity_cursor.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND state = 'active' "
+                            "AND wait_event_type = 'Lock' AND query LIKE %s",
+                            (f"%requests%WHERE id = {request_id}%",),
+                        )
+                        if activity_cursor.fetchone()[0] == 2:
+                            break
+                        assert not any(future.done() for future in futures), "Connect finished before both lock waits"
+                        time.sleep(0.01)
+                    else:
+                        pytest.fail("Both Connect transactions did not wait for the request lock")
+                finally:
+                    blocker.rollback()
+                results = [future.result(timeout=3) for future in futures]
+
+        assert sorted(status for status, _ in results) == [200, 400]
+        successful_caller_id, successful_response = next(
+            (user_id, response) for (user_id, _), (status, response) in zip(callers, results)
+            if status == 200
+        )
+        status, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
+        assert status == 200 and stored_request["status"] == "matched"
+        assert stored_request["matchedUserId"] == successful_caller_id
+        assert successful_response["matchedUserId"] == successful_caller_id
+        for client, path, expected in [
+            (author, match_path, 400), (anonymous, match_path, 401),
+            (mentor, missing_path, 404), (mentor, match_path, 400), (other, match_path, 400),
+        ]:
+            assert api(client, base, "POST", path)[0] == expected
+            _, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
+            assert stored_request["matchedUserId"] == successful_caller_id
 
 
 def test_rest_missions_privacy_validation_and_persistence(chat_server):
