@@ -1,14 +1,16 @@
 # Mentor popularity badges: six Python missions
 
-Your Python code decides which popularity badge appears beside a mentor's
-name. Complete the missions in `Python/mentor_ranks.py` in order. The file
+Your Python code computes mentor popularity ranks and badge labels for the lesson
+API. Complete the missions in `Python/mentor_ranks.py` in order. The file
 stays importable while unfinished, and its authenticated routes return a safe
 TODO response until Missions 5 and 6 are implemented.
 
 `Python/mentor_ranks_answer.py` is the tested reference. Try the mission and
 run its focused check before comparing your work with the answer. The app does
-not import the answer automatically: the normal server and `Python/main.py`
-always load the student file.
+not import the answer automatically: the dedicated loopback lesson server loads
+the student file by default. Production `Python/main.py` does not mount these
+routes, and the public gateway returns 404 for mentor-rank paths, whether or not
+the caller is signed in.
 
 ## What the score means
 
@@ -78,12 +80,12 @@ badge selection, and endpoint composition remain your work.
 Putting the request filter in `WHERE` can remove zero rows. `COUNT(*)` can
 incorrectly count the empty side of a left join as one.
 
-Run the real PostgreSQL check. It creates connection-local temporary tables
-and always rolls back; it does not seed or change the product tables.
+Run the real PostgreSQL check in a disposable database. It creates connection-local
+temporary tables and always rolls back; it does not touch the developer database.
 
 ```sh
-MENTOR_RANKS_MODULE=mentor_ranks MENTOR_RANKS_TEST_DSN='dbname=postgres' \
-  .venv/bin/python -m pytest -q tests/test_mentor_ranks.py -k test_mission_1
+MENTOR_RANKS_MODULE=mentor_ranks PYTHON_BIN=.venv/bin/python \
+  sh scripts/test-python.sh tests/test_mentor_ranks.py -k test_mission_1
 ```
 
 ### Mission 2: sort without mutation
@@ -173,29 +175,27 @@ MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
 
 ## Run the checks
 
-The ordinary checked-in suite verifies the answer key plus the safe scaffold
-baseline. It remains green while the exercise is unfinished:
+The default suite verifies the answer key and stable student interfaces,
+anonymous-access safety, row formatting, and the shared TODO helper. It does not
+require Mission 6 to remain unfinished; completing that route does not change
+the TODO-helper check. Use the disposable database runner for the full checks:
 
 ```sh
-.venv/bin/python -m pytest -q tests/test_mentor_ranks.py
+PYTHON_BIN=.venv/bin/python sh scripts/test-python.sh tests/test_mentor_ranks.py
 ```
 
 To grade all student missions, explicitly select the student module and the
 mission tests. This command can become fully green after all six missions:
 
 ```sh
-MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
-  tests/test_mentor_ranks.py -k test_mission_
+MENTOR_RANKS_MODULE=mentor_ranks PYTHON_BIN=.venv/bin/python \
+  sh scripts/test-python.sh tests/test_mentor_ranks.py -k test_mission_
 ```
 
-The scaffold-only import, authentication, and HTTP TODO checks verify the
-delivered unfinished state. Run them before replacing the TODO routes; their
-exact TODO-envelope check is expected to fail after Missions 5 and 6 are
-complete:
-
-```sh
-.venv/bin/python -m pytest -q tests/test_mentor_ranks.py -k test_scaffold
-```
+Student mission correctness is opt-in through `MENTOR_RANKS_MODULE=mentor_ranks`
+and `-k test_mission_`; the default release gate uses the reference for those
+mission checks. The student authentication checks remain mandatory throughout
+the exercise, and the TODO helper is tested independently of mutable routes.
 
 ## Run the lesson server
 
@@ -219,19 +219,10 @@ Only one process can use the port at a time. This command does not enable
 automatic reload. After editing `Python/mentor_ranks.py`, press Ctrl-C in the
 server terminal and run the student command again.
 
-For the existing frontend and gateway, use separate terminals after starting
-the Python server on its configured port:
-
-```sh
-GATEWAY_UPSTREAM_ORIGIN=http://127.0.0.1:8001 PORT=8080 pnpm --config.verify-deps-before-run=false --filter @workspace/api-gateway dev
-```
-
-```sh
-PORT=5173 BASE_PATH=/ VITE_FEATURE_MATCHING=true pnpm --config.verify-deps-before-run=false --filter @workspace/peerbridge dev
-```
-
-The badge component hides unfinished TODO data and null badges, so the Profile
-and Recommendations pages should remain usable while you work.
+Call the loopback lesson endpoints directly using the interactive docs or curl
+below. The existing Profile and Recommendations pages do not render
+`MentorRankBadge`. That unmounted lesson component supports raw rank arrays and
+hides TODO data and null badges, but it is not a production integration.
 
 ## Log in and call the API with curl
 
@@ -265,14 +256,11 @@ editing, then repeat the same command.
 
 - `401 Not authenticated`: log in again and pass the saved cookie with `-b`.
 - `TODO`: complete the named mission, restart the server, and retry.
-- Mission 1 is skipped: set `MENTOR_RANKS_TEST_DSN` to an available PostgreSQL
-  database; a skipped test does not prove the SQL is correct.
+- Mission 1 is skipped: use the disposable database runner above; a skipped
+  test does not prove the SQL is correct.
 - Missing badge: inspect `matchedCount`, `rank`, and `badge`; null values are
-  correct for zero matches, and the UI intentionally hides them.
+  correct for zero matches, and the unmounted lesson badge component hides them.
 - Unexpected answer output: stop the server and restart without `--answer`.
 - Port already in use: stop your earlier lesson server or choose another port.
-- If pnpm 11 tries to auto-install dependencies and fails in a noninteractive
-  terminal, confirm dependencies are installed and keep
-  `--config.verify-deps-before-run=false` after `pnpm` in both UI commands.
 - The normal app encounters a chat import error: that is a separate student
   exercise. Use `mentor_ranks_server.py` for these missions.

@@ -1,3 +1,4 @@
+import { trimDisplayName } from "@/lib/display-name";
 import { useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useRegister, useListDistricts } from "@workspace/api-client-react";
@@ -87,7 +88,7 @@ export default function Register() {
     if (busy.current || districtsUnavailable) return;
     setError("");
 
-    const name = form.name.trim();
+    const name = trimDisplayName(form.name);
     if (!name || new TextEncoder().encode(form.name).length > 120) {
       setError("Use a name of 1–120 UTF-8 bytes.");
       return;

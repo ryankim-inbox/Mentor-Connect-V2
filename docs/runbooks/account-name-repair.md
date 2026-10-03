@@ -1,7 +1,8 @@
 # Account name repair
 
 Registration and profile writes now reject empty/whitespace-only names and raw names
-over 120 UTF-8 bytes, then trim accepted names. Existing invalid rows can still make
+over 120 UTF-8 bytes, then trim accepted names using the union of Python whitespace
+and JavaScript trim whitespace (including FEFF, U+0085, and U+001C–U+001F). Existing invalid rows can still make
 gateway profile, session, room-history, or DM-list responses fail validation. This
 procedure is a separate operator action; do not run it against an existing database
 during development. Do not change schema version `0002`, truncate valid names, or

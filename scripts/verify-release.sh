@@ -43,6 +43,7 @@ run sh scripts/test-python.sh
 run pnpm typecheck
 run pnpm build:release
 run pnpm test:gateway
+run pnpm --filter @workspace/mockup-sandbox test
 run pnpm test:migrations
 run pnpm --filter @workspace/db test
 run pnpm --filter @workspace/peerbridge test:unit

@@ -633,6 +633,13 @@ test("rejects invalid auth bodies before upstream and preserves accepted login b
 for (const name of [
   "",
   " \t\n",
+  "\ufeff",
+  "\u0085",
+  "\u001c",
+  "\u001d",
+  "\u001e",
+  "\u001f",
+  "\u001c\ufeff\u001c",
   "x".repeat(121),
   "界".repeat(41),
   " " + "x".repeat(120),
@@ -668,6 +675,13 @@ test("registration forwards normalized names and accepts the UTF-8 byte boundary
   );
   for (const [name, expected] of [
     ["  Ada  ", "Ada"],
+    ["\ufeffAda\ufeff", "Ada"],
+    ["\u0085Ada\u0085", "Ada"],
+    ["\u001cAda\u001c", "Ada"],
+    ["\u001dAda\u001d", "Ada"],
+    ["\u001eAda\u001e", "Ada"],
+    ["\u001fAda\u001f", "Ada"],
+    ["\u001c\ufeff\u001cAda\u001c\ufeff\u001c", "Ada"],
     ["x".repeat(120), "x".repeat(120)],
     ["界".repeat(40), "界".repeat(40)],
   ]) {

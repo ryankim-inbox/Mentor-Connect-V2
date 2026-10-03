@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useAuth } from "@/lib/auth-context";
-import { getPythonApi } from "@/lib/pythonApi";
+import { customFetch } from "@workspace/api-client-react";
 
 interface MentorRank {
   mentorId: number;
@@ -22,20 +22,16 @@ export function MentorRankBadge({ mentorId }: { mentorId: number }) {
   const { user } = useAuth();
   const ranks = useQuery({
     queryKey: ["mentor-ranks", user?.id],
-    queryFn: () => getPythonApi<MentorRank[] | MentorRankTodo>("/api/mentor-ranks"),
+    queryFn: () =>
+      customFetch<MentorRank[] | MentorRankTodo>("/api/mentor-ranks"),
     enabled: user !== null,
   });
 
-  if (
-    !user ||
-    ranks.isPending ||
-    ranks.isError ||
-    ranks.data?.student_module?.status === "TODO"
-  ) {
+  if (!user || ranks.isPending || ranks.isError) {
     return null;
   }
 
-  const payload = ranks.data?.data;
+  const payload = ranks.data;
   if (!Array.isArray(payload)) {
     return null;
   }

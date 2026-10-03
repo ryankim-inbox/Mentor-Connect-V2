@@ -24,6 +24,7 @@ import {
   createLimiter,
   validateAuthBody,
   readBoundedString,
+  readDisplayName,
 } from "./request-controls.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
@@ -861,7 +862,7 @@ function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
   const sanitized: Record<string, string | string[] | null> = {};
 
   if (Object.prototype.hasOwnProperty.call(payload, "name")) {
-    const name = readBoundedString(payload.name, 120);
+    const name = readDisplayName(payload.name);
     if (!name) {
       throw new GatewayHttpError(400, "invalid_profile_update");
     }

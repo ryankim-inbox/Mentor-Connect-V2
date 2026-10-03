@@ -60,7 +60,7 @@ export function validateAuthBody(
   }
 
   if (kind === "register") {
-    const name = readBoundedString(payload.name, 120);
+    const name = readDisplayName(payload.name);
     if (!name) throw new Error("invalid_auth_body");
     payload.name = name;
     body = Buffer.from(JSON.stringify(payload));
@@ -72,6 +72,16 @@ export function validateAuthBody(
       .update(payload.email.trim().toLowerCase(), "utf8")
       .digest("hex"),
   };
+}
+
+// Names trim the union of Python whitespace and JavaScript trim whitespace.
+export function readDisplayName(value: unknown): string | undefined {
+  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > 120) {
+    return undefined;
+  }
+  return value.replace(
+    /^[\s\u0085\u001c-\u001f]+|[\s\u0085\u001c-\u001f]+$/g, "",
+  ) || undefined;
 }
 
 export function readBoundedString(
