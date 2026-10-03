@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -25,6 +25,7 @@ assert.deepEqual(output.trim().split("\n"), [
   "pnpm install --frozen-lockfile",
   "node scripts/test-python-runtime.mjs",
   "node scripts/test-python-freeze.mjs",
+  "sh scripts/test-python.sh",
   "pnpm typecheck",
   "pnpm build:release",
   "pnpm test:gateway",
@@ -87,6 +88,53 @@ try {
   rmSync(fakeBin, { recursive: true, force: true });
 }
 
+const gateBin = mkdtempSync(path.join(tmpdir(), "verify-release-backend-"));
+try {
+  for (const command of ["pnpm", "node", "sh"]) {
+    writeFileSync(
+      path.join(gateBin, command),
+      `#!/bin/sh
+echo '${command}' "$@" "PYTHON_BIN=$PYTHON_BIN" "CLASSROOM_TEST_PYTHON=$CLASSROOM_TEST_PYTHON"
+if [ '${command}' = sh ] && [ "$1" = scripts/test-python.sh ]; then
+  exit "\${BACKEND_EXIT:-0}"
+fi
+`,
+      { mode: 0o755 },
+    );
+  }
+  for (const pythonBin of [undefined, path.join(gateBin, "custom-python")]) {
+    const expectedPython = pythonBin ?? path.join(root, ".venv/bin/python");
+    const env = {
+      ...process.env,
+      PATH: `${gateBin}:${process.env.PATH}`,
+      GITHUB_HEAD_REF: "release-backend-test",
+      CLASSROOM_TEST_PYTHON: "/incorrect/interpreter",
+    };
+    if (pythonBin) env.PYTHON_BIN = pythonBin;
+    else delete env.PYTHON_BIN;
+    const success = spawnSync("/bin/sh", ["scripts/verify-release.sh"], {
+      cwd: root, encoding: "utf8", env,
+    });
+    assert.equal(success.status, 0, success.stderr);
+    const interpreters = `PYTHON_BIN=${expectedPython} CLASSROOM_TEST_PYTHON=${expectedPython}`;
+    assert.ok(success.stdout.includes(`sh scripts/test-python.sh ${interpreters}`));
+    assert.ok(success.stdout.includes(`pnpm --filter @workspace/db test ${interpreters}`));
+
+    const failure = spawnSync("/bin/sh", ["scripts/verify-release.sh"], {
+      cwd: root, encoding: "utf8", env: { ...env, BACKEND_EXIT: "43" },
+    });
+    assert.equal(failure.status, 43, failure.stderr);
+    assert.deepEqual(failure.stdout.trim().split("\n"), [
+      `pnpm install --frozen-lockfile ${interpreters}`,
+      `node scripts/test-python-runtime.mjs ${interpreters}`,
+      `node scripts/test-python-freeze.mjs ${interpreters}`,
+      `sh scripts/test-python.sh ${interpreters}`,
+    ]);
+  }
+} finally {
+  rmSync(gateBin, { recursive: true, force: true });
+}
+
 const releaseWorkflow = readFileSync(
   path.join(root, ".github/workflows/release-surface.yml"),
   "utf8",
@@ -109,6 +157,61 @@ for (const required of [
 }
 assert.doesNotMatch(releaseWorkflow, /^\s+services:/m);
 assert.doesNotMatch(releaseWorkflow, /DATABASE_URL|SESSION_SECRET|secrets\./);
+
+// Run the real provisioning block with stand-ins for network-bound tooling.
+const provisioning = [...releaseWorkflow.matchAll(/        run: \|\n((?:          .*\n)+)/g)]
+  .map((match) => match[1].replace(/^          /gm, ""))
+  .find((script) => script.includes("uv sync"));
+assert.ok(provisioning, "release workflow must provision the locked Python dev environment");
+const runnerTemp = mkdtempSync(path.join(tmpdir(), "verify-release-python-ci-"));
+try {
+  const bin = path.join(runnerTemp, "bin");
+  mkdirSync(bin);
+  writeFileSync(path.join(bin, "python3"), `#!/bin/sh
+set -eu
+case "$*" in
+  "-m venv $RUNNER_TEMP/mentor-uv-tools")
+    mkdir -p "$RUNNER_TEMP/mentor-uv-tools/bin"
+    cp "$0" "$RUNNER_TEMP/mentor-uv-tools/bin/python"
+    ;;
+  "-m pip install uv==0.11.16")
+    cp "$FAKE_UV" "$RUNNER_TEMP/mentor-uv-tools/bin/uv"
+    ;;
+  *) echo "unexpected Python provisioning: $*" >&2; exit 44 ;;
+esac
+`, { mode: 0o755 });
+  writeFileSync(path.join(bin, "uv"), "#!/bin/sh\necho 'isolated uv tools environment was not activated' >&2\nexit 45\n", { mode: 0o755 });
+  const fakeUv = path.join(runnerTemp, "uv-stub");
+  writeFileSync(fakeUv, `#!/bin/sh
+set -eu
+test "$*" = 'sync --frozen --python 3.12 --group dev'
+test "$UV_PROJECT_ENVIRONMENT" = "$RUNNER_TEMP/mentor-python"
+mkdir -p "$UV_PROJECT_ENVIRONMENT/bin"
+touch "$UV_PROJECT_ENVIRONMENT/bin/python"
+`, { mode: 0o755 });
+  const githubPath = path.join(runnerTemp, "github-path");
+  const githubEnv = path.join(runnerTemp, "github-env");
+  const result = spawnSync("/bin/sh", ["-eu", "-c", provisioning], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      FAKE_UV: fakeUv,
+      RUNNER_TEMP: runnerTemp,
+      GITHUB_PATH: githubPath,
+      GITHUB_ENV: githubEnv,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(githubPath, "utf8").trim(), path.join(runnerTemp, "mentor-uv-tools/bin"));
+  assert.deepEqual(readFileSync(githubEnv, "utf8").trim().split("\n"), [
+    `PYTHON_BIN=${runnerTemp}/mentor-python/bin/python`,
+    `CLASSROOM_TEST_PYTHON=${runnerTemp}/mentor-python/bin/python`,
+  ]);
+} finally {
+  rmSync(runnerTemp, { recursive: true, force: true });
+}
 
 const secretWorkflow = readFileSync(
   path.join(root, ".github/workflows/secret-scan.yml"),

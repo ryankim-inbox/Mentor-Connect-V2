@@ -4,6 +4,10 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+PYTHON_BIN=${PYTHON_BIN:-"$ROOT/.venv/bin/python"}
+CLASSROOM_TEST_PYTHON=$PYTHON_BIN
+export PYTHON_BIN CLASSROOM_TEST_PYTHON
+
 PYTHON_FREEZE_BASE=${PYTHON_FREEZE_BASE:-98e1b04c292302bd25365ed7db4c5675671df337}
 PYTHON_PR_BASE=${PYTHON_PR_BASE:-$(git merge-base HEAD refs/remotes/origin/main 2>/dev/null || true)}
 PYTHON_FREEZE_SCOPE_REF=${PYTHON_FREEZE_SCOPE_REF:-codex/learning-tasks-21-24}
@@ -35,6 +39,7 @@ esac
 run pnpm install --frozen-lockfile
 run node scripts/test-python-runtime.mjs
 run node scripts/test-python-freeze.mjs
+run sh scripts/test-python.sh
 run pnpm typecheck
 run pnpm build:release
 run pnpm test:gateway
