@@ -55,12 +55,20 @@ export default function Register() {
   const [emailError, setEmailError] = useState("");
   const [districtSearch, setDistrictSearch] = useState("");
 
-  const { data: districts } = useListDistricts(
+  const {
+    data: districts,
+    isPending: districtsPending,
+    isError: districtsError,
+    isFetching: districtsFetching,
+    refetch: retryDistricts,
+  } = useListDistricts(
     { type: "high_school", search: districtSearch || undefined },
     {
       query: { queryKey: ["listDistricts", "high_school", districtSearch] },
     },
   );
+  const districtsUnavailable = districtsPending || districtsFetching || districtsError;
+  const selectedDistrict = districts?.find((district) => district.id === form.districtId);
 
   const registerMutation = useRegister();
 
@@ -76,7 +84,7 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy.current) return;
+    if (busy.current || districtsUnavailable) return;
     setError("");
 
     if (!form.email.toLowerCase().endsWith(".edu")) {
@@ -84,7 +92,7 @@ export default function Register() {
       return;
     }
 
-    if (!form.districtId) {
+    if (!selectedDistrict) {
       setError("Please select your school district");
       return;
     }
@@ -226,13 +234,17 @@ export default function Register() {
                 type="text"
                 placeholder="Search districts..."
                 value={districtSearch}
-                onChange={(e) => setDistrictSearch(e.target.value)}
+                onChange={(e) => {
+                  setDistrictSearch(e.target.value);
+                  setForm((f) => ({ ...f, districtId: 0 }));
+                }}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition mb-2"
               />
               <label htmlFor="district-choice" className="sr-only">District choices</label>
               <select
                 id="district-choice"
-                value={form.districtId || ""}
+                value={selectedDistrict?.id ?? ""}
+                disabled={districtsUnavailable}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, districtId: Number(e.target.value) }))
                 }
@@ -249,10 +261,34 @@ export default function Register() {
                   </option>
                 ))}
               </select>
-              {form.districtId > 0 && (
+              {districtsError ? (
+                <div className="mt-2">
+                  <p role="alert" className="text-sm text-destructive">
+                    Couldn't load school districts. Please try again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void retryDistricts()}
+                    disabled={districtsFetching}
+                    className="mt-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    Retry districts
+                  </button>
+                </div>
+              ) : districtsPending || districtsFetching ? (
+                <p role="status" className="mt-2 text-sm text-muted-foreground">
+                  Loading districts...
+                </p>
+              ) : districts?.length === 0 ? (
+                <p role="status" className="mt-2 text-sm text-muted-foreground">
+                  {districtSearch
+                    ? "No districts match your search."
+                    : "No school districts are available."}
+                </p>
+              ) : null}
+              {selectedDistrict && !districtsUnavailable && (
                 <p className="text-xs text-primary mt-1">
-                  Selected:{" "}
-                  {districts?.find((d) => d.id === form.districtId)?.name}
+                  Selected: {selectedDistrict.name}
                 </p>
               )}
             </div>
@@ -276,7 +312,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={pending || !!emailError}
+              disabled={pending || !!emailError || districtsUnavailable || !selectedDistrict}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {pending ? "Creating account..." : "Create account"}
