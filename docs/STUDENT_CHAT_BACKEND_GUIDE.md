@@ -217,8 +217,8 @@ progress, not a bug.
 
 ## Mission 2 — `GET /api/chat/rooms/{room_id}/messages`
 
-**Goal:** message history, oldest → newest, with each sender's name. The room
-tabs will start showing the seeded conversation.
+**Goal:** latest 50 visible messages, displayed oldest to newest, with each
+sender's name. Room polling includes new messages even when history exceeds 50.
 
 **Edit:** `list_room_messages()`.
 
@@ -234,11 +234,12 @@ FROM chat_messages m
 JOIN users u ON u.id = m.sender_id
 WHERE m.room_id = %s
   AND ...            -- hide soft-deleted rows!
-ORDER BY m.created_atd
+ORDER BY m.created_at DESC, m.id DESC
 LIMIT 50
 ```
 
-4. Return the list (camelCase, `isoformat()` for the timestamp).
+4. Reverse the selected rows before formatting and returning the list (camelCase,
+   `isoformat()` for the timestamp). The ID breaks ties between equal timestamps.
 
 **Expected shape:**
 
@@ -395,7 +396,10 @@ creates duplicate conversations.
 **Plan:**
 1. Session check (401).
 2. Validate: target exists in `users` (404); target is not yourself (400).
-3. **The gotcha:** a conversation between 1 and 501 may be stored as
+3. Check the `blocks` table (see `routers/reports.py`) with
+   `_require_unblocked_pair()` and refuse to open or reuse a DM when either
+   participant blocks the other (403).
+4. **The gotcha:** a conversation between 1 and 501 may be stored as
    `(1, 501)` *or* `(501, 1)`. Check both:
 
 ```sql
@@ -407,10 +411,7 @@ WHERE (user_a_id = %s AND user_b_id = %s)
    If found → return it (200). Cleaner alternative: *always store the smaller
    id in `user_a_id`* (Python's `min()`/`max()`, or SQL `LEAST()`/`GREATEST()`)
    — then one `WHERE` clause suffices forever.
-4. Not found → INSERT and return the new conversation in Mission 5's shape.
-5. Check the `blocks` table (see `routers/reports.py`) with
-   `_require_unblocked_pair()` and refuse to open or reuse a DM when either
-   participant blocks the other (403).
+5. Not found → INSERT and return the new conversation in Mission 5's shape.
 
 **Test:**
 ```bash

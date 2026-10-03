@@ -196,7 +196,7 @@ def test_mission_2_returns_visible_room_history_in_frontend_shape(monkeypatch):
             "from chat_messages",
             "join users",
             "deleted_at is null",
-            "order by m.created_at",
+            "order by m.created_at desc, m.id desc",
             "limit 50",
             params=(1,),
             all_rows=[
