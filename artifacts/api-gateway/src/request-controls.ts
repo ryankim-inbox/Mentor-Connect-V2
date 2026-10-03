@@ -59,12 +59,34 @@ export function validateAuthBody(
     throw new Error("invalid_auth_body");
   }
 
+  if (kind === "register") {
+    const name = readBoundedString(payload.name, 120);
+    if (!name) throw new Error("invalid_auth_body");
+    payload.name = name;
+    body = Buffer.from(JSON.stringify(payload));
+  }
+
   return {
     body,
     accountKey: createHash("sha256")
       .update(payload.email.trim().toLowerCase(), "utf8")
       .digest("hex"),
   };
+}
+
+export function readBoundedString(
+  value: unknown,
+  maxBytes: number,
+): string | undefined {
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") > maxBytes
+  ) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

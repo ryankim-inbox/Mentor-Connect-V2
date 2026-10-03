@@ -178,6 +178,67 @@ test("login and registration block double submits until session confirmation fin
   }
 });
 
+test("registration validates name bytes before sending and trims a valid name", async ({
+  page,
+}) => {
+  await fallback(page);
+  let submitted: unknown;
+  let submissions = 0;
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ status: 401, json: {} }),
+  );
+  await page.route("**/api/districts?**", (route) =>
+    route.fulfill({ json: [{ id: 1, name: "School", county: "Test" }] }),
+  );
+  await page.route("**/api/auth/register", (route) => {
+    submissions++;
+    submitted = route.request().postDataJSON();
+    return route.fulfill({ status: 422, json: { error: "validation_error" } });
+  });
+  await page.goto("/register");
+  await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+  await page.getByPlaceholder("Create a password").fill("password123");
+  await page.locator("select").selectOption("1");
+  const name = page.getByPlaceholder("Your name");
+  for (const invalid of [
+    "   ",
+    "x".repeat(121),
+    "界".repeat(41),
+    " " + "x".repeat(120),
+  ]) {
+    await name.fill(invalid);
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Use a name of 1–120 UTF-8 bytes.",
+    );
+    expect(submissions).toBe(0);
+  }
+  for (const [value, expected] of [
+    ["  Ada  ", "Ada"],
+    ["界".repeat(40), "界".repeat(40)],
+  ]) {
+    const nextSubmission = submissions + 1;
+    await name.fill(value);
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect.poll(() => submissions).toBe(nextSubmission);
+    await expect(page.getByRole("alert")).toHaveText(
+      "Check the input and try again.",
+    );
+    expect(submitted).toEqual({
+      name: expected,
+      email: accountA.email,
+      password: "password123",
+      role: "mentee",
+      districtId: 1,
+    });
+  }
+  expect(submissions).toBe(2);
+});
+
 for (const destination of [
   "//outside.example",
   "https://outside.example",

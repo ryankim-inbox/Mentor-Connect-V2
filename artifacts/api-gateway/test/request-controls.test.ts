@@ -354,7 +354,10 @@ test("accepts only the existing registration model", () => {
         districtId: 1,
       }),
     );
-    assert.equal(validateAuthBody("register", valid).body, valid);
+    assert.deepEqual(
+      JSON.parse(validateAuthBody("register", valid).body.toString()),
+      JSON.parse(valid.toString()),
+    );
   }
 
   const invalidPayloads = [
@@ -526,7 +529,7 @@ test("allows no-origin GET polling and allowed-origin bodyless mutations", async
   );
 });
 
-test("rejects invalid auth bodies before upstream and forwards accepted bytes unchanged", async (context) => {
+test("rejects invalid auth bodies before upstream and preserves accepted login bytes", async (context) => {
   const fixture = await startControlFixture();
   context.after(async () =>
     Promise.all([close(fixture.gateway), close(fixture.upstream)]),
@@ -621,7 +624,76 @@ test("rejects invalid auth bodies before upstream and forwards accepted bytes un
     body: registerBody,
   });
   assert.equal(register.status, 201);
-  assert.equal(fixture.calls.at(-1)?.body, registerBody);
+  assert.deepEqual(
+    JSON.parse(fixture.calls.at(-1)!.body),
+    JSON.parse(registerBody),
+  );
+});
+
+for (const name of [
+  "",
+  " \t\n",
+  "x".repeat(121),
+  "界".repeat(41),
+  " " + "x".repeat(120),
+]) {
+  test(`rejects invalid registration name ${JSON.stringify(name)} before upstream`, async (context) => {
+    const fixture = await startControlFixture();
+    context.after(async () =>
+      Promise.all([close(fixture.gateway), close(fixture.upstream)]),
+    );
+    const response = await fetch(fixture.gatewayOrigin + "/api/auth/register", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: DEV_PUBLIC_ORIGIN,
+      },
+      body: JSON.stringify({
+        email: "ada@example.edu",
+        name,
+        password: "secret",
+        role: "mentee",
+        districtId: 1,
+      }),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(fixture.calls.length, 0);
+  });
+}
+
+test("registration forwards normalized names and accepts the UTF-8 byte boundary", async (context) => {
+  const fixture = await startControlFixture();
+  context.after(async () =>
+    Promise.all([close(fixture.gateway), close(fixture.upstream)]),
+  );
+  for (const [name, expected] of [
+    ["  Ada  ", "Ada"],
+    ["x".repeat(120), "x".repeat(120)],
+    ["界".repeat(40), "界".repeat(40)],
+  ]) {
+    const response = await fetch(fixture.gatewayOrigin + "/api/auth/register", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: DEV_PUBLIC_ORIGIN,
+      },
+      body: JSON.stringify({
+        email: "ada@example.edu",
+        name,
+        password: "secret",
+        role: "mentee",
+        districtId: 1,
+      }),
+    });
+    assert.equal(response.status, 201);
+    assert.deepEqual(JSON.parse(fixture.calls.at(-1)!.body), {
+      email: "ada@example.edu",
+      name: expected,
+      password: "secret",
+      role: "mentee",
+      districtId: 1,
+    });
+  }
 });
 
 test("applies account and global authentication plans with injected time", async (context) => {

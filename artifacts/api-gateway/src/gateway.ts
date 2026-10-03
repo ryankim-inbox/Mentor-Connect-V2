@@ -23,6 +23,7 @@ import {
   assertValidPublicOrigin,
   createLimiter,
   validateAuthBody,
+  readBoundedString,
 } from "./request-controls.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
@@ -957,21 +958,6 @@ function sanitizeSubjects(value: unknown): string[] | undefined {
   }
 
   return subjects;
-}
-
-function readBoundedString(
-  value: unknown,
-  maxBytes: number,
-): string | undefined {
-  if (
-    typeof value !== "string" ||
-    Buffer.byteLength(value, "utf8") > maxBytes
-  ) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
