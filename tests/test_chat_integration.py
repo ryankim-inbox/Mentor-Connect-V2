@@ -129,6 +129,21 @@ def login(base, email):
     return client, cookie
 
 
+def test_districts_are_available_before_login(chat_server):
+    with chat_server() as base:
+        anonymous = build_opener()
+        status, rows = api(anonymous, base, "GET", "/api/districts?type=high_school")
+        assert status == 200
+        assert {row["id"] for row in rows} == {1, 2}
+        assert all(row["type"] == "high_school" for row in rows)
+        assert all({"id", "name", "county", "type", "memberCount",
+                    "openRequestCount"} <= row.keys() for row in rows)
+        status, rows = api(anonymous, base, "GET",
+                           "/api/districts?type=high_school&search=zzzz_no_such_district")
+        assert status == 200
+        assert rows == []
+
+
 def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
     with chat_server() as base:
         author, _ = login(base, "student001@test.edu")

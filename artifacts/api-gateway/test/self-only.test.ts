@@ -272,6 +272,13 @@ test("profile names retain the registration UTF-8 byte boundaries and trimming",
   for (const name of [
     "",
     " \t\n",
+    "\ufeff",
+    "\u0085",
+    "\u001c",
+    "\u001d",
+    "\u001e",
+    "\u001f",
+    "\u001c\ufeff\u001c",
     "x".repeat(121),
     "界".repeat(41),
     " " + "x".repeat(120),
@@ -280,12 +287,24 @@ test("profile names retain the registration UTF-8 byte boundaries and trimming",
   }
   assert.equal(harness.calls.authMe, 0);
   assert.equal(harness.calls.user, 0);
-  for (const name of ["x".repeat(120), "界".repeat(40), "  Ada  "]) {
+  for (const name of [
+    "x".repeat(120), "界".repeat(40), "  Ada  ",
+    "\ufeffAda\ufeff", "\u0085Ada\u0085", "\u001cAda\u001c",
+    "\u001dAda\u001d", "\u001eAda\u001e", "\u001fAda\u001f",
+    "\u001c\ufeff\u001cAda\u001c\ufeff\u001c",
+  ]) {
     assert.equal((await patch(name)).status, 200);
   }
   assert.deepEqual(harness.calls.patchedBodies, [
     { name: "x".repeat(120) },
     { name: "界".repeat(40) },
+    { name: "Ada" },
+    { name: "Ada" },
+    { name: "Ada" },
+    { name: "Ada" },
+    { name: "Ada" },
+    { name: "Ada" },
+    { name: "Ada" },
     { name: "Ada" },
   ]);
 });

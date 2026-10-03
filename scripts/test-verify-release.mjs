@@ -29,6 +29,7 @@ assert.deepEqual(output.trim().split("\n"), [
   "pnpm typecheck",
   "pnpm build:release",
   "pnpm test:gateway",
+  "pnpm --filter @workspace/mockup-sandbox test",
   "pnpm test:migrations",
   "pnpm --filter @workspace/db test",
   "pnpm --filter @workspace/peerbridge test:unit",

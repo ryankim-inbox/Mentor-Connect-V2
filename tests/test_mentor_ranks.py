@@ -119,19 +119,13 @@ def test_student_list_route_formats_stubbed_rank_data(monkeypatch):
     ]
 
 
-def test_student_get_todo_envelope_survives_fastapi_http_response_validation():
-    app = FastAPI()
-    app.include_router(student.router, prefix="/api")
-
-    assert asgi_get_json(app, "/api/mentor-ranks/7", {"user_id": 99}) == (
-        200,
-        {
-            "status": "todo",
-            "mission": 6,
-            "message": "Complete Mission 6 to return one mentor's global rank.",
-            "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
-        },
-    )
+def test_todo_helper_formats_an_unfinished_mission_independently_of_student_routes():
+    assert student._todo(6, "Complete Mission 6 to return one mentor's global rank.") == {
+        "status": "todo",
+        "mission": 6,
+        "message": "Complete Mission 6 to return one mentor's global rank.",
+        "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
+    }
 
 
 @pytest.mark.parametrize(("rank", "badge"), [(2, "Platinum"), (None, None)])
