@@ -1,8 +1,8 @@
 """Real HTTP/WS + PostgreSQL checks for the chat mission completion contract.
 
-Run: CHAT_TEST_ADMIN_DSN='dbname=postgres' .venv/bin/python -m pytest tests/test_chat_integration.py -q
-The admin DSN must point to a LOCAL test server with CREATE DATABASE permission.
-Each run creates and drops its own database; existing databases are never seeded.
+Run: sh scripts/test-python.sh tests/test_chat_integration.py -q
+The runner creates its own loopback PostgreSQL cluster; each test creates and
+drops its own database using the canonical schema and small data-only fixture.
 """
 
 import json
@@ -22,7 +22,7 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extensions import make_dsn
 import pytest
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
 
 
@@ -53,7 +53,9 @@ def chat_database():
     dsn = make_dsn(admin_dsn, dbname=name)
     try:
         with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
-            cur.execute((ROOT / "database/mentor_connect_mock_1000.sql").read_text())
+            cur.execute((ROOT / "database/schema/canonical.sql").read_text())
+            cur.execute((ROOT / "tests/fixtures/chat-canonical.sql").read_text())
+            conn.commit()
         yield dsn
     finally:
         with admin.cursor() as cur:
@@ -227,3 +229,77 @@ def test_live_messages_are_private_validated_and_saved(chat_server, path, other_
         status, history = api(student, base, "GET", history_path)
         assert status == 200 and any(m["id"] == confirmed["id"] for m in history)
         assert not any(m["body"] in ("   ", "x" * 2001) for m in history)
+
+
+@pytest.mark.parametrize("blocker_id", [1, 501])
+def test_existing_dm_enforces_new_blocks(chat_server, chat_database, blocker_id):
+    def message_count():
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM dm_messages WHERE conversation_id = %s", (1,))
+            return cur.fetchone()[0]
+
+    with chat_server() as base:
+        sender, sender_cookie = login(base, "student001@test.edu")
+        recipient, recipient_cookie = login(base, "mentor501@test.edu")
+        blocker = sender if blocker_id == 1 else recipient
+        blocked_id = 501 if blocker_id == 1 else 1
+        url = base.replace("http://", "ws://") + "/ws/dms/1"
+        with connect(url, additional_headers={"Cookie": sender_cookie}, open_timeout=3) as sender_socket, \
+             connect(url, additional_headers={"Cookie": recipient_cookie}, open_timeout=3) as recipient_socket:
+            persisted_message_count_before = message_count()
+            assert api(blocker, base, "POST", "/api/blocks", {"blockedUserId": blocked_id})[0] == 201
+            assert api(sender, base, "POST", "/api/dms/1/messages", {"body": "blocked"})[0] == 403
+            sender_socket.send("blocked")
+            with pytest.raises(ConnectionClosed) as closed:
+                sender_socket.recv(timeout=3)
+            closed_code = closed.value.rcvd.code
+            assert closed_code == 4403
+            persisted_message_count_after = message_count()
+            assert persisted_message_count_after == persisted_message_count_before
+            recipient_received_blocked_message = False
+            try:
+                received = json.loads(recipient_socket.recv(timeout=0.2))
+                recipient_received_blocked_message = received["body"] == "blocked"
+            except TimeoutError:
+                pass
+            assert recipient_received_blocked_message is False
+            assert api(sender, base, "GET", "/api/dms/1/messages")[0] == 200
+
+            for cookie in (sender_cookie, recipient_cookie):
+                with pytest.raises(InvalidStatus) as rejected:
+                    with connect(url, additional_headers={"Cookie": cookie}, open_timeout=3):
+                        pytest.fail("Blocked socket accepted")
+                assert rejected.value.response.status_code == 403
+
+            assert api(blocker, base, "DELETE", f"/api/blocks/{blocked_id}")[0] == 204
+            status, restored = api(sender, base, "POST", "/api/dms/1/messages", {"body": "unblocked REST"})
+            assert status == 201 and restored["body"] == "unblocked REST"
+            with connect(url, additional_headers={"Cookie": sender_cookie}, open_timeout=3) as reconnected:
+                reconnected.send("unblocked socket")
+                confirmed = json.loads(reconnected.recv(timeout=3))
+                assert confirmed["body"] == "unblocked socket"
+                assert json.loads(recipient_socket.recv(timeout=3)) == confirmed
+            assert message_count() == persisted_message_count_before + 2
+
+
+def test_registration_names_cannot_poison_room_history(chat_server, chat_database):
+    with chat_server() as base:
+        client = build_opener(HTTPCookieProcessor(CookieJar()))
+        registration = {"email": "new-student@test.edu", "password": "Password123!",
+                        "role": "mentee", "districtId": 1}
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM users")
+            users_before = cur.fetchone()[0]
+            for invalid in ("", "   ", "x" * 121, "한" * 41):
+                assert api(client, base, "POST", "/api/auth/register", {**registration, "name": invalid})[0] == 422
+                cur.execute("SELECT count(*) FROM users")
+                assert cur.fetchone()[0] == users_before
+
+        status, registered = api(client, base, "POST", "/api/auth/register",
+                                 {**registration, "name": "  New Student  "})
+        assert status == 201 and registered["user"]["name"] == "New Student"
+        status, sent = api(client, base, "POST", "/api/chat/rooms/1/messages", {"body": "registered sender"})
+        assert status == 201 and sent["senderName"] == "New Student"
+        status, history = api(client, base, "GET", "/api/chat/rooms/1/messages")
+        assert status == 200
+        assert any(m["id"] == sent["id"] and m["senderName"] == "New Student" for m in history)

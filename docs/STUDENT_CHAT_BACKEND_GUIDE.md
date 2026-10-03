@@ -408,8 +408,9 @@ WHERE (user_a_id = %s AND user_b_id = %s)
    id in `user_a_id`* (Python's `min()`/`max()`, or SQL `LEAST()`/`GREATEST()`)
    — then one `WHERE` clause suffices forever.
 4. Not found → INSERT and return the new conversation in Mission 5's shape.
-5. Stretch goal: check the `blocks` table (see `routers/reports.py`) and
-   refuse to open a DM either direction of a block (403).
+5. Check the `blocks` table (see `routers/reports.py`) with
+   `_require_unblocked_pair()` and refuse to open or reuse a DM when either
+   participant blocks the other (403).
 
 **Test:**
 ```bash
@@ -442,8 +443,12 @@ and `SELECT COUNT(*) FROM dm_conversations;` must not grow.
 4. Stretch goal (read receipts): after fetching, set `read_at = now()` on the
    *other* user's still-unread rows in this conversation — you just read them.
 
-**Plan (POST):** same participant check, Mission 3's text validation, INSERT
-into `dm_messages`, return the created row (201).
+**Plan (POST):** same participant check and Mission 3's text validation, then
+call `_require_unblocked_pair()` before every INSERT into `dm_messages`,
+inside the same transaction. Either block direction returns 403, including
+blocks added after the conversation started. Return the created row (201).
+Participants can still GET their historical messages while blocked; unblocking
+allows new messages again.
 
 **Expected shape (GET):**
 
@@ -473,12 +478,16 @@ e.g. `both951@test.edu`, and curl conversation 1: must be `403`.
 
 **Edit:** `dm_socket()`.
 
-**Plan:** everything from Mission 4, with two changes:
+**Plan:** everything from Mission 4, with these changes:
 1. The registry key is `conversation_id`, and each list should only ever hold
    the two participants' sockets.
-2. On connect, run Mission 7's participant check using
-   `websocket.session.get("user_id")`; outsiders get
+2. On connect, run Mission 7's participant and bidirectional block checks using
+   `websocket.session.get("user_id")`; outsiders and blocked pairs get
    `await websocket.close(code=4403)` *before* any data flows.
+3. Before every message INSERT, repeat both checks in the insert transaction.
+   If access fails on an already-open socket, close with 4403, leave the loop,
+   and unregister in `finally`. The rejected message must never be saved or
+   broadcast. After unblocking, a new socket can send normally.
 
 **Test:** two windows (user 1 + user 501), both connected to
 `ws://localhost:8000/ws/dms/1`; messages appear instantly on both sides. A
