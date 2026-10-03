@@ -37,6 +37,15 @@ jobs:
           sudo apt-get install --yes postgresql-16
           sudo systemctl stop postgresql || true
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Install locked Python test environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/mentor-uv-tools"
+          "$RUNNER_TEMP/mentor-uv-tools/bin/python" -m pip install uv==0.11.16
+          echo "$RUNNER_TEMP/mentor-uv-tools/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/mentor-uv-tools/bin:$PATH"
+          UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/mentor-python" uv sync --frozen --python 3.12 --group dev
+          echo "PYTHON_BIN=$RUNNER_TEMP/mentor-python/bin/python" >> "$GITHUB_ENV"
+          echo "CLASSROOM_TEST_PYTHON=$RUNNER_TEMP/mentor-python/bin/python" >> "$GITHUB_ENV"
       - name: Verify full classroom release
         run: pnpm verify:release
 
