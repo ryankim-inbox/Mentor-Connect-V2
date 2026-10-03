@@ -1,13 +1,13 @@
 """
 Proves the Analytics and Scheduling adapters are python-only:
 
-- When the student Python files fail (the checked-in analysis.py has a real
-  syntax error), the endpoints report that error with data=None — no
+- When student Python imports or functions fail, the endpoints report
+  that error with data=None — no
   DB-derived or otherwise fabricated fallback data.
 - When the student functions succeed, exactly their output is returned.
 - The runtime UI code no longer contains the "Adapter fallback" label.
 
-The student files in Python/ are exercised as-is and never modified.
+Import and runtime failures are injected independently of lesson progress.
 """
 
 import re
@@ -45,12 +45,15 @@ def patch_student_module(monkeypatch, module):
     )
 
 
-# --- failure paths against the real (broken) student files -----------------
+# --- explicit import and runtime failure paths -----------------------------
 
 
-def test_analytics_endpoints_surface_python_error_without_fallback():
-    # Python/analysis.py currently has a syntax error on line 27; every
-    # analysis-backed endpoint must report it and return no data at all.
+def test_analytics_endpoints_surface_python_error_without_fallback(monkeypatch):
+    monkeypatch.setattr(
+        integration_api,
+        "_import_student_module",
+        lambda name: (None, {"status": "import error", "error": "SyntaxError: injected"}),
+    )
     for endpoint in (
         analysis_adapter.get_analysis_status,
         analysis_adapter.get_weekly_matches,
@@ -63,25 +66,34 @@ def test_analytics_endpoints_surface_python_error_without_fallback():
         assert envelope["success"] is False
         assert envelope["ok"] is False
         assert envelope["data"] is None
-        assert "SyntaxError" in envelope["error"]
+        assert envelope["error"] == "SyntaxError: injected"
+        assert envelope["student_module"]["status"] == "import error"
 
 
-def test_time_slot_endpoints_surface_scheduling_runtime_error():
-    # Python/scheduling.py imports, but receive_time_data() fails at call time
-    # (connects to a non-existent host). No substitute slot data is allowed.
+def test_time_slot_endpoints_surface_scheduling_runtime_error(monkeypatch):
+    def broken_receive_time_data():
+        raise RuntimeError("injected")
+
+    patch_student_module(
+        monkeypatch,
+        fake_module("scheduling", receive_time_data=broken_receive_time_data),
+    )
     for endpoint in (
         analysis_adapter.get_popular_time_slots,
         scheduling_adapter.get_overview,
     ):
         envelope = endpoint()
+        assert ENVELOPE_KEYS <= set(envelope)
         assert envelope["source"] == "python"
         assert envelope["success"] is False
+        assert envelope["ok"] is False
         assert envelope["data"] is None
-        assert envelope["error"]
+        assert envelope["error"] == "RuntimeError: injected"
         assert envelope["student_module"]["status"] == "runtime error"
 
 
-def test_scheduling_status_reports_import_ok():
+def test_scheduling_status_reports_import_ok(monkeypatch):
+    patch_student_module(monkeypatch, fake_module("scheduling"))
     envelope = scheduling_adapter.get_scheduling_status()
     assert envelope["source"] == "python"
     assert envelope["success"] is True

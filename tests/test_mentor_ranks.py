@@ -68,33 +68,61 @@ def test_scaffold_imports_with_all_lesson_interfaces():
     )
 
 
-def test_scaffold_list_requires_authentication_before_todo():
+def test_require_user_success():
+    assert student._require_user(request_with_session(42)) == 42
+
+
+def test_require_user_missing_session():
+    with pytest.raises(HTTPException) as exc:
+        student._require_user(request_with_session())
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Not authenticated"
+
+
+def test_scaffold_list_requires_authentication_before_query(monkeypatch):
+    monkeypatch.setattr(student, "rank_data", lambda: pytest.fail("query must not run"))
+
     with pytest.raises(HTTPException) as exc:
         student.list_mentor_ranks(request_with_session())
 
     assert exc.value.status_code == 401
 
 
-def test_scaffold_get_requires_authentication_before_todo():
+def test_scaffold_get_requires_authentication_before_query(monkeypatch):
+    monkeypatch.setattr(student, "rank_data", lambda: pytest.fail("query must not run"))
+
     with pytest.raises(HTTPException) as exc:
-        student.get_mentor_rank(7, request_with_session())
+        student.get_mentor_rank(0, request_with_session())
 
     assert exc.value.status_code == 401
 
 
-def test_scaffold_todo_envelopes_survive_fastapi_http_response_validation():
+def test_student_list_route_formats_stubbed_rank_data(monkeypatch):
+    monkeypatch.setattr(
+        student,
+        "rank_data",
+        lambda: [
+            {"id": 7, "name": "Ada", "matched_count": 2},
+            {"id": 8, "name": "Bo", "matched_count": 0},
+        ],
+    )
     app = FastAPI()
     app.include_router(student.router, prefix="/api")
 
-    assert asgi_get_json(app, "/api/mentor-ranks", {"user_id": 99}) == (
-        200,
-        {
-            "status": "todo",
-            "mission": 5,
-            "message": "Complete Missions 1-5 to return mentor rankings.",
-            "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
-        },
-    )
+    status, rows = asgi_get_json(app, "/api/mentor-ranks", {"user_id": 99})
+
+    assert status == 200
+    assert rows == [
+        {"mentorId": 7, "mentorName": "Ada", "matchedCount": 2, "rank": 1, "badge": "Master"},
+        {"mentorId": 8, "mentorName": "Bo", "matchedCount": 0, "rank": None, "badge": None},
+    ]
+
+
+def test_student_get_todo_envelope_survives_fastapi_http_response_validation():
+    app = FastAPI()
+    app.include_router(student.router, prefix="/api")
+
     assert asgi_get_json(app, "/api/mentor-ranks/7", {"user_id": 99}) == (
         200,
         {
@@ -104,6 +132,19 @@ def test_scaffold_todo_envelopes_survive_fastapi_http_response_validation():
             "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
         },
     )
+
+
+@pytest.mark.parametrize(("rank", "badge"), [(2, "Platinum"), (None, None)])
+def test_student_public_row_uses_badge_thresholds_and_omits_private_fields(rank, badge):
+    assert student._public_row(
+        {"id": 7, "name": "Ada", "matched_count": 2, "rank": rank, "email": "private@test.edu"}
+    ) == {
+        "mentorId": 7,
+        "mentorName": "Ada",
+        "matchedCount": 2,
+        "rank": rank,
+        "badge": badge,
+    }
 
 
 def test_mission_2_sorts_counts_and_id_ties_without_mutation():
