@@ -1,3 +1,4 @@
+import { trimDisplayName } from "@/lib/display-name";
 import { useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useRegister, useListDistricts } from "@workspace/api-client-react";
@@ -87,6 +88,12 @@ export default function Register() {
     if (busy.current || districtsUnavailable) return;
     setError("");
 
+    const name = trimDisplayName(form.name);
+    if (!name || new TextEncoder().encode(form.name).length > 120) {
+      setError("Use a name of 1–120 UTF-8 bytes.");
+      return;
+    }
+
     if (!form.email.toLowerCase().endsWith(".edu")) {
       setError("Only .edu school email addresses are accepted");
       return;
@@ -102,7 +109,9 @@ export default function Register() {
     setNeedsConfirmation(false);
     try {
       await queryClient.cancelQueries({ queryKey: getGetMeQueryKey() });
-      const response = await registerMutation.mutateAsync({ data: form });
+      const response = await registerMutation.mutateAsync({
+        data: { ...form, name },
+      });
       await queryClient.cancelQueries();
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],

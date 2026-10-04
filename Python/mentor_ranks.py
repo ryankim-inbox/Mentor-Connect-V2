@@ -6,6 +6,7 @@ The complete reference is never imported here.
 """
 
 from fastapi import APIRouter, HTTPException, Request
+from psycopg2.extras import RealDictCursor
 
 from db import db
 
@@ -24,30 +25,13 @@ BADGE_THRESHOLDS = (
 )
 
 
-from unittest.mock import MagicMock
-import pytest
-from fastapi import HTTPException
+def _require_user(request: Request) -> int:
+    """Return the session user ID or reject anonymous access."""
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_id
 
-def test_require_user_success():
-    # Simulate a request with a valid session
-    mock_request = MagicMock()
-    mock_request.session = {"user_id": 42}
-
-    assert _require_user(mock_request) == 42
-
-def test_require_user_missing_session():
-    # Simulate an anonymous request
-    mock_request = MagicMock()
-    mock_request.session = {}
-
-    with pytest.raises(HTTPException) as exc_info:
-        _require_user(mock_request)
-
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "Not authenticated"
-
-
-from psycopg2.extras import RealDictCursor
 
 def _fetch_rows(query: str, params: tuple) -> list[dict]:
     """Run one read-only parameterized query and copy its result rows.
@@ -86,25 +70,13 @@ def _public_row(row: dict) -> dict:
     Failure: a missing required key raises ``KeyError`` so a broken earlier
     mission is visible instead of leaking a partial response.
     """
-    # Helper logic to determine badge if badge_for_rank isn't globally defined
-    # You can swap this string assignment if your project has a specific badge tier lookup
     rank_val = row["rank"]
-
-    # Example logic mapping if 'badge' comes from rank rules,
-    # otherwise replace with your specific badge calculation/lookup function.
-    if rank_val == 1:
-        badge_title = "Master"
-    elif rank_val <= 3:
-        badge_title = "Elite"
-    else:
-        badge_title = "Mentor"
-
     return {
         "mentorId": int(row["id"]),
         "mentorName": str(row["name"]),
         "matchedCount": int(row["matched_count"]),
-        "rank": int(rank_val),
-        "badge": badge_title,
+        "rank": int(rank_val) if rank_val is not None else None,
+        "badge": badge_for_rank(rank_val),
     }
 
 
@@ -120,17 +92,11 @@ def _todo(mission: int, message: str) -> dict:
     Used by: Mission 5 step 2 and Mission 6 step 3 until each route is complete.
     Failure: none; this helper does no I/O and raises no expected exceptions.
     """
-    # Dynamically select the correct guide file depending on whether it's Mission 5 or 6
-    if mission == 6:
-        guide_path = "docs/STUDENT_MENTOR_RANKS_ADVANCED_GUIDE.md"
-    else:
-        guide_path = "docs/STUDENT_MENTOR_RANKS_GUIDE.md"
-
     return {
         "status": "todo",
         "mission": int(mission),
         "message": str(message),
-        "guide": guide_path,
+        "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
     }
 
 

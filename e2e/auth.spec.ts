@@ -178,6 +178,81 @@ test("login and registration block double submits until session confirmation fin
   }
 });
 
+test("registration validates name bytes before sending and trims a valid name", async ({
+  page,
+}) => {
+  await fallback(page);
+  let submitted: unknown;
+  let submissions = 0;
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ status: 401, json: {} }),
+  );
+  await page.route("**/api/districts?**", (route) =>
+    route.fulfill({ json: [{ id: 1, name: "School", county: "Test" }] }),
+  );
+  await page.route("**/api/auth/register", (route) => {
+    submissions++;
+    submitted = route.request().postDataJSON();
+    return route.fulfill({ status: 422, json: { error: "validation_error" } });
+  });
+  await page.goto("/register");
+  await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+  await page.getByPlaceholder("Create a password").fill("password123");
+  await page.locator("select").selectOption("1");
+  const name = page.getByPlaceholder("Your name");
+  for (const invalid of [
+    "   ",
+    "\ufeff",
+    "\u0085",
+    "\u001c",
+    "\u001d",
+    "\u001e",
+    "\u001f",
+    "\u001c\ufeff\u001c",
+    "x".repeat(121),
+    "界".repeat(41),
+    " " + "x".repeat(120),
+  ]) {
+    await name.fill(invalid);
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "Use a name of 1–120 UTF-8 bytes.",
+    );
+    expect(submissions).toBe(0);
+  }
+  for (const [value, expected] of [
+    ["  Ada  ", "Ada"],
+    ["\ufeffAda\ufeff", "Ada"],
+    ["\u0085Ada\u0085", "Ada"],
+    ["\u001cAda\u001c", "Ada"],
+    ["\u001dAda\u001d", "Ada"],
+    ["\u001eAda\u001e", "Ada"],
+    ["\u001fAda\u001f", "Ada"],
+    ["\u001c\ufeff\u001cAda\u001c\ufeff\u001c", "Ada"],
+    ["界".repeat(40), "界".repeat(40)],
+  ]) {
+    const nextSubmission = submissions + 1;
+    await name.fill(value);
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect.poll(() => submissions).toBe(nextSubmission);
+    await expect(page.getByRole("alert")).toHaveText(
+      "Check the input and try again.",
+    );
+    expect(submitted).toEqual({
+      name: expected,
+      email: accountA.email,
+      password: "password123",
+      role: "mentee",
+      districtId: 1,
+    });
+  }
+  expect(submissions).toBe(9);
+});
+
 for (const destination of [
   "//outside.example",
   "https://outside.example",
@@ -341,17 +416,20 @@ test("profile validates gateway byte limits and blocks duplicate pending saves",
   });
   await page.goto("/settings");
   const name = page.locator('input[type="text"]').first();
-  await name.fill("가".repeat(41));
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByText(/Use a name up to 120/)).toBeVisible();
-  expect(saves).toBe(0);
-  await name.fill("Updated name");
+  for (const invalid of ["가".repeat(41), "\ufeff", "\u0085", "\u001c\u001d\u001e\u001f", "\u001c\ufeff\u001c"]) {
+    await name.fill(invalid);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText(/Use a name up to 120/)).toBeVisible();
+    expect(saves).toBe(0);
+  }
+  await name.fill("\u001c\ufeff Updated name \u0085");
   await page.locator("form").evaluate((form: HTMLFormElement) => {
     form.requestSubmit();
     form.requestSubmit();
   });
   await expect.poll(() => saves).toBe(1);
   await expect(page.getByRole("button", { name: "Saving..." })).toBeDisabled();
+  expect(user.name).toBe("Updated name");
   await name.fill("Next draft");
   saved.resolve();
   await expect(page.getByText("Profile saved successfully.")).toBeVisible();

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from db import db
+from routers.auth import normalize_display_name
 
 router = APIRouter()
 
@@ -10,6 +11,11 @@ class UpdateUserBody(BaseModel):
     bio: Optional[str] = None
     role: Optional[str] = None
     subjects: Optional[List[str]] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_valid(cls, value):
+        return normalize_display_name(value) if value is not None else None
 
 def format_user(user, district_name):
     return {
