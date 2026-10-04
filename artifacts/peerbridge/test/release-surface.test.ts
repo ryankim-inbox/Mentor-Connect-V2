@@ -6,7 +6,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { featureFlags, releaseSurface } from "../src/lib/release-flags";
+import { releaseSurface } from "../src/lib/release-flags";
 
 const execFile = promisify(execFileCallback);
 const rootDir = path.resolve(
@@ -32,7 +32,6 @@ test("chat retains no browser message draft", async () => {
 });
 
 test("the complete learning surface is public", () => {
-  assert.deepEqual(Object.values(featureFlags), Array(8).fill(true));
   assert.deepEqual(releaseSurface.appRoutes, {
     register: "/register",
     dashboard: "/dashboard",

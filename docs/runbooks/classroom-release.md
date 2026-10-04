@@ -19,14 +19,32 @@ on later student Python assignments.
 ```sh
 export RELEASE_SHA="$(git rev-parse HEAD)"
 export PYTHON_PR_BASE="$(git merge-base HEAD origin/main)"
+uv sync --frozen --group dev
 pnpm verify:release
 ```
 
-The command installs from the frozen lockfile, typechecks, builds the release, runs gateway, migration,
-disposable PostgreSQL, frontend unit, contract, boundary, secret, smoke self-tests, and browser tests in
+The command installs from the frozen lockfile, runs the full Python suite before typechecking and
+building the frontend, then runs gateway, migration, disposable PostgreSQL, frontend unit, contract,
+boundary, secret, smoke self-tests, and browser tests in
 the CI order, then verifies both Python baselines. A code-generation diff is a failure: commit the
 generated clients in their own reviewed change and rerun the whole command. Database tests create and
 destroy runner-owned PostgreSQL 16 clusters; do not point them at a shared or deployed database.
+
+Local verification requires Node 24.21.0, pnpm 10.33.0, Python 3.12 or newer, and PostgreSQL 16 tools
+(`initdb` and `pg_ctl`) on `PATH`. The release gate defaults to the checkout's absolute
+`.venv/bin/python` path. Set `PYTHON_BIN` to another compatible interpreter's absolute path if needed;
+the gate exports the same interpreter as `CLASSROOM_TEST_PYTHON` so the canonical classroom bootstrap
+test exercises its real Python path. Missing tools or failing pytest checks stop the release sequence.
+For focused backend checks, use the disposable runner, for example:
+
+```sh
+sh scripts/test-python.sh tests/test_chat_integration.py
+```
+
+CI installs pinned `uv==0.11.16` in an isolated tools environment under `RUNNER_TEMP`, then uses
+`uv sync --frozen --python 3.12 --group dev` to provision a separate locked test environment there.
+It exports absolute `PYTHON_BIN` and `CLASSROOM_TEST_PYTHON` paths and reuses PostgreSQL 16 tools;
+these checks require no production credentials.
 
 CI separately runs and retains both `pnpm audit --prod --audit-level high --json` and the complete
 `pnpm audit --audit-level high --json` report. High or critical findings in the frontend build, Vite,

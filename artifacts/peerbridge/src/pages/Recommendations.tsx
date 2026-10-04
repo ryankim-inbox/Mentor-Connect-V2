@@ -4,7 +4,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { TagBadge } from "@/components/TagBadge";
-import { isFeatureEnabled } from "@/lib/release-flags";
+import { releaseSurface } from "@/lib/release-flags";
 
 interface MentorMatch {
   rank: number;
@@ -532,15 +532,9 @@ export default function Recommendations() {
                   )}
 
                   <div className="mt-4 flex gap-2">
-                    {isFeatureEnabled("connect") ? (
-                      <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
-                        Request match
-                      </button>
-                    ) : (
-                      <p className="self-center text-xs text-muted-foreground" role="status">
-                        Match requests are being prepared.
-                      </p>
-                    )}
+                    <Link href={releaseSurface.appRoutes.requests} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">
+                      Browse requests
+                    </Link>
                   </div>
                 </div>
               </div>

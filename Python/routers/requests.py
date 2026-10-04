@@ -219,7 +219,7 @@ def match_request(request_id: int, request: Request):
 
     with db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM requests WHERE id = %s", (request_id,))
+        cur.execute("SELECT * FROM requests WHERE id = %s FOR UPDATE", (request_id,))
         req = cur.fetchone()
         if not req:
             raise HTTPException(status_code=404, detail="Request not found")
