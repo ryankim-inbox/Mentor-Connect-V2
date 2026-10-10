@@ -259,7 +259,7 @@ def badge_for_rank(rank: int | None) -> str | None:
 # Verify from the repository root:
 #   MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
 #     tests/test_mentor_ranks.py -k test_mission_5
-# ---------------------------------------------------------------------------
+
 @router.get("/mentor-ranks")
 def list_mentor_ranks(request: Request) -> list[dict] | dict:
     """Return rankings, or a safe Mission 5 TODO envelope while unfinished."""
