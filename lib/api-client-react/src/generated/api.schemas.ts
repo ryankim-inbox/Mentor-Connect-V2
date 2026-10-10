@@ -164,12 +164,17 @@ export const CreateRequestBodyRole = {
 } as const;
 
 export interface CreateRequestBody {
+  /** @minimum 1 */
   districtId: number;
   /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;
-  tagIds: number[];
+  /**
+   * @maxItems 20
+   * @items.minimum 1
+   */
+  tagIds?: number[];
   role: CreateRequestBodyRole;
   /**
    * Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
@@ -179,6 +184,9 @@ export interface CreateRequestBody {
   preferredTimes?: string[];
 }
 
+/**
+ * Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
+ */
 export type UpdateRequestBodyStatus =
   (typeof UpdateRequestBodyStatus)[keyof typeof UpdateRequestBodyStatus];
 
@@ -193,7 +201,12 @@ export interface UpdateRequestBody {
   title?: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;
+  /**
+   * @maxItems 20
+   * @items.minimum 1
+   */
   tagIds?: number[];
+  /** Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId. */
   status?: UpdateRequestBodyStatus;
 }
 
@@ -209,6 +222,7 @@ export const CreateReportBodyReason = {
 } as const;
 
 export interface CreateReportBody {
+  /** @minimum 1 */
   reportedUserId: number;
   reason: CreateReportBodyReason;
   /** @nullable */
@@ -216,6 +230,7 @@ export interface CreateReportBody {
 }
 
 export interface BlockUserBody {
+  /** @minimum 1 */
   blockedUserId: number;
 }
 

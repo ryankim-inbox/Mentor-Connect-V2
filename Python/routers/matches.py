@@ -1,5 +1,7 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from typing import Annotated
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field, PositiveInt
 
 import integration_api
 
@@ -7,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/matches/{question_id}")
-def get_matches(question_id: int, limit: int = 5):
+def get_matches(question_id: PositiveInt, limit: Annotated[int, Query(ge=1, le=20)] = 5):
     """
     Run the student matching engine (Python/find_matches.py) for one question.
     """
@@ -15,8 +17,8 @@ def get_matches(question_id: int, limit: int = 5):
 
 
 class MatchRequest(BaseModel):
-    question_id: int
-    limit: int = 5
+    question_id: PositiveInt
+    limit: int = Field(default=5, ge=1, le=20)
 
 
 @router.post("/matches")

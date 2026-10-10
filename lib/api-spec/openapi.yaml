@@ -432,6 +432,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -458,6 +460,7 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "200":
           description: Request details
@@ -468,6 +471,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -493,6 +498,7 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       requestBody:
         required: true
         content:
@@ -509,6 +515,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "409":
+          $ref: "#/components/responses/Error409"
         "401":
           $ref: "#/components/responses/Error401"
         "403":
@@ -538,12 +546,15 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "204":
           description: Deleted
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "403":
@@ -572,6 +583,7 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "200":
           description: Matched successfully
@@ -582,6 +594,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -648,6 +664,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -713,6 +733,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -739,12 +763,15 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "204":
           description: Unblocked
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -1175,6 +1202,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -2016,6 +2045,7 @@ components:
       properties:
         districtId:
           type: integer
+          minimum: 1
         title:
           type: string
           description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
@@ -2024,8 +2054,11 @@ components:
           description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
+          maxItems: 20
+          uniqueItems: true
           items:
             type: integer
+            minimum: 1
         role:
           type: string
           enum:
@@ -2044,7 +2077,6 @@ components:
         - districtId
         - title
         - description
-        - tagIds
         - role
     UpdateRequestBody:
       type: object
@@ -2057,9 +2089,13 @@ components:
           description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
+          maxItems: 20
+          uniqueItems: true
           items:
             type: integer
+            minimum: 1
         status:
+          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
           type: string
           enum:
             - open
@@ -2070,6 +2106,7 @@ components:
       properties:
         reportedUserId:
           type: integer
+          minimum: 1
         reason:
           type: string
           enum:
@@ -2090,6 +2127,7 @@ components:
       properties:
         blockedUserId:
           type: integer
+          minimum: 1
       required:
         - blockedUserId
     BlockedUser:
