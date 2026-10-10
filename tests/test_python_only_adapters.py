@@ -49,6 +49,49 @@ def patch_student_module(monkeypatch, module):
     )
 
 
+@pytest.mark.parametrize("mentor,expected", [
+    ({"location": " SAN JOSE "}, {"compatible": True, "overlap": ["san jose"]}),
+    ({"location": "Cupertino"}, {"compatible": False, "overlap": []}),
+])
+def test_location_practice_returns_real_module_output(mentor, expected):
+    envelope = integration_api.run_location_test({
+        "student": {"location": "San Jose"}, "mentor": mentor, "question": {},
+    })
+    assert envelope["success"] is True
+    assert envelope["is_real"] is True and envelope["is_todo"] is False
+    assert envelope["function_called"] == "location_data"
+    assert envelope["result"] == expected
+
+
+def test_location_practice_surfaces_real_validation_error():
+    envelope = integration_api.run_location_test({
+        "student": {"locations": None}, "mentor": {}, "question": {},
+    })
+    assert envelope["success"] is False and envelope["is_real"] is False
+    assert envelope["status"] == "runtime error"
+    assert envelope["error"].startswith("ValueError:")
+    assert "result" not in envelope
+
+
+@pytest.mark.parametrize("failure", ["import", "missing", "runtime"])
+def test_location_practice_preserves_injected_failure_envelopes(monkeypatch, failure):
+    def broken(student, mentor, question):
+        raise ValueError("injected location failure")
+
+    if failure == "import":
+        monkeypatch.setattr(integration_api, "_import_student_module", lambda name: (
+            None, {"success": False, "status": "import error", "error": "ImportError: injected"},
+        ))
+    else:
+        patch_student_module(monkeypatch, fake_module("locations", **(
+            {"location_data": broken} if failure == "runtime" else {})))
+    envelope = integration_api.run_location_test({"student": {}, "mentor": {}, "question": {}})
+    assert envelope["success"] is False
+    assert "result" not in envelope
+    assert envelope["status"] == {"import": "import error", "missing": "missing function",
+                                  "runtime": "runtime error"}[failure]
+
+
 # --- explicit import and runtime failure paths -----------------------------
 
 

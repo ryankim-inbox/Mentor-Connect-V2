@@ -106,7 +106,7 @@ const fixtures: Record<string, unknown> = {
     success: true,
     status: "connected",
     message: "Location module loaded.",
-    available_functions: ["find_nearby"],
+    available_functions: ["location_data"],
   },
   "/api/practice/blocks/status": {
     success: true,
@@ -283,6 +283,51 @@ test("Practice renders successful statuses after all status responses complete",
     await expect(section.getByText(message, { exact: true })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(unknownRequests).toEqual([]);
+});
+
+test("Practice submits location inputs and shows successful compatible or disjoint results", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  const calls: unknown[] = [];
+  const results = [
+    { compatible: true, overlap: ["san jose"] },
+    { compatible: false, overlap: [] },
+  ];
+  await page.route("**/api/practice/locations/test", async route => {
+    calls.push(route.request().postDataJSON());
+    await route.fulfill({ json: {
+      success: true, feature: "locations", module_name: "locations", status: "connected",
+      function_called: "location_data", available_functions: ["location_data"],
+      message: "locations.location_data returned a result.", result: results[calls.length - 1],
+      is_todo: false, is_real: true,
+    } });
+  });
+  await page.goto("/practice-lab");
+  const section = page.locator("section").filter({ has: page.getByRole("heading", { name: "Location Engine Test", exact: true }) });
+  await expect(section.locator("p").filter({ hasText: "Available functions:" })).toContainText("location_data");
+  const submit = section.getByRole("button", { name: "Run Location Test", exact: true });
+  await submit.click();
+  const output = section.locator("pre").filter({ hasText: '"function_called": "location_data"' });
+  await section.locator("details").filter({ hasText: '"function_called": "location_data"' }).getByText("Raw JSON output", { exact: true }).click();
+  await expect(output).toBeVisible();
+  await expect(output).toContainText('"success": true');
+  await expect(output).toContainText('"compatible": true');
+  await expect(output).toContainText('"san jose"');
+  const disjoint = {
+    student: { id: 1, locations: ["San Jose"] },
+    mentor: { id: 2, locations: ["Cupertino"] },
+    question: { id: 1, subject: "math" },
+  };
+  await section.getByLabel("JSON test input").fill(JSON.stringify(disjoint));
+  await submit.click();
+  await expect(output).toContainText('"success": true');
+  await expect(output).toContainText('"compatible": false');
+  await expect(output).toContainText('"overlap": []');
+  expect(calls).toEqual([{
+    ...disjoint, mentor: { id: 2, locations: ["San Jose", "Cupertino"] },
+  }, disjoint]);
+  await expect(submit).toBeEnabled();
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(unknownRequests).toEqual([]);
 });
