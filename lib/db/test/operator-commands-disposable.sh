@@ -51,7 +51,7 @@ MIGRATION_AUDIT_APPEND_ONLY=1 \
   node "$ROOT/scripts/migration-entrypoint.mjs" \
     --env staging \
     --actor release-test \
-    --migration-id 0002_integrity_constraints_indexes \
+    --migration-id 0003_request_events \
     --backup-id backup-test \
     --approval-id approval-test \
     --dry-run \
@@ -118,7 +118,7 @@ node -e '
   const fs = require("node:fs");
   const audit = JSON.parse(fs.readFileSync(process.argv[1], "utf8").trim());
   if (audit.result !== "dry-run-validated") throw new Error("dry-run result was not validated");
-  if (audit.plannedMigrationCount !== 1) throw new Error("unexpected plan length");
+  if (audit.plannedMigrationCount !== 2) throw new Error("unexpected plan length");
   if (audit.appliedTail !== "0001_canonical_baseline") throw new Error("wrong applied tail");
   if (fs.readFileSync(process.argv[2], "utf8") !== "") throw new Error("zero-violation preflight wrote candidates");
 ' "$FIXTURE_DIR/audit.jsonl" "$FIXTURE_DIR/preflight.jsonl"
