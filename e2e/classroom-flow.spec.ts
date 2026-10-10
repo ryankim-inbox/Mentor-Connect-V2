@@ -126,3 +126,31 @@ test("a saved room message is visible to the other signed-in account", async ({ 
     await expect(otherPage.getByText("Classroom cross-account message", { exact: true })).toHaveCount(1);
   } finally { await other.close(); }
 });
+
+for (const count of [0, 49, 50]) {
+  test(`DM history with ${count} messages labels a full window and preserves the empty state`, async ({ page, request }) => {
+    const messages = Array.from({ length: count }, (_, index) => ({
+      id: index + 1,
+      conversationId: 1,
+      senderId: 2,
+      body: `DM window message ${index + 1}`,
+      createdAt: "2026-09-09T00:00:00Z",
+      readAt: "2026-09-09T01:00:00Z",
+    }));
+    expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+      data: { method: "GET", path: "/api/dms/1/messages", status: 200, body: messages },
+    })).ok()).toBe(true);
+    await signIn(page);
+    await page.getByRole("button", { name: "Open chat" }).click();
+    await page.getByRole("tab", { name: "DMs", exact: true }).click();
+    const loaded = apiResponse(page, "/api/dms/1/messages");
+    await page.getByRole("button", { name: "Classroom Mentee", exact: false }).click();
+    const response = await loaded;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-request-id"]).toBeTruthy();
+    await expect(page.getByText(/^DM window message \d+$/)).toHaveCount(count);
+    await expect(page.getByText("Latest 50 messages", { exact: true })).toHaveCount(count === 50 ? 1 : 0);
+    await expect(page.getByText("No messages yet — send the first one.", { exact: true })).toHaveCount(count === 0 ? 1 : 0);
+    await expect(page.getByPlaceholder("Type a message…")).toBeEnabled();
+  });
+}

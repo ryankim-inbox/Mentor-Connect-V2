@@ -440,9 +440,13 @@ and `SELECT COUNT(*) FROM dm_conversations;` must not grow.
 2. Load the conversation (404 if missing) and verify the current user is
    `user_a_id` **or** `user_b_id`. Anyone else → `403`. This is the single
    most important check in the whole project: DMs are private.
-3. Select non-deleted messages ordered by `created_at`.
-4. Stretch goal (read receipts): after fetching, set `read_at = now()` on the
-   *other* user's still-unread rows in this conversation — you just read them.
+3. Select the latest 50 non-deleted messages with
+   `ORDER BY created_at DESC, id DESC LIMIT 50`, then reverse the bounded result
+   for ascending display order. Keep older history stored in the database.
+4. Mark only the selected incoming messages read. Use their IDs in the UPDATE,
+   preserve existing `read_at` timestamps, and return the actual stored timestamps
+   as `readAt`. Older messages outside the window must remain unread.
+5. The widget shows “Latest 50 messages” when the returned window is full.
 
 **Plan (POST):** same participant check and Mission 3's text validation, then
 call `_require_unblocked_pair()` before every INSERT into `dm_messages`,

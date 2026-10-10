@@ -457,6 +457,7 @@ function DmThread({
   return (
     <Thread
       title={conversation.otherUserName}
+      historyLabel={messages.length === 50 ? "Latest 50 messages" : undefined}
       leading={back}
       messages={messages.map((message: DmMessage) => ({
         id: message.id,
@@ -487,6 +488,7 @@ interface ThreadMessage {
 
 function Thread({
   title,
+  historyLabel,
   leading,
   messages,
   currentUserId,
@@ -495,6 +497,7 @@ function Thread({
   emptyText,
 }: {
   title: string;
+  historyLabel?: string;
   leading?: ReactNode;
   messages: ThreadMessage[];
   currentUserId: number;
@@ -529,6 +532,7 @@ function Thread({
       <div className="flex items-center gap-2 border-b border-card-border px-3 py-2">
         {leading}
         <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
+        {historyLabel && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{historyLabel}</span>}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
