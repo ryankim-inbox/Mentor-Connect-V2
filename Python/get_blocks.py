@@ -1,4 +1,4 @@
-import psycopg2
+from db import db
 """
 Handles block/report-related DB checks.
 
@@ -15,19 +15,10 @@ each report, we give warning
 
 """
 
-def receive_block_data():
-    connections = psycopg2.connect(
-    database="blocks_db",
-    host="get_blocks"
-    )
-    cursor = connections.cursor()
-    query="SELECT blocker_id, blocked_user_id FROM blocks;"
-    cursor.execute(query)
-
-    blocks_data = cursor.fetchall()
-    cursor.close()
-    connections.close()
-    return blocks_data
+def receive_block_data() -> list[tuple[int, int]]:
+    with db() as conn, conn.cursor() as cursor:
+        cursor.execute("SELECT blocker_id, blocked_user_id FROM blocks;")
+        return [(row["blocker_id"], row["blocked_user_id"]) for row in cursor.fetchall()]
 
 def prevent_matches(blocks_data, match_possibilities):
     block_s = set(blocks_data)

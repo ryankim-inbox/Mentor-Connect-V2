@@ -177,17 +177,10 @@ def _safe_error(question_id: int, status: str, message: str, error: Exception | 
     }
 
 
-def _load_block_pairs():
-    """
-    Load blocked relationships if the block helper is available.
-    If the block helper/database is not ready yet, do not crash matching.
-    """
-    try:
-        from get_blocks import receive_block_data
+def _load_block_pairs() -> set[tuple[int, int]]:
+    from get_blocks import receive_block_data
 
-        return set(tuple(row) for row in receive_block_data())
-    except Exception:
-        return set()
+    return set(receive_block_data())
 
 
 def _is_blocked(student_id, mentor_id, block_pairs):
@@ -247,7 +240,15 @@ def find_matches(question_id: int, limit: int = 5):
             error=exc,
         )
 
-    block_pairs = _load_block_pairs()
+    try:
+        block_pairs = _load_block_pairs()
+    except Exception as exc:
+        return _safe_error(
+            question_id=question_id,
+            status="database error",
+            message="Could not load blocked relationships from the database.",
+            error=exc,
+        )
     matches = []
 
     for mentor in mentors:
