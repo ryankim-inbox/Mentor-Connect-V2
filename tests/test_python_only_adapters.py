@@ -10,6 +10,8 @@ Proves the Analytics and Scheduling adapters are python-only:
 Import and runtime failures are injected independently of lesson progress.
 """
 
+import json
+import math
 import re
 import types
 from contextlib import contextmanager
@@ -18,6 +20,7 @@ from pathlib import Path
 import integration_api
 import pytest
 from api.adapters import analysis_adapter, scheduling_adapter
+from starlette.responses import JSONResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -148,12 +151,16 @@ def test_unusable_student_output_is_an_error_not_fallback(monkeypatch):
     assert envelope["student_result"] == "Math"
 
 
-@pytest.mark.parametrize("mentor_id", ["invalid ID", [1], float("inf")])
+@pytest.mark.parametrize("mentor_id", [
+    "invalid ID", [1], float("inf"), float("-inf"), float("nan"),
+])
 def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
     patch_student_module(
         monkeypatch,
         fake_module("analysis", receive_mentor_ranks=lambda: [
-            {"mentorId": mentor_id, "mentorName": "Ada"}
+            {"mentorId": mentor_id, "mentorName": "Ada", "debug": {
+                "values": (float("inf"), [float("-inf"), {"value": float("nan")}]),
+            }}
         ]),
     )
     envelope = analysis_adapter.get_mentor_response_rates()
@@ -162,6 +169,14 @@ def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
     assert envelope["data"] is None
     assert envelope["student_module"]["status"] == "invalid output"
     assert envelope["student_module"]["error"] == envelope["error"]
+    response = JSONResponse(envelope)
+    payload = json.loads(response.body)
+    assert payload["success"] is False
+    assert payload["data"] is None
+    raw_row = payload["student_result"][0]
+    assert raw_row["debug"] == {"values": ["inf", ["-inf", {"value": "nan"}]]}
+    if isinstance(mentor_id, float) and not math.isfinite(mentor_id):
+        assert raw_row["mentorId"] == repr(mentor_id)
 
 
 def test_zero_subject_count_is_preserved(monkeypatch):

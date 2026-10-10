@@ -1,5 +1,7 @@
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Event, current_thread
 from types import SimpleNamespace
 
@@ -58,18 +60,34 @@ def test_reload_critical_section_is_serialized(monkeypatch):
     assert len({thread for thread, _ in sequence[4:]}) == 1
 
 
-def test_real_analysis_reload_stress():
-    def reload_repeatedly():
-        for _ in range(200):
-            module, error = integration_api._import_student_module("analysis")
-            assert error is None
-            assert callable(module.receive_most_popular_subject)
-            assert callable(module.receive_mentor_ranks)
+_RELOAD_STRESS_SCRIPT = '''
+from concurrent.futures import ThreadPoolExecutor
+import integration_api
 
-    with ThreadPoolExecutor(max_workers=20) as workers:
-        futures = [workers.submit(reload_repeatedly) for _ in range(20)]
-        for future in futures:
-            future.result(timeout=30)
+def reload_repeatedly():
+    for _ in range(200):
+        module, error = integration_api._import_student_module("analysis")
+        assert error is None, error
+        assert callable(module.receive_most_popular_subject)
+        assert callable(module.receive_mentor_ranks)
+
+with ThreadPoolExecutor(max_workers=20) as workers:
+    futures = [workers.submit(reload_repeatedly) for _ in range(20)]
+    for future in futures:
+        future.result()
+print("4000 imports completed")
+'''
+
+
+def test_real_analysis_reload_stress():
+    # A process deadline also bounds executor shutdown if a reload worker deadlocks.
+    result = subprocess.run(
+        [sys.executable, "-c", _RELOAD_STRESS_SCRIPT],
+        cwd=Path(__file__).resolve().parent.parent / "Python",
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "4000 imports completed"
 
 
 def test_reload_observes_edited_module(monkeypatch, tmp_path):

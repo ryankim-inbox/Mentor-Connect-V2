@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+import math
 import sys
 from importlib import import_module, invalidate_caches
 from threading import RLock
@@ -40,6 +41,8 @@ def _safe_error(
 
 
 def _json_safe(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
