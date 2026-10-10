@@ -227,3 +227,96 @@ of production deployment, populated-data migration, or multiworker operation.
 
 All 16 planned tasks are complete. Branch `codex/backend-completion` remains local
 for the user's integration choice; no push, merge or deployment was performed.
+
+## Subsequent integration review follow-up (2026-10-10)
+
+A later whole-branch review at `9385f402` reproduced three additional integration
+gaps in tasks 4, 11 and 16. This dated follow-up supersedes the earlier claims
+that no code review remained pending and every requirement was complete at that
+point. Earlier approvals, tests and failed attempts remain historical evidence.
+The three reported gaps are now fixed and verified locally; independent controller
+review of this fix wave remains pending.
+
+- The shared chat thread watches the newest message ID as well as count, so a
+  latest-50 window scrolls after send or polling replaces its oldest message.
+  Permanent browser cases keep the window at 50, check the oldest row disappears
+  and require the entire newest bubble in the viewport. Existing empty/short
+  history and 0/49/50-message coverage remain.
+- Weekly chart columns share equal plotting heights and bottom baselines, with
+  a fixed label area. Dates, counts, null dash, Untracked/Partial, current
+  Week-to-date and accessible titles remain. Eight-week fixtures at 1440, 375
+  and 320px check relative geometry, null/zero heights, hand-derived proportions,
+  label containment and no overlap into the following mobile card. A native
+  horizontal scroll region and small minimum width keep labels readable.
+- The shared Python fixture uses documented Uvicorn auto WebSocket mode. Two
+  tests collected by the default Python suite use the actual gateway, Python
+  and disposable canonical PostgreSQL for room and DM sockets. They require
+  anonymous/wrong-Origin and unauthorized DM/district-room rejection, two-peer
+  bidirectional delivery and both messages in both accounts' REST histories.
+  Socket waits are bounded. Direct Python socket tests and gateway malformed/
+  duplicate-header checks remain; gateway validation was not weakened.
+- The authorized release prerequisite patches the existing transitive
+  `source-map-js@1` override to 1.2.2 for high advisory
+  [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+  Only its override, version/integrity/snapshot and existing Tailwind/PostCSS
+  lock edges changed. No dependency was added, and minimumReleaseAge, audit
+  thresholds, freeze scope and release policies remain unchanged.
+
+Commands ran in the isolated worktree with
+`PATH=/Users/rinny/.nvm/versions/node/v24.21.0/bin:$PATH`: Node 24.21.0,
+pnpm 10.33.0, uv 0.11.16, root `.venv` Python 3.12.13 and disposable PostgreSQL
+16.13. `CLASSROOM_TEST_PYTHON` remained set by the gate, preventing required DB
+checks from silently skipping. Full logs, browser traces, screenshots and the
+detailed `task-1-report.md` are retained in the ignored workspace
+`.superpowers/sdd/2026-10-10-backend-review-followups/`.
+
+| Exact command (after the PATH assignment above) | Result and retained log |
+| --- | --- |
+| `pnpm exec playwright test e2e/classroom-flow.spec.ts --grep 'a new DM stays in view'` | RED exit 1, 2 failed: newest-bubble viewport ratio 0.02777777798473835 (`dm-red-clean.log`). GREEN exit 0, 2 passed in 5.6s (`dm-green.log`). |
+| `pnpm exec playwright test e2e/classroom-flow.spec.ts --grep 'weekly bars share'` | Initial RED exit 1, 1 failed: plot-height mismatch 23px (`chart-red.log`). Initial GREEN exit 0, 1 passed in 3.0s (`chart-green.log`). Expanded eight-week RED exit 1, 3 failed label containment at 1440/375/320px (`chart-mobile-red.log`); final GREEN exit 0, 3 passed in 6.7s (`chart-mobile-green.log`). |
+| `sh scripts/test-python.sh tests/test_backend_completion.py -k real_gateway_websockets -q` | RED exit 1, 2 failed/2 deselected in 1.86s: rejection checks passed, authorized upgrades returned 502 (`websocket-red.log`). GREEN exit 0, 2 passed/2 deselected in 2.28s (`websocket-green.log`). |
+| `sh scripts/test-python.sh tests/test_backend_completion.py tests/test_chat_integration.py tests/test_chat_missions_1_6.py tests/test_dm_history.py -q` | Exit 0, 55 passed in 17.93s, zero skipped; source compilation included (`chat-green.log`). |
+| `pnpm test:gateway` | Exit 0, 114 gateway plus 8 shield passed, zero skipped (`gateway-green.log`). |
+| `pnpm build:release` | Exit 0 after the final chart/dependency patch; typechecks and both release bundles passed (`build-final-green.log`). |
+| `pnpm exec playwright test e2e/classroom-flow.spec.ts` | Initial exit 0, 11 passed before mobile expansion (`classroom-green.log`); corrected fixture distribution exit 0, 13 passed in 38.9s (`classroom-final-green.log`). |
+| `pnpm audit --prod --audit-level high --json` | Exit 0 before and after patch; all severities zero (`audit-production-before.json`, `audit-production-after.json`). |
+| `pnpm audit --audit-level high --json` | Before patch exit 1, high 1/moderate 1 (`audit-complete-before.json`). After patch exit 0, high 0/critical 0/moderate 1 (`audit-complete-after.json`). |
+| `pnpm verify:release` on clean `509fb925150a979eb21d920436ca772d74e52527` | Historical/provisional exit 0: Python 350 and browser 66 passed with all other gate stages (`verify-release.log`). Superseded by density/mobile and security follow-ups below. |
+| `pnpm verify:release` on clean `8fc0796e77f1336efd0130ad49b1a54331236969` | Exit 1: preceding stages passed, browser 66 passed/2 failed at chart mobile login setup with 429 (`verify-release-final.log`); traces retained in `release-failed-rate-limit-browser-results/`. |
+| `pnpm verify:release` on clean `e838899c0a412f6a01a1ab6cf6c015b65944fe7d` | **Exit 0**: runtime 8, freeze self-tests 8, Python 350 (63.70s), student ranks 45, gateway 114+8 shield, mockup 1, canonical DB 58 plus four operator checks, frontend unit 3, smoke 4 and browser 68 (1.8m). Zero required skips. Locked installation, source compilation, typechecks/builds, migration/post-merge checks, reproducible generation, 48 REST/2 WS contract agreement, 154 boundary checks and secret checks passed (`verify-release-corrected.log`). |
+
+Mobile self-review initially found wrapped labels below the reserved area at
+375px (Partial bottom 649, area bottom 605). Expanded tests reproduced the issue
+at all three widths. The minimal overflow/minimum-width/nowrap correction keeps
+the final Partial bottom at 604 within the region ending at 605; the card ends
+at 626 and following card begins at 650, with document width 375. Final screenshots
+and measurements are `chart-mobile-final-{left,right}.png` and
+`chart-mobile-final.json/log`. Intermediate failed attempts are disclosed in the
+task report; containment/visibility assertions were not relaxed.
+
+Keyboard access was checked against the final compiled UI in bundled Chromium
+at 375px (`chart-keyboard-check.cjs`, exit 0; log/JSON/screenshots retained).
+From Run Analysis, one Tab focuses the native scroll region; horizontal arrow
+keys reach the full current Week-to-date/Partial labels (scrollLeft 0 to 275).
+Safari/Firefox and assistive-technology sessions were not exercised.
+
+The second gate's 429 failures came from 12 mentor logins within the real
+gateway's unchanged 10-per-account/60-second limit. Upstream fixture reset does
+not reset the gateway limiter. The chart cases now use the existing mentee
+account, distributing the file's logins as mentor 9/mentee 5. No limiter,
+assertion, auth mock, wait or fixture-server policy was weakened. The standalone
+classroom file and corrected complete gate both passed with this distribution.
+An earlier overlapping browser invocation also collided on fixed fixture ports
+and trace output; clean RED runs were repeated serially before implementation,
+and the task report preserves the tooling error.
+
+Code and tests remain identical to successful gate commit `e838899c`; subsequent
+tracked edits update only this results record and the runbook's coverage sentence.
+Generated browser output is retained in the ignored follow-up workspace. Existing
+tooltip sourcemap/color notices remain nonblocking and the legacy-schema warning
+remains an intentional safeguard. One moderate build-tool finding remains in
+`postcss-selector-parser` via `@tailwindcss/typography` (read-only moderate audit
+exit 1; `audit-moderate-context.json`); its patched major version was outside the
+authorized high/critical patch. Both required local audits pass; separate CI
+audit status is unknown. Independent review remains pending. No push, PR, merge,
+deployment, populated-database operation or primary checkout change was performed.
