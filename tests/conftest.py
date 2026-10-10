@@ -62,7 +62,7 @@ def backend_server(backend_database, tmp_path_factory):
         with log_path.open("w+") as log:
             process = subprocess.Popen(
                 [sys.executable, "-m", "uvicorn", app, "--host", "127.0.0.1",
-                 "--port", str(port), "--ws", "websockets-sansio"] + (["--factory"] if factory else []),
+                 "--port", str(port)] + (["--factory"] if factory else []),
                 cwd=ROOT / "Python", stdout=log, stderr=log,
                 env={**os.environ, "DATABASE_URL": backend_database,
                      "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},

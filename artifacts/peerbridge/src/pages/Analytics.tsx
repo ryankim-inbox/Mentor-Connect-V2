@@ -25,17 +25,19 @@ function MiniBarChart({ data }: { data: WeeklyMatch[] }) {
         const heightPct = ((d.matches ?? 0) / max) * 100;
         return (
           <div key={d.week} className="flex-1 h-full flex flex-col items-center gap-2">
-            <div className="w-full flex-1 flex items-end">
+            <div className="w-full flex-1 min-h-0 flex items-end">
               <div
                 className="w-full bg-gradient-to-t from-primary to-primary/60 rounded-t-md transition-all"
                 style={{ height: `${heightPct}%` }}
                 title={d.matches === null ? "Untracked" : `${d.matches} observed matches (${d.coverage})`}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">{d.week}</span>
-            {index === data.length - 1 && <span className="text-[10px] text-muted-foreground">Week-to-date</span>}
-            <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches ?? "—"}</span>
-            {d.coverage !== "complete" && <span className="text-[10px] text-muted-foreground">{d.coverage === "untracked" ? "Untracked" : "Partial"}</span>}
+            <div className="h-20 shrink-0 flex flex-col items-center gap-2">
+              <span className="text-[10px] text-muted-foreground">{d.week}</span>
+              {index === data.length - 1 && <span className="text-[10px] text-muted-foreground">Week-to-date</span>}
+              <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches ?? "—"}</span>
+              {d.coverage !== "complete" && <span className="text-[10px] text-muted-foreground">{d.coverage === "untracked" ? "Untracked" : "Partial"}</span>}
+            </div>
           </div>
         );
       })}

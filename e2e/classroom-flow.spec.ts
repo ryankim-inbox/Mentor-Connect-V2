@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { fixtureAccounts, fixturePassword } from "./fixtures";
+import { fixtureAccounts, fixturePassword, pythonEnvelope } from "./fixtures";
 
 async function signIn(page: Page, role: keyof typeof fixtureAccounts = "mentor") {
   await page.goto("/login");
@@ -154,3 +154,77 @@ for (const count of [0, 49, 50]) {
     await expect(page.getByPlaceholder("Type a message…")).toBeEnabled();
   });
 }
+
+for (const update of ["send", "poll"] as const) {
+  test(`a new DM stays in view when ${update} replaces a full 50-message window`, async ({ page, request }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    if (update === "poll") await page.clock.install();
+    const messages = Array.from({ length: 50 }, (_, index) => ({
+      id: index + 1, conversationId: 1, senderId: 2,
+      body: `Full window message ${index + 1}`,
+      createdAt: "2026-09-09T00:00:00Z", readAt: null,
+    }));
+    const configure = async (method: string, body: unknown, status = 200) => {
+      expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+        data: { method, path: "/api/dms/1/messages", status, body },
+      })).ok()).toBe(true);
+    };
+    await configure("GET", messages);
+    await signIn(page);
+    await page.getByRole("button", { name: "Open chat" }).click();
+    await page.getByRole("tab", { name: "DMs", exact: true }).click();
+    await page.getByRole("button", { name: "Classroom Mentee", exact: false }).click();
+    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(50);
+    await expect(page.getByText("Full window message 50", { exact: true })).toBeInViewport({ ratio: 1 });
+    const newest = { ...messages[49], id: 51, senderId: update === "send" ? 1 : 2, body: "Newest full window message" };
+    await configure("GET", [...messages.slice(1), newest]);
+    if (update === "send") {
+      await configure("POST", newest, 201);
+      await page.getByPlaceholder("Type a message…").fill(newest.body);
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+    } else {
+      await page.clock.fastForward(10_100);
+      await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+    }
+    await expect(page.getByText("Full window message 1", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(49);
+    await expect(page.getByText("Latest 50 messages", { exact: true })).toBeVisible();
+    await expect(page.getByText(newest.body, { exact: true })).toBeInViewport({ ratio: 1 });
+  });
+}
+
+test("weekly bars share a plot scale and baseline across coverage and current-week labels", async ({ page, request }) => {
+  const weekly = [
+    { week: "2026-09-07", matches: null, coverage: "untracked" },
+    { week: "2026-09-14", matches: 0, coverage: "complete" },
+    { week: "2026-09-21", matches: 5, coverage: "partial" },
+    { week: "2026-09-28", matches: 9, coverage: "complete" },
+    { week: "2026-10-05", matches: 10, coverage: "complete" },
+  ];
+  expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+    data: { method: "GET", path: "/api/analytics/weekly-matches", status: 200,
+      body: pythonEnvelope("analysis", weekly) },
+  })).ok()).toBe(true);
+  await signIn(page);
+  await page.goto("/analytics");
+  await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
+  await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
+  await expect(page.getByText("Partial", { exact: true })).toBeVisible();
+  const bars = page.locator('[title="Untracked"], [title*="observed matches ("]');
+  await expect(bars).toHaveCount(5);
+  const geometry = await bars.evaluateAll(elements => elements.map(element => {
+    const bar = element.getBoundingClientRect();
+    const plot = element.parentElement!.getBoundingClientRect();
+    return { height: bar.height, bottom: bar.bottom, plotHeight: plot.height, plotBottom: plot.bottom };
+  }));
+  for (const bar of geometry) {
+    expect(Math.abs(bar.plotHeight - geometry[0].plotHeight)).toBeLessThan(1);
+    expect(Math.abs(bar.plotBottom - geometry[0].plotBottom)).toBeLessThan(1);
+    expect(Math.abs(bar.bottom - geometry[0].bottom)).toBeLessThan(1);
+  }
+  expect(geometry[0].height).toBe(0);
+  expect(geometry[1].height).toBe(0);
+  expect(geometry[4].height).toBeGreaterThan(geometry[3].height);
+  expect(geometry[2].height / geometry[4].height).toBeCloseTo(0.5, 1);
+  expect(geometry[3].height / geometry[4].height).toBeCloseTo(0.9, 1);
+});
