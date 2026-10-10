@@ -3,7 +3,7 @@
 Local synthetic verification on 2026-10-10, based on Task 16 baseline `12b2e4aa`.
 Tasks 1–15 were implemented and reviewed individually before this gate. This
 record preserves execution evidence; plan checkboxes remain unchanged, and
-independent final whole-branch review is pending.
+independent final whole-branch review and scoped fix review are complete (see final review approval below).
 
 ## Implemented scope
 
@@ -55,8 +55,8 @@ so that the initial failure is not hidden.
 The existing tooltip sourcemap diagnostic, NO_COLOR/FORCE_COLOR warnings and
 intentional incompatible legacy-fixture notice recurred without failing these
 checks. Generated browser output was cleaned; generated API clients had no diff.
-No named acceptance command remains failed or pending. Independent final review
-and the separately scoped dependency-audit CI job remain external evidence.
+No named acceptance command remains failed or pending. Independent final review is
+complete below; the separately scoped dependency-audit CI job remains external evidence.
 
 ## Decisions
 
@@ -127,7 +127,7 @@ this record does not declare them resolved:
   legacy backend activation were not performed or claimed.
 - The separate dependency-audit CI job was not run locally; its result is unknown.
   Both existing high/critical audit policies remain unchanged, with no new exceptions.
-- Independent final whole-branch review is pending. No push, merge or deployment
+- Independent final review is complete after the fixes documented below. No push, merge or deployment
   was performed, and no populated database or primary checkout was touched.
 
 ## Final review remediation (2026-10-10)
@@ -202,3 +202,28 @@ CI result remains unknown; deployment, populated databases, multiworker WS,
 historical backfill, automated suspension, full DM pagination, public ranks and
 legacy backend activation remain outside scope. No push, merge or deployment
 was performed. Scoped re-review remains pending the controller's verdict.
+
+## Final review approval
+
+The independent whole-branch review examined all 111 changed files through
+`6fc77162`. Its two Important findings (blocked Connect and the district input
+enum), Minor date-validation finding and obsolete probe-header comment were fixed
+in `d041780b`. A separate scoped re-review read the full fix diff and marked all
+four ADDRESSED, with no new breakage and no new out-of-scope defect. Earlier
+pending-review statements above describe the historical validation sequence;
+no code review remains pending.
+
+The final full release gate passed on provisional `9d060966`; `d041780b` differs
+only in this evidence document. The final review-record update also changes only
+this document. The final code therefore retains 348 passing Python tests,
+45 student-rank tests, 58 database tests plus 4 operator checks, 122 gateway/shield
+tests and 63 browser tests, with zero required skips and reproducible generation.
+
+Only existing nonblocking tooltip source-map and color-environment diagnostics
+remain deferred; the legacy-fixture warning is an intentional deployment guard.
+No functional finding is parked. The separate dependency-audit CI result remains
+unknown and its existing policy still applies. Local verification is not evidence
+of production deployment, populated-data migration, or multiworker operation.
+
+All 16 planned tasks are complete. Branch `codex/backend-completion` remains local
+for the user's integration choice; no push, merge or deployment was performed.
