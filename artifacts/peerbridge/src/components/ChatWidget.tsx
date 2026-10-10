@@ -507,10 +507,11 @@ function Thread({
 }) {
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const newestMessageId = messages.at(-1)?.id;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
-  }, [messages.length]);
+  }, [messages.length, newestMessageId]);
 
   const sendBlocked = isScaffoldTodo(sendMutation.data)
     ? `${sendMutation.data.message}. Sending isn't implemented yet.`

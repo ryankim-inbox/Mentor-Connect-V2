@@ -1,4 +1,5 @@
 """Release completion means healthy real modules composed through the gateway."""
+import json
 from contextlib import closing
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -6,8 +7,54 @@ from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, build_opener
 
 import psycopg2
+import pytest
+from websockets.exceptions import InvalidStatus
+from websockets.sync.client import connect
 
 from backend_support import api, login
+
+
+@pytest.mark.parametrize("socket_path,history_path", [
+    ("/ws/chat/rooms/1", "/api/chat/rooms/1/messages"),
+    ("/ws/dms/1", "/api/dms/1/messages"),
+])
+def test_real_gateway_websockets_deliver_authorized_messages_and_persist_history(
+        gateway_server, socket_path, history_path):
+    base = gateway_server
+    student, student_cookie = login(base, "student001@test.edu")
+    mentor, mentor_cookie = login(base, "mentor501@test.edu")
+    _, outsider_cookie = login(base, "both951@test.edu")
+    url = base.replace("http://", "ws://")
+    origin = "http://127.0.0.1:14200"
+    rejected = [
+        (socket_path, origin, {}, 403),
+        (socket_path, "https://wrong.example", {"Cookie": student_cookie}, 403),
+        ("/ws/dms/1", origin, {"Cookie": outsider_cookie}, 403),
+        ("/ws/chat/rooms/3", origin, {"Cookie": student_cookie}, 403),
+    ]
+    for path, attempted_origin, headers, status in rejected:
+        with pytest.raises(InvalidStatus) as error:
+            with connect(url + path, origin=attempted_origin, additional_headers=headers, open_timeout=3):
+                pytest.fail("Unauthorized gateway socket accepted")
+        assert error.value.response.status_code == status
+
+    with connect(url + socket_path, origin=origin,
+                 additional_headers={"Cookie": student_cookie}, open_timeout=3) as sender, \
+         connect(url + socket_path, origin=origin,
+                 additional_headers={"Cookie": mentor_cookie}, open_timeout=3) as recipient:
+        sender.send("  Composed gateway message  ")
+        sent = json.loads(sender.recv(timeout=3))
+        assert sent["body"] == "Composed gateway message" and sent["senderId"] == 1
+        assert json.loads(recipient.recv(timeout=3)) == sent
+        recipient.send("Composed gateway reply")
+        reply = json.loads(recipient.recv(timeout=3))
+        assert reply["body"] == "Composed gateway reply" and reply["senderId"] == 501
+        assert json.loads(sender.recv(timeout=3)) == reply
+    for client in (student, mentor):
+        status, history = api(client, base, "GET", history_path)
+        assert status == 200
+        assert any(row["id"] == sent["id"] and row["body"] == sent["body"] for row in history)
+        assert any(row["id"] == reply["id"] and row["body"] == reply["body"] for row in history)
 
 
 def test_active_python_sources_compile():
