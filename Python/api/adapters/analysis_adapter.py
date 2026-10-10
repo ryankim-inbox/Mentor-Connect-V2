@@ -1,16 +1,5 @@
-"""
-Wraps the student analytics file (Python/analysis.py) without modifying it.
-
-analysis.py is meant to provide:
-  - receive_most_popular_subject()  -> most requested subjects
-  - receive_mentor_ranks()          -> mentor rankings
-  - response_time_analysis()        -> mentor response times
-
-The student module is the ONLY source of analytics data. When it cannot be
-imported (it currently has a syntax error) or a function fails or returns an
-unusable shape, the endpoint answers success=False with the captured Python
-error and data=None. There is no adapter-computed fallback.
-"""
+"""Validate student analytics output; the student module owns every aggregate."""
+import math
 
 from api.adapters.probe import probe_student_call, student_envelope, student_status_envelope
 
@@ -36,20 +25,25 @@ def _normalize_weekly(result):
         return None
     normalized = []
     for item in result:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or "matches" not in item:
             return None
-        week = item.get("week") or item.get("label")
-        matches = item.get("matches") if "matches" in item else item.get("count")
-        if week is None or not isinstance(matches, (int, float)):
+        week = item.get("week")
+        matches = item.get("matches")
+        coverage = item.get("coverage")
+        if not isinstance(week, str) or coverage not in ("untracked", "partial", "complete"):
             return None
-        normalized.append({"week": str(week), "matches": int(matches)})
+        if matches is None:
+            if coverage != "untracked":
+                return None
+        elif (coverage == "untracked" or not isinstance(matches, (int, float))
+              or not math.isfinite(matches) or matches < 0 or int(matches) != matches):
+            return None
+        normalized.append({"week": week, "matches": None if matches is None else int(matches),
+                           "coverage": coverage})
     return normalized
 
 
 def get_weekly_matches():
-    # analysis.py does not define a weekly-matches function yet, so once the
-    # import succeeds this reports "missing function" until the student adds
-    # receive_weekly_matches() -> [{"week": ..., "matches": ...}].
     probe = probe_student_call("analysis", "receive_weekly_matches")
     return student_envelope("analytics.weekly_matches", probe, normalize=_normalize_weekly)
 
@@ -106,28 +100,27 @@ def get_popular_time_slots():
 
 
 def _normalize_mentor_ranks(result):
-    if not isinstance(result, list):
+    if (not isinstance(result, dict) or not isinstance(result.get("trackingStartedAt"), str)
+            or not isinstance(result.get("mentors"), list)):
         return None
-    normalized = []
-    for item in result:
-        if not isinstance(item, dict):
+    mentors = []
+    for item in result["mentors"]:
+        if not isinstance(item, dict) or item.get("mentorName") is None:
             return None
-        mentor_id = item.get("mentorId", item.get("mentor_id", item.get("id")))
-        name = item.get("mentorName") or item.get("mentor_name") or item.get("name")
-        if mentor_id is None or name is None:
+        mentor_id = int(item["mentorId"]) if "mentorId" in item else None
+        if mentor_id is None or "totalMatches" not in item or "avgTimeToMatchHours" not in item:
             return None
-        normalized.append(
-            {
-                "mentorId": int(mentor_id),
-                "mentorName": str(name),
-                "responseRate": float(item.get("responseRate", item.get("response_rate", 0))),
-                "totalRequests": int(item.get("totalRequests", item.get("total_requests", 0))),
-                "avgResponseHours": float(
-                    item.get("avgResponseHours", item.get("avg_response_hours", 0))
-                ),
-            }
-        )
-    return normalized
+        total = int(item["totalMatches"])
+        hours = item["avgTimeToMatchHours"]
+        if total < 0 or total != item["totalMatches"]:
+            return None
+        if hours is not None:
+            hours = float(hours)
+            if not math.isfinite(hours) or hours < 0:
+                return None
+        mentors.append({"mentorId": mentor_id, "mentorName": str(item["mentorName"]),
+                        "totalMatches": total, "avgTimeToMatchHours": hours})
+    return {"trackingStartedAt": result["trackingStartedAt"], "mentors": mentors}
 
 
 def get_mentor_response_rates():

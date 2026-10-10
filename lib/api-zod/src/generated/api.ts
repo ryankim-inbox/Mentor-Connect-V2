@@ -1412,82 +1412,145 @@ export const GetAnalysisStatusResponse = zod.object({
 });
 
 /**
- * @summary getWeeklyMatches
+ * @summary Eight UTC calendar weeks of observed matches, ending with the current week-to-date
  */
 
-export const getWeeklyMatchesResponseStudentModuleOneAttemptedFunctionMax = 128;
+export const getWeeklyMatchesResponseOneStudentModuleOneAttemptedFunctionMax = 128;
 
-export const getWeeklyMatchesResponseStudentModuleOneErrorMax = 128;
+export const getWeeklyMatchesResponseOneStudentModuleOneErrorMax = 128;
 
-export const getWeeklyMatchesResponseErrorMax = 128;
+export const getWeeklyMatchesResponseOneErrorMax = 128;
 
-export const GetWeeklyMatchesResponse = zod.object({
-  ok: zod.boolean(),
-  success: zod.boolean().optional(),
-  feature: zod.string().min(1).optional(),
-  source: zod.enum(["python", "student-module", "adapter-fallback"]),
-  student_module: zod.union([
+export const getWeeklyMatchesResponseTwoDataOneItemMatchesMin = 0;
+
+export const GetWeeklyMatchesResponse = zod
+  .object({
+    ok: zod.boolean(),
+    success: zod.boolean().optional(),
+    feature: zod.string().min(1).optional(),
+    source: zod.enum(["python", "student-module", "adapter-fallback"]),
+    student_module: zod.union([
+      zod.object({
+        module: zod.string().min(1),
+        attempted_function: zod
+          .string()
+          .min(1)
+          .max(getWeeklyMatchesResponseOneStudentModuleOneAttemptedFunctionMax)
+          .nullish(),
+        importable: zod.boolean().optional(),
+        called: zod.boolean().optional(),
+        status: zod.string().min(1),
+        error: zod
+          .string()
+          .min(1)
+          .max(getWeeklyMatchesResponseOneStudentModuleOneErrorMax)
+          .nullish(),
+        available_functions: zod.array(zod.string().min(1)).optional(),
+      }),
+      zod.null(),
+    ]),
+    error: zod
+      .string()
+      .min(1)
+      .max(getWeeklyMatchesResponseOneErrorMax)
+      .nullish(),
+    data: zod.unknown(),
+  })
+  .and(
     zod.object({
-      module: zod.string().min(1),
-      attempted_function: zod
-        .string()
-        .min(1)
-        .max(getWeeklyMatchesResponseStudentModuleOneAttemptedFunctionMax)
-        .nullish(),
-      importable: zod.boolean().optional(),
-      called: zod.boolean().optional(),
-      status: zod.string().min(1),
-      error: zod
-        .string()
-        .min(1)
-        .max(getWeeklyMatchesResponseStudentModuleOneErrorMax)
-        .nullish(),
-      available_functions: zod.array(zod.string().min(1)).optional(),
+      data: zod.union([
+        zod.array(
+          zod.object({
+            week: zod
+              .string()
+              .date()
+              .describe(
+                "Monday of the UTC calendar week; the final row is week-to-date.",
+              ),
+            matches: zod
+              .number()
+              .int()
+              .min(getWeeklyMatchesResponseTwoDataOneItemMatchesMin)
+              .nullable()
+              .describe(
+                "Observed match count; null means the entire week was untracked.",
+              ),
+            coverage: zod
+              .enum(["untracked", "partial", "complete"])
+              .describe(
+                "Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.",
+              ),
+          }),
+        ),
+        zod.null(),
+      ]),
     }),
-    zod.null(),
-  ]),
-  error: zod.string().min(1).max(getWeeklyMatchesResponseErrorMax).nullish(),
-  data: zod.unknown(),
-});
+  );
 
 /**
- * @summary getPopularSubjects
+ * @summary Top ten tags by current request demand, ordered by count descending then tag ID
  */
 
-export const getPopularSubjectsResponseStudentModuleOneAttemptedFunctionMax = 128;
+export const getPopularSubjectsResponseOneStudentModuleOneAttemptedFunctionMax = 128;
 
-export const getPopularSubjectsResponseStudentModuleOneErrorMax = 128;
+export const getPopularSubjectsResponseOneStudentModuleOneErrorMax = 128;
 
-export const getPopularSubjectsResponseErrorMax = 128;
+export const getPopularSubjectsResponseOneErrorMax = 128;
 
-export const GetPopularSubjectsResponse = zod.object({
-  ok: zod.boolean(),
-  success: zod.boolean().optional(),
-  feature: zod.string().min(1).optional(),
-  source: zod.enum(["python", "student-module", "adapter-fallback"]),
-  student_module: zod.union([
+export const getPopularSubjectsResponseTwoDataOneItemRequestsMin = 0;
+
+export const GetPopularSubjectsResponse = zod
+  .object({
+    ok: zod.boolean(),
+    success: zod.boolean().optional(),
+    feature: zod.string().min(1).optional(),
+    source: zod.enum(["python", "student-module", "adapter-fallback"]),
+    student_module: zod.union([
+      zod.object({
+        module: zod.string().min(1),
+        attempted_function: zod
+          .string()
+          .min(1)
+          .max(
+            getPopularSubjectsResponseOneStudentModuleOneAttemptedFunctionMax,
+          )
+          .nullish(),
+        importable: zod.boolean().optional(),
+        called: zod.boolean().optional(),
+        status: zod.string().min(1),
+        error: zod
+          .string()
+          .min(1)
+          .max(getPopularSubjectsResponseOneStudentModuleOneErrorMax)
+          .nullish(),
+        available_functions: zod.array(zod.string().min(1)).optional(),
+      }),
+      zod.null(),
+    ]),
+    error: zod
+      .string()
+      .min(1)
+      .max(getPopularSubjectsResponseOneErrorMax)
+      .nullish(),
+    data: zod.unknown(),
+  })
+  .and(
     zod.object({
-      module: zod.string().min(1),
-      attempted_function: zod
-        .string()
-        .min(1)
-        .max(getPopularSubjectsResponseStudentModuleOneAttemptedFunctionMax)
-        .nullish(),
-      importable: zod.boolean().optional(),
-      called: zod.boolean().optional(),
-      status: zod.string().min(1),
-      error: zod
-        .string()
-        .min(1)
-        .max(getPopularSubjectsResponseStudentModuleOneErrorMax)
-        .nullish(),
-      available_functions: zod.array(zod.string().min(1)).optional(),
+      data: zod.union([
+        zod.array(
+          zod.object({
+            subject: zod.string(),
+            requests: zod
+              .number()
+              .int()
+              .min(getPopularSubjectsResponseTwoDataOneItemRequestsMin),
+            color: zod.string(),
+          }),
+        ),
+        zod.null(),
+      ]),
     }),
-    zod.null(),
-  ]),
-  error: zod.string().min(1).max(getPopularSubjectsResponseErrorMax).nullish(),
-  data: zod.unknown(),
-});
+  );
 
 /**
  * @summary getPopularTimeSlots
@@ -1529,47 +1592,90 @@ export const GetPopularTimeSlotsResponse = zod.object({
 });
 
 /**
- * @summary getMentorResponseRates
+ * Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
+ * @summary Mentor matching activity observed after tracking started
  */
 
-export const getMentorResponseRatesResponseStudentModuleOneAttemptedFunctionMax = 128;
+export const getMentorResponseRatesResponseOneStudentModuleOneAttemptedFunctionMax = 128;
 
-export const getMentorResponseRatesResponseStudentModuleOneErrorMax = 128;
+export const getMentorResponseRatesResponseOneStudentModuleOneErrorMax = 128;
 
-export const getMentorResponseRatesResponseErrorMax = 128;
+export const getMentorResponseRatesResponseOneErrorMax = 128;
 
-export const GetMentorResponseRatesResponse = zod.object({
-  ok: zod.boolean(),
-  success: zod.boolean().optional(),
-  feature: zod.string().min(1).optional(),
-  source: zod.enum(["python", "student-module", "adapter-fallback"]),
-  student_module: zod.union([
+export const getMentorResponseRatesResponseTwoDataOneMentorsItemTotalMatchesMin = 0;
+
+export const getMentorResponseRatesResponseTwoDataOneMentorsItemAvgTimeToMatchHoursMin = 0;
+
+export const GetMentorResponseRatesResponse = zod
+  .object({
+    ok: zod.boolean(),
+    success: zod.boolean().optional(),
+    feature: zod.string().min(1).optional(),
+    source: zod.enum(["python", "student-module", "adapter-fallback"]),
+    student_module: zod.union([
+      zod.object({
+        module: zod.string().min(1),
+        attempted_function: zod
+          .string()
+          .min(1)
+          .max(
+            getMentorResponseRatesResponseOneStudentModuleOneAttemptedFunctionMax,
+          )
+          .nullish(),
+        importable: zod.boolean().optional(),
+        called: zod.boolean().optional(),
+        status: zod.string().min(1),
+        error: zod
+          .string()
+          .min(1)
+          .max(getMentorResponseRatesResponseOneStudentModuleOneErrorMax)
+          .nullish(),
+        available_functions: zod.array(zod.string().min(1)).optional(),
+      }),
+      zod.null(),
+    ]),
+    error: zod
+      .string()
+      .min(1)
+      .max(getMentorResponseRatesResponseOneErrorMax)
+      .nullish(),
+    data: zod.unknown(),
+  })
+  .and(
     zod.object({
-      module: zod.string().min(1),
-      attempted_function: zod
-        .string()
-        .min(1)
-        .max(getMentorResponseRatesResponseStudentModuleOneAttemptedFunctionMax)
-        .nullish(),
-      importable: zod.boolean().optional(),
-      called: zod.boolean().optional(),
-      status: zod.string().min(1),
-      error: zod
-        .string()
-        .min(1)
-        .max(getMentorResponseRatesResponseStudentModuleOneErrorMax)
-        .nullish(),
-      available_functions: zod.array(zod.string().min(1)).optional(),
+      data: zod.union([
+        zod.object({
+          trackingStartedAt: zod.string().datetime({ offset: true }),
+          mentors: zod
+            .array(
+              zod.object({
+                mentorId: zod.number().int(),
+                mentorName: zod.string(),
+                totalMatches: zod
+                  .number()
+                  .int()
+                  .min(
+                    getMentorResponseRatesResponseTwoDataOneMentorsItemTotalMatchesMin,
+                  ),
+                avgTimeToMatchHours: zod
+                  .number()
+                  .min(
+                    getMentorResponseRatesResponseTwoDataOneMentorsItemAvgTimeToMatchHoursMin,
+                  )
+                  .nullable()
+                  .describe(
+                    "Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.",
+                  ),
+              }),
+            )
+            .describe(
+              "Current mentor/both users, including zero matches, ordered by totalMatches descending then ID.",
+            ),
+        }),
+        zod.null(),
+      ]),
     }),
-    zod.null(),
-  ]),
-  error: zod
-    .string()
-    .min(1)
-    .max(getMentorResponseRatesResponseErrorMax)
-    .nullish(),
-  data: zod.unknown(),
-});
+  );
 
 /**
  * @summary getPythonReportsStatus
