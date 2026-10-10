@@ -19,7 +19,7 @@ from pathlib import Path
 
 import integration_api
 import pytest
-from api.adapters import analysis_adapter, scheduling_adapter
+from api.adapters import admin_adapter, analysis_adapter, reports_adapter, scheduling_adapter
 from starlette.responses import JSONResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -379,3 +379,58 @@ def test_scheduling_suggestions_preserve_users_and_overlap(monkeypatch, overlap)
     envelope = scheduling_adapter.suggest_times(1, 2)
     assert envelope["success"] is True
     assert envelope["data"] == {"userA": USER_A, "userB": USER_B, "overlap": overlap}
+
+
+# Reports and moderation must never replace module failures with SQL results.
+@pytest.mark.parametrize("endpoint,module_name,function_name", [
+    (reports_adapter.get_signup_summary, "reports", "signup_summary"),
+    (admin_adapter.get_flagged_users, "get_blocks", "get_flagged_users"),
+])
+@pytest.mark.parametrize("failure", ["import", "missing", "runtime"])
+def test_reporting_module_errors_are_explicit(monkeypatch, endpoint, module_name, function_name, failure):
+    def broken():
+        raise RuntimeError("injected reporting failure")
+    if failure == "import":
+        monkeypatch.setattr(integration_api, "_import_student_module",
+                            lambda name: (None, {"status": "import error", "error": "SyntaxError: injected"}))
+    else:
+        patch_student_module(monkeypatch, fake_module(module_name, **({function_name: broken} if failure == "runtime" else {})))
+    envelope = endpoint()
+    assert ENVELOPE_KEYS <= set(envelope)
+    assert envelope["ok"] is False and envelope["success"] is False
+    assert envelope["data"] is None and envelope["error"]
+    assert envelope["source"] == "python"
+
+
+def test_reporting_adapters_use_single_full_summary_and_empty_module_results(monkeypatch):
+    calls = []
+    def summary():
+        calls.append(True)
+        return {"today": 0, "thisMonth": 0, "thisYear": 0, "total": 0}
+    patch_student_module(monkeypatch, fake_module("reports", signup_summary=summary))
+    result = reports_adapter.get_signup_summary()
+    assert result["ok"] and result["source"] == "student-module"
+    assert result["data"] == {"today": 0, "thisMonth": 0, "thisYear": 0, "total": 0}
+    assert len(calls) == 1
+    patch_student_module(monkeypatch, fake_module("get_blocks", get_flagged_users=lambda: []))
+    result = admin_adapter.get_flagged_users()
+    assert result["ok"] and result["source"] == "student-module" and result["data"] == []
+
+
+@pytest.mark.parametrize("summary", [None, {}, "invalid", {"today": -1, "thisMonth": 0, "thisYear": 0, "total": 0},
+    {"today": True, "thisMonth": 0, "thisYear": 0, "total": 0},
+    {"today": float("nan"), "thisMonth": 0, "thisYear": 0, "total": 0}])
+def test_reporting_invalid_summary_is_explicit_and_json_safe(monkeypatch, summary):
+    patch_student_module(monkeypatch, fake_module("reports", signup_summary=lambda: summary))
+    result = reports_adapter.get_signup_summary()
+    assert result["ok"] is False and result["data"] is None
+    assert result["student_module"]["status"] == "invalid output"
+    JSONResponse(result)
+
+
+@pytest.mark.parametrize("rows", [None, "invalid", {}])
+def test_moderation_invalid_output_is_explicit(monkeypatch, rows):
+    patch_student_module(monkeypatch, fake_module("get_blocks", get_flagged_users=lambda: rows))
+    result = admin_adapter.get_flagged_users()
+    assert result["ok"] is False and result["data"] is None
+    assert result["student_module"]["status"] == "invalid output"
