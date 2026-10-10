@@ -59,7 +59,7 @@ def update_user(user_id: int, body: UpdateUserBody, request: Request):
     if body.name is not None:
         fields.append("name = %s")
         values.append(body.name)
-    if body.bio is not None:
+    if "bio" in body.model_fields_set:
         fields.append("bio = %s")
         values.append(body.bio)
     if body.role is not None:
