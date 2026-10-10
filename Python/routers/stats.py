@@ -3,16 +3,22 @@ from db import db
 
 router = APIRouter()
 
-def get_top_tags(cur, limit=5):
-    cur.execute("SELECT * FROM tags ORDER BY name")
-    tags = cur.fetchall()
-    result = []
-    for tag in tags:
-        cur.execute("SELECT COUNT(*) as cnt FROM request_tags WHERE tag_id = %s", (tag["id"],))
-        count = cur.fetchone()["cnt"]
-        result.append({"id": tag["id"], "name": tag["name"], "color": tag["color"], "requestCount": count})
-    result.sort(key=lambda t: t["requestCount"], reverse=True)
-    return result[:limit]
+def get_top_tags(cur, limit: int = 5, district_id: int | None = None) -> list[dict]:
+    cur.execute(
+        """SELECT t.id, t.name, t.color, COUNT(*) AS request_count
+           FROM tags t
+           JOIN request_tags rt ON rt.tag_id = t.id
+           JOIN requests r ON r.id = rt.request_id
+           WHERE (%s IS NULL OR r.district_id = %s)
+           GROUP BY t.id
+           ORDER BY request_count DESC, t.id ASC
+           LIMIT %s""",
+        (district_id, district_id, limit),
+    )
+    return [
+        {"id": tag["id"], "name": tag["name"], "color": tag["color"], "requestCount": tag["request_count"]}
+        for tag in cur.fetchall()
+    ]
 
 @router.get("/stats/overview")
 def stats_overview():
@@ -61,7 +67,7 @@ def district_stats(district_id: int):
         open_requests = cur.fetchone()["cnt"]
         cur.execute("SELECT COUNT(*) as cnt FROM requests WHERE district_id = %s AND status = 'matched'", (district_id,))
         matched_requests = cur.fetchone()["cnt"]
-        top_tags = get_top_tags(cur)
+        top_tags = get_top_tags(cur, district_id=district_id)
 
     return {
         "districtId": district["id"],

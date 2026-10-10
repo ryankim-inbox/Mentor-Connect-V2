@@ -8,6 +8,9 @@
 import type { ListDistrictsType } from "./listDistrictsType";
 
 export type ListDistrictsParams = {
+  /**
+   * Filter by district type; omit to return all supported districts.
+   */
   type?: ListDistrictsType;
   search?: string;
 };

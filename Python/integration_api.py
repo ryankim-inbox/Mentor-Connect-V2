@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import inspect
+import math
 import sys
 from importlib import import_module, invalidate_caches
+from threading import RLock
 from typing import Any
 
 
 ALLOWED_RAW_MODULES = {"find_matches", "locations", "get_blocks"}
+_MODULE_RELOAD_LOCK = RLock()
 
 
 def _error_status(error: BaseException) -> str:
@@ -38,6 +41,8 @@ def _safe_error(
 
 
 def _json_safe(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
@@ -48,11 +53,11 @@ def _json_safe(value: Any) -> Any:
 
 
 def _import_student_module(module_name: str) -> tuple[Any | None, dict[str, Any] | None]:
-    invalidate_caches()
-    sys.modules.pop(module_name, None)
-
     try:
-        return import_module(module_name), None
+        with _MODULE_RELOAD_LOCK:
+            invalidate_caches()
+            sys.modules.pop(module_name, None)
+            return import_module(module_name), None
     except Exception as error:
         return None, _safe_error(
             feature=module_name,
@@ -185,7 +190,7 @@ def get_matching_result(question_id: int, limit: int = 5) -> dict[str, Any]:
         safe_result.setdefault("available_functions", available)
         safe_result.setdefault("message", "Matches returned by find_matches.py.")
         safe_result["is_todo"] = False
-        safe_result["is_real"] = True
+        safe_result.setdefault("is_real", True)
         return safe_result
 
     if isinstance(result, list):

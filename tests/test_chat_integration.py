@@ -7,24 +7,21 @@ drops its own database using the canonical schema and small data-only fixture.
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing, contextmanager
-from http.cookiejar import CookieJar
+from contextlib import closing
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from http.cookiejar import CookieJar
+from urllib.request import HTTPCookieProcessor, build_opener
 
 import psycopg2
-from psycopg2 import sql
-from psycopg2.extensions import make_dsn
 import pytest
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
+
+from backend_support import api, login
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,94 +36,6 @@ def test_backend_starts_with_declared_dependencies():
         capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def chat_database():
-    admin_dsn = os.environ.get("CHAT_TEST_ADMIN_DSN")
-    if not admin_dsn:
-        pytest.skip("Set CHAT_TEST_ADMIN_DSN to run isolated PostgreSQL integration tests")
-    name = "chat_test_" + uuid.uuid4().hex
-    admin = psycopg2.connect(admin_dsn)
-    admin.autocommit = True
-    with admin.cursor() as cur:
-        cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    dsn = make_dsn(admin_dsn, dbname=name)
-    try:
-        with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
-            cur.execute((ROOT / "database/schema/canonical.sql").read_text())
-            cur.execute((ROOT / "tests/fixtures/chat-canonical.sql").read_text())
-            conn.commit()
-        yield dsn
-    finally:
-        with admin.cursor() as cur:
-            cur.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
-        admin.close()
-
-
-@pytest.fixture
-def chat_server(chat_database, tmp_path_factory):
-    @contextmanager
-    def running():
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        base = f"http://127.0.0.1:{port}"
-        log_path = tmp_path_factory.mktemp("chat-server") / "server.log"
-        with log_path.open("w+") as log:
-            process = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-                 "--port", str(port), "--ws", "websockets-sansio"],
-                cwd=ROOT / "Python", stdout=log, stderr=log,
-                env={**os.environ, "DATABASE_URL": chat_database,
-                     "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},
-            )
-            try:
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline and process.poll() is None:
-                    try:
-                        if api(build_opener(), base, "GET", "/api/healthz")[0] == 200:
-                            break
-                    except URLError:
-                        time.sleep(0.05)
-                else:
-                    pytest.fail("Chat server failed to start:\n" + log_path.read_text())
-                yield base
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
-    return running
-
-
-def api(client, base, method, path, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    request = Request(base + path, data=data, method=method,
-                      headers={"Content-Type": "application/json"})
-    try:
-        response = client.open(request, timeout=3)
-    except HTTPError as exc:
-        response = exc
-    with response:
-        payload = response.read().decode()
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError:
-            pass
-        return response.status, payload
-
-
-def login(base, email):
-    jar = CookieJar()
-    client = build_opener(HTTPCookieProcessor(jar))
-    status, result = api(client, base, "POST", "/api/auth/login",
-                         {"email": email, "password": "Password123!"})
-    assert status == 200, result
-    cookie = "; ".join(f"{item.name}={item.value}" for item in jar)
-    return client, cookie
 
 
 def test_districts_are_available_before_login(chat_server):
@@ -211,6 +120,58 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
             assert api(client, base, "POST", path)[0] == expected
             _, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
             assert stored_request["matchedUserId"] == successful_caller_id
+
+
+def test_concurrent_dm_start_returns_one_conversation(chat_server, chat_database):
+    with chat_server() as base:
+        mentor, _ = login(base, "mentor501@test.edu")
+        other, _ = login(base, "both951@test.edu")
+        with closing(psycopg2.connect(chat_database)) as blocker, \
+             closing(psycopg2.connect(chat_database)) as observer, \
+             blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
+            observer.autocommit = True
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            assert activity_cursor.fetchone()[0] == 0
+            lock_cursor.execute("LOCK TABLE dm_conversations IN SHARE MODE")
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                futures = [workers.submit(api, client, base, "POST", "/api/dms/start",
+                                          {"toUserId": target})
+                           for client, target in [(mentor, 951), (other, 501)]]
+                try:
+                    # Both requests must pass the missing-pair read before either inserts.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        activity_cursor.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND state = 'active' "
+                            "AND wait_event_type = 'Lock' AND query LIKE %s",
+                            ("%INSERT INTO dm_conversations%",),
+                        )
+                        if activity_cursor.fetchone()[0] == 2:
+                            break
+                        assert not any(future.done() for future in futures), "DM start finished before both INSERT waits"
+                        time.sleep(0.01)
+                    else:
+                        pytest.fail("Both DM starts did not wait for the conversation table lock")
+                finally:
+                    blocker.rollback()
+                results = [future.result(timeout=3) for future in futures]
+
+            statuses = [status for status, _ in results]
+            responses = [response for _, response in results]
+            assert sorted(statuses) == [200, 200]
+            assert responses[0]["id"] == responses[1]["id"]
+            assert responses[0]["otherUserId"] == 951
+            assert responses[1]["otherUserId"] == 501
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            stored_pair_count = activity_cursor.fetchone()[0]
+            assert stored_pair_count == 1
 
 
 def test_room_history_returns_latest_visible_window(chat_server, chat_database):
@@ -314,7 +275,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         _, own_view = api(student, base, "GET", "/api/dms/1/messages")
         assert next(m for m in own_view if m["id"] == sent["id"])["readAt"] is None
         _, recipient_view = api(mentor, base, "GET", "/api/dms/1/messages")
-        assert next(m for m in recipient_view if m["id"] == sent["id"])["readAt"] is not None
+        saved_read_at = next(m for m in recipient_view if m["id"] == sent["id"])["readAt"]
+        assert saved_read_at is not None
         status, room_sent = api(student, base, "POST", "/api/chat/rooms/1/messages", {"body": "  persistent room message  "})
         assert status == 201 and room_sent["body"] == "persistent room message"
     with chat_server() as base:
@@ -323,6 +285,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
             status, history = api(student, base, "GET", path)
             assert status == 200
             assert any(m["id"] == expected["id"] and m["body"] == expected["body"] for m in history)
+            if path == "/api/dms/1/messages":
+                assert next(m for m in history if m["id"] == sent["id"])["readAt"] == saved_read_at
 
 
 @pytest.mark.parametrize("path,other_path,history_path", [

@@ -34,6 +34,7 @@ export const request = {
   districtName: "Classroom North",
   title: "Calculus study session",
   description: "Practice derivatives together.",
+  descriptionTruncated: false,
   tags: [tag],
   status: "open",
   matchedUserId: null,
@@ -108,7 +109,8 @@ export const fixtures: Record<string, unknown> = {
   },
   "/api/analysis/status": pythonEnvelope("analysis", null),
   "/api/analytics/weekly-matches": pythonEnvelope("analysis", [
-    { week: "Sep 7", matches: 3 },
+    { week: "2026-08-31", matches: null, coverage: "untracked" },
+    { week: "2026-09-07", matches: 3, coverage: "partial" },
   ]),
   "/api/analytics/popular-subjects": pythonEnvelope("analysis", [
     { subject: "Math", requests: 4, color: "#2563eb" },
@@ -116,15 +118,14 @@ export const fixtures: Record<string, unknown> = {
   "/api/analytics/popular-time-slots": pythonEnvelope("scheduling", [
     { slot: "Mon 17:00", count: 2 },
   ]),
-  "/api/analytics/mentor-response-rates": pythonEnvelope("analysis", [
-    {
-      mentorId: 1,
-      mentorName: "Classroom Mentor",
-      responseRate: 1,
-      totalRequests: 2,
-      avgResponseHours: 1.5,
-    },
-  ]),
+  "/api/analytics/mentor-response-rates": pythonEnvelope("analysis", {
+    trackingStartedAt: "2026-09-09T00:00:00Z",
+    mentors: [
+      { mentorId: 1, mentorName: "Classroom Mentor", totalMatches: 2, avgTimeToMatchHours: 1.5 },
+      { mentorId: 2, mentorName: "New Mentor", totalMatches: 0, avgTimeToMatchHours: null },
+      { mentorId: 3, mentorName: "Unknown Duration Mentor", totalMatches: 1, avgTimeToMatchHours: null },
+    ],
+  }),
   "/api/scheduling/status": pythonEnvelope("scheduling", null),
   "/api/scheduling/overview": pythonEnvelope("scheduling", {
     topSlots: [{ slot: "Mon 17:00", count: 2 }],

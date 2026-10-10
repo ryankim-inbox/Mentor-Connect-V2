@@ -31,7 +31,7 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
     practiceAvailable ? initialTab ?? getDashboardTabFromUrl(practiceAvailable) : "overview",
   );
   const { data: stats } = useGetStatsOverview();
-  const { data: recentRequests } = useListRequests({ status: "open" }, {
+  const { data: recentRequests } = useListRequests({ status: "open", limit: 5 }, {
     query: { queryKey: ["listRequests", "open", "dashboard"] }
   });
   const { data: districts } = useListDistricts(undefined, {
@@ -138,7 +138,7 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
                 </Link>
               </div>
               <div className="space-y-3">
-                {recentRequests?.slice(0, 5).map((req) => (
+                {recentRequests?.map((req) => (
                   <RequestCard key={req.id} {...req} />
                 ))}
                 {(!recentRequests || recentRequests.length === 0) && (

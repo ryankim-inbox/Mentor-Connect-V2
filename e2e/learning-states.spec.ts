@@ -349,3 +349,30 @@ test("account forms expose labels, autocomplete, alerts, and busy state", async 
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.locator("form")).toHaveAttribute("aria-busy", "true");
 });
+
+test("report thresholds recommend review and module failures remain retryable", async ({ page }) => {
+  let failed = false;
+  let flaggedCalls = 0;
+  await routeApi(page, async (route, path) => {
+    if (!["/api/admin/flagged-users", "/api/python-reports/summary"].includes(path)) return undefined;
+    if (path === "/api/admin/flagged-users") flaggedCalls++;
+    const data = path === "/api/admin/flagged-users" ? [{
+      userId: 7, name: "Flagged Learner", reportCount: 5, blockCount: 1,
+      status: "banned", lastReportedAt: null, topReasons: ["spam"],
+    }] : { today: 0, thisMonth: 0, thisYear: 0, total: 0 };
+    await route.fulfill({ json: failed ? { ...studentFailure, feature: "reports" } : {
+      ...realEmpty, source: "student-module", feature: "reports", data,
+    } });
+    return true;
+  });
+  await page.goto("/admin/reports");
+  await expect(page.getByRole("cell", { name: "Review recommended", exact: true })).toBeVisible();
+  await expect(page.getByText(/login ban|account suspended|^banned$/i)).toHaveCount(0);
+  failed = true;
+  await page.reload();
+  await expect(page.getByText("Python reports failed.", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("No flagged users were returned.", { exact: true })).toHaveCount(0);
+  const count = flaggedCalls;
+  await page.getByRole("button", { name: "Retry flagged users" }).click();
+  await expect.poll(() => flaggedCalls).toBe(count + 1);
+});

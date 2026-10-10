@@ -8,6 +8,7 @@
 import type { CreateReportBodyReason } from "./createReportBodyReason";
 
 export interface CreateReportBody {
+  /** @minimum 1 */
   reportedUserId: number;
   reason: CreateReportBodyReason;
   /** @nullable */

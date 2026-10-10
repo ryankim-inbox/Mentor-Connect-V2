@@ -18,6 +18,8 @@ export interface MentorshipRequest {
   districtName: string;
   title: string;
   description: string;
+  /** True when the list description is a bounded preview. Detail reads return false. */
+  descriptionTruncated: boolean;
   tags: Tag[];
   status: MentorshipRequestStatus;
   /** @nullable */

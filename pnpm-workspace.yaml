@@ -88,6 +88,7 @@ overrides:
   "@babel/core@7": "7.29.6"
   "markdown-it@14": "14.3.1"
   "linkify-it@5": "5.0.2"
+  "source-map-js@1": "1.2.2"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"

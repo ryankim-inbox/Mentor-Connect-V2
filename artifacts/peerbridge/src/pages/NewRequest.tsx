@@ -50,6 +50,15 @@ export default function NewRequest() {
     e.preventDefault();
     setError("");
 
+    if (!form.title.trim() || new TextEncoder().encode(form.title).length > 200) {
+      setError("Title must contain text and be at most 200 UTF-8 bytes.");
+      return;
+    }
+    if (!form.description.trim() || new TextEncoder().encode(form.description).length > 4000) {
+      setError("Description must contain text and be at most 4,000 UTF-8 bytes.");
+      return;
+    }
+
     if (!form.districtId) {
       setError("Please select a district");
       return;
@@ -110,7 +119,6 @@ export default function NewRequest() {
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder="e.g. Need help with AP Calculus BC"
               required
-              maxLength={120}
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
             />
           </div>
@@ -123,10 +131,9 @@ export default function NewRequest() {
               placeholder="Describe what you're looking for, your background, and your goals..."
               required
               rows={4}
-              maxLength={800}
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none"
             />
-            <p className="text-xs text-muted-foreground mt-1 text-right">{form.description.length}/800</p>
+            <p className="text-xs text-muted-foreground mt-1 text-right">{new TextEncoder().encode(form.description).length}/4,000 UTF-8 bytes</p>
           </div>
 
           <div className="mb-5">

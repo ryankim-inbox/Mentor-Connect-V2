@@ -17,7 +17,7 @@ run_unreachable_entrypoint() {
   node "$ROOT/scripts/migration-entrypoint.mjs" \
     --env staging \
     --actor release-engineer \
-    --migration-id 0002_integrity_constraints_indexes \
+    --migration-id 0003_request_events \
     --backup-id backup-20260902 \
     --approval-id change-123 \
     --dry-run \
@@ -62,7 +62,7 @@ node -e '
   const required = ["actor", "migrationId", "targetEnvironment", "targetHost", "targetPort", "targetDatabase", "backupId", "approvalId", "startedAt", "endedAt", "result"];
   for (const field of required) if (!entry[field]) throw new Error(`missing audit field: ${field}`);
   if (entry.actor !== "release-engineer") throw new Error("wrong actor");
-  if (entry.migrationId !== "0002_integrity_constraints_indexes") throw new Error("wrong migration id");
+  if (entry.migrationId !== "0003_request_events") throw new Error("wrong migration id");
   if (entry.targetEnvironment !== "staging") throw new Error("wrong environment");
   if (entry.targetHost !== "staging-db.internal") throw new Error("wrong target host");
   if (entry.targetPort !== "5432" || entry.targetDatabase !== "classroom") throw new Error("target identity is incomplete");

@@ -1,9 +1,8 @@
 """
-Wraps the student scheduling file (Python/scheduling.py) without modifying it.
+Wraps the student scheduling functions in Python/scheduling.py.
 
 scheduling.py is the ONLY source of scheduling results. When one of its
-functions fails (receive_time_data connects to a non-existent host, time_dict
-references an undefined variable) or returns an unusable shape, the endpoint
+functions fails or returns an unusable shape, the endpoint
 answers success=False with the captured Python error and data=None. There is
 no adapter-computed fallback.
 

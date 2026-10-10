@@ -8,6 +8,7 @@
     "dm_messages",
     "questions",
     "reports",
+    "request_events",
     "request_tags",
     "requests",
     "schedules",
@@ -390,6 +391,54 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+    },
+    {
+      "table": "request_events",
+      "position": 1,
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "request_events",
+      "position": 2,
+      "name": "kind",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_events",
+      "position": 3,
+      "name": "occurred_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "clock_timestamp()"
+    },
+    {
+      "table": "request_events",
+      "position": 4,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "request_events",
+      "position": 5,
+      "name": "mentor_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "request_events",
+      "position": 6,
+      "name": "request_created_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
     },
     {
       "table": "request_tags",
@@ -874,6 +923,36 @@
       "definition": "FOREIGN KEY (reporter_id) REFERENCES users(id)"
     },
     {
+      "table": "request_events",
+      "name": "request_events_kind_check",
+      "type": "c",
+      "definition": "CHECK (kind = ANY (ARRAY['tracking_started'::text, 'matched'::text]))"
+    },
+    {
+      "table": "request_events",
+      "name": "request_events_matched_created_at_check",
+      "type": "c",
+      "definition": "CHECK (kind <> 'matched'::text OR request_created_at IS NOT NULL)"
+    },
+    {
+      "table": "request_events",
+      "name": "request_events_mentor_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (mentor_id) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table": "request_events",
+      "name": "request_events_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "request_events",
+      "name": "request_events_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL"
+    },
+    {
       "table": "request_tags",
       "name": "request_tags_pkey",
       "type": "p",
@@ -1082,6 +1161,21 @@
       "table": "reports",
       "name": "reports_pkey",
       "definition": "CREATE UNIQUE INDEX reports_pkey ON public.reports USING btree (id)"
+    },
+    {
+      "table": "request_events",
+      "name": "idx_request_events_kind_occurred_at_id",
+      "definition": "CREATE INDEX idx_request_events_kind_occurred_at_id ON public.request_events USING btree (kind, occurred_at, id)"
+    },
+    {
+      "table": "request_events",
+      "name": "idx_request_events_tracking_started",
+      "definition": "CREATE UNIQUE INDEX idx_request_events_tracking_started ON public.request_events USING btree (kind) WHERE (kind = 'tracking_started'::text)"
+    },
+    {
+      "table": "request_events",
+      "name": "request_events_pkey",
+      "definition": "CREATE UNIQUE INDEX request_events_pkey ON public.request_events USING btree (id)"
     },
     {
       "table": "request_tags",

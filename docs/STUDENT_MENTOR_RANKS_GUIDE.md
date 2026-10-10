@@ -176,26 +176,37 @@ MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
 ## Run the checks
 
 The default suite verifies the answer key and stable student interfaces,
-anonymous-access safety, row formatting, and the shared TODO helper. It does not
-require Mission 6 to remain unfinished; completing that route does not change
-the TODO-helper check. Use the disposable database runner for the full checks:
+anonymous-access safety, row formatting, and the shared TODO helper. It also
+starts the actual student lesson server with a disposable canonical-schema
+database and checks authenticated list/detail agreement for matched, both-role,
+and zero-match mentors, plus HTTP 401/422/404 behavior. Use the disposable
+database runner for the full checks:
 
 ```sh
 PYTHON_BIN=.venv/bin/python sh scripts/test-python.sh tests/test_mentor_ranks.py
 ```
 
-To grade all student missions, explicitly select the student module and the
-mission tests. This command can become fully green after all six missions:
+To verify completion of all six student missions, explicitly select the student
+module and run the entire rank suite:
 
 ```sh
 MENTOR_RANKS_MODULE=mentor_ranks PYTHON_BIN=.venv/bin/python \
-  sh scripts/test-python.sh tests/test_mentor_ranks.py -k test_mission_
+  sh scripts/test-python.sh tests/test_mentor_ranks.py -q
 ```
 
-Student mission correctness is opt-in through `MENTOR_RANKS_MODULE=mentor_ranks`
-and `-k test_mission_`; the default release gate uses the reference for those
-mission checks. The student authentication checks remain mandatory throughout
-the exercise, and the TODO helper is tested independently of mutable routes.
+For a focused real HTTP completion check:
+
+```sh
+PYTHON_BIN=.venv/bin/python sh scripts/test-python.sh tests/test_mentor_ranks.py \
+  -q -k test_lesson_http_list_and_detail_share_global_ranks
+```
+
+Student mission unit checks select `mentor_ranks` through
+`MENTOR_RANKS_MODULE=mentor_ranks`; the default suite uses the independent
+reference for those checks. Both selections verify the actual student lesson
+server. Completed list/detail routes return the five public fields without a
+TODO response; zero-match mentors retain null rank and badge. The TODO helper is
+tested independently of completed routes.
 
 ## Run the lesson server
 

@@ -33,6 +33,7 @@ const request = {
   districtName: "Classroom North",
   title: "Calculus study session",
   description: "Practice derivatives together.",
+  descriptionTruncated: false,
   tags: [tag],
   status: "open",
   matchedUserId: null,
@@ -105,7 +106,7 @@ const fixtures: Record<string, unknown> = {
     success: true,
     status: "connected",
     message: "Location module loaded.",
-    available_functions: ["find_nearby"],
+    available_functions: ["location_data"],
   },
   "/api/practice/blocks/status": {
     success: true,
@@ -139,7 +140,8 @@ const fixtures: Record<string, unknown> = {
   },
   "/api/analysis/status": pythonEnvelope("analysis", null),
   "/api/analytics/weekly-matches": pythonEnvelope("analysis", [
-    { week: "Sep 7", matches: 3 },
+    { week: "2026-08-31", matches: null, coverage: "untracked" },
+    { week: "2026-09-07", matches: 3, coverage: "partial" },
   ]),
   "/api/analytics/popular-subjects": pythonEnvelope("analysis", [
     { subject: "Math", requests: 4, color: "#2563eb" },
@@ -147,15 +149,14 @@ const fixtures: Record<string, unknown> = {
   "/api/analytics/popular-time-slots": pythonEnvelope("scheduling", [
     { slot: "Mon 17:00", count: 2 },
   ]),
-  "/api/analytics/mentor-response-rates": pythonEnvelope("analysis", [
-    {
-      mentorId: 1,
-      mentorName: "Classroom Mentor",
-      responseRate: 1,
-      totalRequests: 2,
-      avgResponseHours: 1.5,
-    },
-  ]),
+  "/api/analytics/mentor-response-rates": pythonEnvelope("analysis", {
+    trackingStartedAt: "2026-09-09T00:00:00Z",
+    mentors: [
+      { mentorId: 1, mentorName: "Classroom Mentor", totalMatches: 2, avgTimeToMatchHours: 1.5 },
+      { mentorId: 2, mentorName: "New Mentor", totalMatches: 0, avgTimeToMatchHours: null },
+      { mentorId: 3, mentorName: "Unknown Duration Mentor", totalMatches: 1, avgTimeToMatchHours: null },
+    ],
+  }),
   "/api/scheduling/status": pythonEnvelope("scheduling", null),
   "/api/scheduling/overview": pythonEnvelope("scheduling", {
     topSlots: [{ slot: "Mon 17:00", count: 2 }],
@@ -286,6 +287,51 @@ test("Practice renders successful statuses after all status responses complete",
   expect(unknownRequests).toEqual([]);
 });
 
+test("Practice submits location inputs and shows successful compatible or disjoint results", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  const calls: unknown[] = [];
+  const results = [
+    { compatible: true, overlap: ["san jose"] },
+    { compatible: false, overlap: [] },
+  ];
+  await page.route("**/api/practice/locations/test", async route => {
+    calls.push(route.request().postDataJSON());
+    await route.fulfill({ json: {
+      success: true, feature: "locations", module_name: "locations", status: "connected",
+      function_called: "location_data", available_functions: ["location_data"],
+      message: "locations.location_data returned a result.", result: results[calls.length - 1],
+      is_todo: false, is_real: true,
+    } });
+  });
+  await page.goto("/practice-lab");
+  const section = page.locator("section").filter({ has: page.getByRole("heading", { name: "Location Engine Test", exact: true }) });
+  await expect(section.locator("p").filter({ hasText: "Available functions:" })).toContainText("location_data");
+  const submit = section.getByRole("button", { name: "Run Location Test", exact: true });
+  await submit.click();
+  const output = section.locator("pre").filter({ hasText: '"function_called": "location_data"' });
+  await section.locator("details").filter({ hasText: '"function_called": "location_data"' }).getByText("Raw JSON output", { exact: true }).click();
+  await expect(output).toBeVisible();
+  await expect(output).toContainText('"success": true');
+  await expect(output).toContainText('"compatible": true');
+  await expect(output).toContainText('"san jose"');
+  const disjoint = {
+    student: { id: 1, locations: ["San Jose"] },
+    mentor: { id: 2, locations: ["Cupertino"] },
+    question: { id: 1, subject: "math" },
+  };
+  await section.getByLabel("JSON test input").fill(JSON.stringify(disjoint));
+  await submit.click();
+  await expect(output).toContainText('"success": true');
+  await expect(output).toContainText('"compatible": false');
+  await expect(output).toContainText('"overlap": []');
+  expect(calls).toEqual([{
+    ...disjoint, mentor: { id: 2, locations: ["San Jose", "Cupertino"] },
+  }, disjoint]);
+  await expect(submit).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(unknownRequests).toEqual([]);
+});
+
 test("mobile menu exposes every signed-in destination and chat", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const unknownRequests = await interceptApi(page);
@@ -395,5 +441,122 @@ test("failed report fixtures keep the page and retryable learning states visible
   });
   await expect(flaggedSection.getByText("We had a connection problem. Please try again.", { exact: true })).toBeVisible();
   await expect(flaggedSection.getByRole("button", { name: "Retry flagged users" })).toBeVisible();
+  expect(unknownRequests).toEqual([]);
+});
+
+test("request browsing pages older and newer, resets filters, and discloses previews", async ({ page }) => {
+  await interceptApi(page);
+  const calls: URL[] = [];
+  const firstPage = Array.from({ length: 50 }, (_, index) => ({
+    ...request, id: 100 - index, title: `Page request ${100 - index}`, descriptionTruncated: index === 0,
+  }));
+  await page.route("**/api/requests?*", async (route) => {
+    const url = new URL(route.request().url());
+    calls.push(url);
+    await route.fulfill({ json: url.searchParams.has("before")
+      ? [{ ...request, id: 50, title: "Older request", descriptionTruncated: false }]
+      : firstPage });
+  });
+  await page.goto("/requests");
+  await expect(page.getByText("50 requests shown", { exact: true })).toBeVisible();
+  await expect(page.getByText("Preview — open request for full description", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Newer requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.get("before")).toBe(`${request.createdAt}|51`);
+  await expect(page.getByRole("button", { name: "Older requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Newer requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Offering mentorship", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.has("before")).toBe(false);
+  expect(calls.at(-1)?.searchParams.get("role")).toBe("mentor");
+  await expect(page.getByRole("button", { name: "Newer requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Math", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.has("before")).toBe(false);
+  expect(calls.at(-1)?.searchParams.get("tagId")).toBe("1");
+
+  await page.route("**/api/districts/1", (route) => route.fulfill({ json: district }));
+  await page.route("**/api/stats/district/1", (route) => route.fulfill({ json: {
+    districtId: 1, districtName: district.name, memberCount: 12, mentorCount: 6,
+    menteeCount: 6, openRequests: 51, successfulMatches: 3, topTags: [tag],
+  } }));
+  await page.goto("/districts/1");
+  await expect(page.getByRole("heading", { name: "Open requests (50 shown)", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.get("districtId")).toBe("1");
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Newer requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+});
+
+test("request creation validates UTF-8 byte lengths before sending", async ({ page }) => {
+  await interceptApi(page);
+  await page.goto("/requests/new");
+  const title = page.getByPlaceholder("e.g. Need help with AP Calculus BC");
+  const description = page.getByPlaceholder("Describe what you're looking for, your background, and your goals...");
+  await title.fill("é".repeat(100) + "a");
+  await description.fill("Description");
+  await page.getByRole("button", { name: "Post request", exact: true }).click();
+  await expect(page.getByText("Title must contain text and be at most 200 UTF-8 bytes.", { exact: true })).toBeVisible();
+  await title.fill("Valid title");
+  await description.fill("🦉".repeat(1000) + "a");
+  await page.getByRole("button", { name: "Post request", exact: true }).click();
+  await expect(page.getByText("Description must contain text and be at most 4,000 UTF-8 bytes.", { exact: true })).toBeVisible();
+});
+
+
+test("analytics discloses observed coverage and creation-to-match duration", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  await page.goto("/analytics");
+  await expect(page.getByRole("heading", { name: "Mentor matching activity", exact: true })).toBeVisible();
+  await expect(page.getByText("Average time from request creation to match", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Only activity observed after tracking started/)).toBeVisible();
+  await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
+  await expect(page.getByText("Partial", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Week-to-date/)).toBeVisible();
+  await expect(page.getByText("No observed matches", { exact: true })).toBeVisible();
+  await expect(page.getByText("No valid time-to-match data", { exact: true })).toBeVisible();
+  await expect(page.getByText("1.5 hours", { exact: true })).toBeVisible();
+  await expect(page.getByText(/avg reply|Mentor response rates|100%/)).toHaveCount(0);
+  expect(unknownRequests).toEqual([]);
+});
+
+
+test("scheduling shows weekly availability and successful overlapping or disjoint suggestions", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  const calls: URL[] = [];
+  await page.route("**/api/scheduling/suggest?*", async route => {
+    const url = new URL(route.request().url());
+    calls.push(url);
+    const disjoint = url.searchParams.get("user_b") === "3";
+    await route.fulfill({ json: pythonEnvelope("scheduling", {
+      userA: { id: 1, name: "Classroom Mentor", role: "mentor", available_times: ["Mon 17:00", "Wed 19:00"] },
+      userB: { id: disjoint ? 3 : 2, name: "Learning Partner", role: "mentee", available_times: disjoint ? ["Fri 12:00"] : ["Wed 19:00", "Mon 17:00"] },
+      overlap: disjoint ? [] : ["Mon 17:00", "Wed 19:00"],
+    }) });
+  });
+  await page.goto("/scheduling");
+  const overview = page.locator("section").filter({ has: page.getByRole("heading", { name: "Availability overview", exact: true }) });
+  await expect(overview.getByText("Mon 17:00", { exact: true })).toBeVisible();
+  await expect(overview.getByText("2", { exact: true })).toBeVisible();
+  await page.getByLabel("User A id").fill("1");
+  await page.getByLabel("User B id").fill("2");
+  await page.getByRole("button", { name: "Suggest times", exact: true }).click();
+  await expect(page.getByText("Overlapping times (2)", { exact: true })).toBeVisible();
+  const overlap = page.locator("div.rounded-xl").filter({ has: page.getByText("Overlapping times (2)", { exact: true }) });
+  await expect(overlap.getByText("Mon 17:00", { exact: true })).toBeVisible();
+  await expect(overlap.getByText("Wed 19:00", { exact: true })).toBeVisible();
+  await page.getByLabel("User B id").fill("3");
+  await page.getByRole("button", { name: "Suggest times", exact: true }).click();
+  await expect(page.getByText("Overlapping times (0)", { exact: true })).toBeVisible();
+  await expect(page.getByText("No overlapping availability found.", { exact: true })).toBeVisible();
+  expect(calls.map(url => [url.searchParams.get("user_a"), url.searchParams.get("user_b")])).toEqual([["1", "2"], ["1", "3"]]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expect(unknownRequests).toEqual([]);
 });

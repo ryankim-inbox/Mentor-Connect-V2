@@ -118,6 +118,7 @@ const mentorshipRequest = z.object({
   districtName: string,
   title: string,
   description: string,
+  descriptionTruncated: z.boolean(),
   tags: tag.array(),
   status: z.enum(["open", "matched", "closed"]),
   matchedUserId: integer.nullable().optional(),
@@ -271,7 +272,9 @@ export function projectPublicPayload(
     else envelope.parse(value);
     const projected = projectStudentPayload(value) as Record<string, unknown>;
     if (path === "/api/admin/flagged-users")
-      projected.data = adminRow.array().parse(value.data);
+      projected.data = value.ok === false && value.data === null
+        ? null
+        : adminRow.array().parse(value.data);
     return projected;
   }
   if (path === "/api/auth/me") return user.parse(payload);

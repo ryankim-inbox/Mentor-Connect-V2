@@ -2,11 +2,13 @@ import asyncio
 import importlib
 import json
 import os
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
+from urllib.request import build_opener
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
+from backend_support import api, login
 
 
 RANKS_MODULE = os.environ.get("MENTOR_RANKS_MODULE", "mentor_ranks_answer")
@@ -392,3 +394,38 @@ def test_lesson_app_answer_flag_explicitly_selects_reference(monkeypatch):
 
     assert routes["/api/mentor-ranks"].__module__ == "mentor_ranks_answer"
     assert routes["/api/mentor-ranks/{mentor_id}"].__module__ == "mentor_ranks_answer"
+
+
+def test_lesson_http_list_and_detail_share_global_ranks(backend_database, backend_server):
+    import psycopg2
+
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO requests (author_id, district_id, title, description, role, status, matched_user_id) "
+            "VALUES (%s, 1, 'Ranking fixture', 'Help', %s, 'matched', %s)",
+            [(501, "mentor", 1), (501, "mentor", 2), (1, "mentee", 501),
+             (951, "mentor", 1), (2, "mentee", 951)],
+        )
+        conn.commit()
+
+    expected = [
+        {"mentorId": 501, "mentorName": "Sophia Lee", "matchedCount": 3, "rank": 1, "badge": "Master"},
+        {"mentorId": 951, "mentorName": "Jordan Park", "matchedCount": 2, "rank": 2, "badge": "Platinum"},
+        {"mentorId": 502, "mentorName": "Marcus Chen", "matchedCount": 0, "rank": None, "badge": None},
+    ]
+    with backend_server("mentor_ranks_server:create_app", factory=True) as base:
+        anonymous = build_opener()
+        for path in ("/api/mentor-ranks", "/api/mentor-ranks/0"):
+            assert api(anonymous, base, "GET", path)[0] == 401
+
+        client, _ = login(base, "student001@test.edu")
+        status, rows = api(client, base, "GET", "/api/mentor-ranks")
+        assert status == 200
+        assert rows == expected
+        for row in expected:
+            status, detail = api(client, base, "GET", f"/api/mentor-ranks/{row['mentorId']}")
+            assert status == 200
+            assert detail == row
+
+        for mentor_id, expected_status in ((0, 422), (-1, 422), (1, 404), (999999, 404)):
+            assert api(client, base, "GET", f"/api/mentor-ranks/{mentor_id}")[0] == expected_status

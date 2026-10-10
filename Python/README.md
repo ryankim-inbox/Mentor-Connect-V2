@@ -5,8 +5,8 @@ FastAPI app (`main.py`) serves everything under `/api`:
 
 - the product API (auth, users, districts, tags, requests, reports, blocks, stats)
 - the student practice/matching endpoints (`/api/practice/*`, `/api/matches/*`)
-- adapter endpoints that wrap the student practice files **without modifying
-  them** (`/api/analytics/*`, `/api/python-reports/*`, `/api/scheduling/*`,
+- adapter endpoints that validate results from completed student practice files
+  (`/api/analytics/*`, `/api/python-reports/*`, `/api/scheduling/*`,
   `/api/admin/flagged-users`)
 
 `artifacts/api-server/python/` is legacy — it is kept for reference but is no
@@ -20,11 +20,12 @@ longer the source of truth.
 | `db.py` | psycopg2 connection helper for the product routers | yes (infrastructure) |
 | `routers/` | Product API routers (auth, users, districts, tags, requests, reports, stats, matches) | yes (infrastructure) |
 | `api/routers/` | Adapter routers (practice, analytics, python_reports, scheduling, admin) | yes (infrastructure) |
-| `api/adapters/` | Safe wrappers + DB fallbacks around the student files | yes (infrastructure) |
-| `migrations/001_practice_additive.sql` | One-time additive migration (questions table + availability columns + demo seed) | yes |
-| `find_matches.py`, `get_users.py`, `get_questions.py`, `database.py`, `integration_api.py`, `app.py` | Student/algorithm files (working) | **no — student practice code** |
-| `analysis.py`, `reports.py`, `scheduling.py`, `get_blocks.py`, `spamlblock.py` | Student practice files (currently broken; wrapped by adapters) | **no — student practice code** |
-| `create_tables.sql`, `seed_demo_data.sql` | Standalone practice schema. **Do not run against the product DB** (they DROP tables). Use `migrations/001_practice_additive.sql` instead. | no |
+| `api/adapters/` | Validated student results; explicit module failures | yes (infrastructure) |
+| `migrations/001_practice_additive.sql` | Historical practice migration; use the canonical product migration ledger | reference only |
+| `find_matches.py`, `get_users.py`, `get_questions.py`, `database.py`, `integration_api.py`, `app.py` | Student/algorithm files (working) | yes (student lessons) |
+| `analysis.py`, `reports.py`, `scheduling.py`, `get_blocks.py`, `locations.py`, `mentor_ranks.py` | Completed student lessons with real result tests | yes (student lessons) |
+| `spamlblock.py` | Inactive historical exercise; no runtime endpoint | reference only |
+| `create_tables.sql`, `seed_demo_data.sql` | Standalone practice schema. **Do not run against the product DB** (they DROP tables); use the canonical migration procedure. | no |
 
 `app.py` (the old standalone practice server) still works on its own, but its
 routes are now also served by `main.py` under `/api/practice/*`, so you only
@@ -33,12 +34,9 @@ need one server.
 ## Setup
 
 ```bash
-# from the repo root (reuses the repo-level virtualenv)
-.venv/bin/pip install -r Python/requirements.txt
-
-# or with a local venv inside Python/
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# from the repo root; uv 0.11.16, Python 3.12+
+uv sync --frozen --group dev
+pnpm install --frozen-lockfile
 ```
 
 Create `Python/.env` from the template (the real `.env` is gitignored and never
@@ -56,11 +54,11 @@ SESSION_SECRET=dev-secret-change-me
 PORT=8000
 ```
 
-One-time database migration (additive only — safe to re-run):
-
-```bash
-psql "$DATABASE_URL" -f Python/migrations/001_practice_additive.sql
-```
+The product schema is canonical version `0003_request_events`. Follow the
+[guarded migration runbook](../docs/runbooks/database-schema-and-migrations.md)
+and [completion runbook](../docs/runbooks/backend-completion.md) for backup,
+rollout and rollback. Do not run the standalone practice schema, seed, or old
+practice migration against a populated product database.
 
 ## Run
 
@@ -119,57 +117,75 @@ Student-code integrations:
 | `GET /api/scheduling/{status,overview}`, `GET /api/scheduling/suggest?user_a=&user_b=` | `scheduling.py` | `/scheduling` |
 | `GET /api/admin/flagged-users` | `get_blocks.py` | `/admin/reports` |
 
-## The adapter contract (`source` field)
+### Location lesson
 
-Adapter endpoints never fail just because a student file is broken. Each
-response is an envelope:
+`locations.location_data(student, mentor, question)` compares trimmed,
+case-folded location labels and returns a sorted, deduplicated intersection.
+The practice form posts the following to `/api/practice/locations/test`:
 
 ```json
 {
-  "ok": true,
-  "feature": "analytics.popular_subjects",
-  "source": "student-module" | "adapter-fallback",
-  "student_module": {
-    "module": "analysis",
-    "attempted_function": "receive_most_popular_subject",
-    "importable": false,
-    "called": false,
-    "status": "syntax error",
-    "error": "SyntaxError: invalid syntax (analysis.py, line 27)",
-    "available_functions": []
-  },
-  "student_result": null,
-  "data": [ ...real data... ]
+  "student": {"id": 1, "locations": ["San Jose"]},
+  "mentor": {"id": 2, "locations": ["San Jose", "Cupertino"]},
+  "question": {"id": 1, "subject": "math"}
 }
 ```
 
-- `source: "student-module"` — the student function ran and returned usable
-  data; `data` is that result.
-- `source: "adapter-fallback"` — the student module failed to import or run
-  (details in `student_module`); `data` is equivalent real data computed by
-  the adapter from the product database.
+The existing success envelope identifies `function_called: "location_data"`
+and contains `result: {"compatible": true, "overlap": ["san jose"]}`.
+Disjoint or missing labels return `{"compatible": false, "overlap": []}`
+with `success: true`. Each person accepts `locations: list[str]` or a single
+`location: str`; the list takes precedence, including an empty list. Omit
+missing fields or use `[]`. Supplied nulls, incorrect types, and blank labels
+raise `ValueError`, surfaced by the existing failure envelope. All three
+arguments must be objects; question content is unused. This lesson makes no
+geographic inference and performs no database or network calls.
 
-Student modules are re-imported **per request** (same mechanism as
-`integration_api.py`), so fixing e.g. `analysis.py` flips the endpoints to
-`student-module` immediately — no server restart needed. The dashboards show
-which source is live via a green/amber badge.
+## Result contract and lesson status
 
-## Current student-module status (as of this integration)
+Matching, analytics, scheduling, reporting, block helpers and location tests now
+return actual completed module results. Analytics and scheduling envelopes use
+`source: "python"`; reporting and moderation use `source: "student-module"`.
+A successful adapter envelope has `ok: true`, `success: true`, `error: null`,
+importable/called module metadata and validated `data`. Status endpoints check
+imports and do not call an aggregate. Empty arrays, zero counts and empty overlaps
+are successful data. Required happy paths never select `adapter-fallback`.
 
-- `find_matches.py` — working; returns real ranked matches.
-- `scheduling.py` — imports, but both functions fail at call time
-  (`receive_time_data` connects to a bogus host, `time_dict` raises
-  `NameError`). Adapter overlap fallback is used.
-- `analysis.py`, `reports.py`, `get_blocks.py` — syntax errors; cannot be
-  imported. Adapter fallbacks are used and the exact error is surfaced in the
-  API response and the UI.
-- `spamlblock.py` — broken imports/module-level code; not wired to any
-  endpoint yet.
+Import/runtime/invalid-output failures remain explicit `ok: false`,
+`success: false`, `data: null` responses, with safe public diagnostics and retry
+controls. Injected failure tests preserve these teaching states without requiring
+actual lesson sources to remain broken. Student modules reload per request under
+an import lock, so edits appear without a server restart.
 
-## Notes
+`mentor_ranks.py` completes all six missions; its independent reference is
+`mentor_ranks_answer.py`. Rank endpoints run through the lesson server separately
+from `main.py`; both suites are mandatory in the release gate. `spamlblock.py`
+is inactive historical exercise code and is not imported by the active runtime.
 
-- Two PostgreSQL drivers coexist on purpose: the product routers use
-  `psycopg2` (`db.py`), the student files use `psycopg` v3 (`database.py`).
-- Adapter endpoints are public (same as the stats router). Follow-up:
-  `/api/admin/flagged-users` exposes user emails and should eventually be
-  gated behind an admin session check.
+Analytics observe events beginning at the migration's persistent tracking marker.
+Earlier weeks are untracked (null), the first observed week may be partial, and
+complete weeks contain observed counts. Historical matched requests are never
+backfilled. Time-to-match averages omit invalid durations; they are not mentor
+reply latency. Zero matches display “No observed matches”; positive counts with
+no valid durations display “No valid time-to-match data”.
+
+## Verification and runtime bounds
+
+See [backend completion](../docs/runbooks/backend-completion.md) for the synthetic
+acceptance sequence and nine permanent regression suites. The runner creates
+and removes disposable PostgreSQL clusters; it requires PostgreSQL 16 tools,
+Node 24.21.0, pnpm 10.33.0 and the locked Python environment. The gateway and
+Python API are actual loopback processes during completion tests. Browser
+interception tests remain complementary UI coverage.
+
+Keep one Python worker and one gateway process. DMs return the latest 50 visible
+messages, oldest first within that window; older stored messages remain intact,
+and only selected incoming messages receive read receipts. Full-text history
+pagination and multiworker WebSocket broadcasting are outside this release.
+
+The product routers use psycopg2 and the student matching/database helper uses
+psycopg v3; both are locked prerequisites. Gateway session/Origin checks and
+privacy projections remain required: member profiles reveal only names,
+subjects and join dates; moderation results omit emails/districts. Python stays
+private on loopback. Local verification does not establish production readiness
+or deploy the application.

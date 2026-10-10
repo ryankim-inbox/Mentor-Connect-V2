@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { fixtureAccounts, fixturePassword } from "./fixtures";
+import { fixtureAccounts, fixturePassword, pythonEnvelope } from "./fixtures";
 
 async function signIn(page: Page, role: keyof typeof fixtureAccounts = "mentor") {
   await page.goto("/login");
@@ -126,3 +126,129 @@ test("a saved room message is visible to the other signed-in account", async ({ 
     await expect(otherPage.getByText("Classroom cross-account message", { exact: true })).toHaveCount(1);
   } finally { await other.close(); }
 });
+
+for (const count of [0, 49, 50]) {
+  test(`DM history with ${count} messages labels a full window and preserves the empty state`, async ({ page, request }) => {
+    const messages = Array.from({ length: count }, (_, index) => ({
+      id: index + 1,
+      conversationId: 1,
+      senderId: 2,
+      body: `DM window message ${index + 1}`,
+      createdAt: "2026-09-09T00:00:00Z",
+      readAt: "2026-09-09T01:00:00Z",
+    }));
+    expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+      data: { method: "GET", path: "/api/dms/1/messages", status: 200, body: messages },
+    })).ok()).toBe(true);
+    await signIn(page);
+    await page.getByRole("button", { name: "Open chat" }).click();
+    await page.getByRole("tab", { name: "DMs", exact: true }).click();
+    const loaded = apiResponse(page, "/api/dms/1/messages");
+    await page.getByRole("button", { name: "Classroom Mentee", exact: false }).click();
+    const response = await loaded;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-request-id"]).toBeTruthy();
+    await expect(page.getByText(/^DM window message \d+$/)).toHaveCount(count);
+    await expect(page.getByText("Latest 50 messages", { exact: true })).toHaveCount(count === 50 ? 1 : 0);
+    await expect(page.getByText("No messages yet — send the first one.", { exact: true })).toHaveCount(count === 0 ? 1 : 0);
+    await expect(page.getByPlaceholder("Type a message…")).toBeEnabled();
+  });
+}
+
+for (const update of ["send", "poll"] as const) {
+  test(`a new DM stays in view when ${update} replaces a full 50-message window`, async ({ page, request }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    if (update === "poll") await page.clock.install();
+    const messages = Array.from({ length: 50 }, (_, index) => ({
+      id: index + 1, conversationId: 1, senderId: 2,
+      body: `Full window message ${index + 1}`,
+      createdAt: "2026-09-09T00:00:00Z", readAt: null,
+    }));
+    const configure = async (method: string, body: unknown, status = 200) => {
+      expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+        data: { method, path: "/api/dms/1/messages", status, body },
+      })).ok()).toBe(true);
+    };
+    await configure("GET", messages);
+    await signIn(page);
+    await page.getByRole("button", { name: "Open chat" }).click();
+    await page.getByRole("tab", { name: "DMs", exact: true }).click();
+    await page.getByRole("button", { name: "Classroom Mentee", exact: false }).click();
+    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(50);
+    await expect(page.getByText("Full window message 50", { exact: true })).toBeInViewport({ ratio: 1 });
+    const newest = { ...messages[49], id: 51, senderId: update === "send" ? 1 : 2, body: "Newest full window message" };
+    await configure("GET", [...messages.slice(1), newest]);
+    if (update === "send") {
+      await configure("POST", newest, 201);
+      await page.getByPlaceholder("Type a message…").fill(newest.body);
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+    } else {
+      await page.clock.fastForward(10_100);
+      await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+    }
+    await expect(page.getByText("Full window message 1", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(49);
+    await expect(page.getByText("Latest 50 messages", { exact: true })).toBeVisible();
+    await expect(page.getByText(newest.body, { exact: true })).toBeInViewport({ ratio: 1 });
+  });
+}
+
+for (const width of [1440, 375, 320]) {
+  test(`weekly bars share a plot scale and readable labels at ${width}px`, async ({ page, request }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    const weekly = [
+      { week: "2026-08-17", matches: null, coverage: "untracked" },
+      { week: "2026-08-24", matches: 0, coverage: "complete" },
+      { week: "2026-08-31", matches: 0, coverage: "complete" },
+      { week: "2026-09-07", matches: 0, coverage: "complete" },
+      { week: "2026-09-14", matches: 0, coverage: "complete" },
+      { week: "2026-09-21", matches: 5, coverage: "partial" },
+      { week: "2026-09-28", matches: 9, coverage: "complete" },
+      { week: "2026-10-05", matches: 10, coverage: "partial" },
+    ];
+    expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+      data: { method: "GET", path: "/api/analytics/weekly-matches", status: 200,
+        body: pythonEnvelope("analysis", weekly) },
+    })).ok()).toBe(true);
+    // Keep this file below the gateway's real per-account login limit.
+    await signIn(page, "mentee");
+    await page.goto("/analytics");
+    await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
+    await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
+    await expect(page.getByText("Partial", { exact: true })).toHaveCount(2);
+    const bars = page.locator('[title="Untracked"], [title*="observed matches ("]');
+    await expect(bars).toHaveCount(8);
+    const geometry = await bars.evaluateAll(elements => elements.map(element => {
+      const bar = element.getBoundingClientRect();
+      const plot = element.parentElement!.getBoundingClientRect();
+      const column = element.parentElement!.parentElement!;
+      const labels = column.children[1];
+      return { height: bar.height, bottom: bar.bottom, plotHeight: plot.height, plotBottom: plot.bottom,
+        columnBottom: column.getBoundingClientRect().bottom,
+        labelsBottom: Math.max(...Array.from(labels.children, label => label.getBoundingClientRect().bottom)) };
+    }));
+    for (const bar of geometry) {
+      expect(Math.abs(bar.plotHeight - geometry[0].plotHeight)).toBeLessThan(1);
+      expect(Math.abs(bar.plotBottom - geometry[0].plotBottom)).toBeLessThan(1);
+      expect(Math.abs(bar.bottom - geometry[0].bottom)).toBeLessThan(1);
+      expect(bar.labelsBottom).toBeLessThanOrEqual(bar.columnBottom + 1);
+    }
+    expect(geometry[0].height).toBe(0);
+    expect(geometry[1].height).toBe(0);
+    expect(geometry[7].height).toBeGreaterThan(geometry[6].height);
+    expect(geometry[5].height / geometry[7].height).toBeCloseTo(0.5, 1);
+    expect(geometry[6].height / geometry[7].height).toBeCloseTo(0.9, 1);
+    const latestLabel = page.getByText("2026-10-05", { exact: true });
+    await page.getByText("Week-to-date", { exact: true }).scrollIntoViewIfNeeded();
+    await expect(latestLabel).toBeInViewport({ ratio: 1 });
+    await expect(page.getByText("Week-to-date", { exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByText("Partial", { exact: true }).last()).toBeInViewport({ ratio: 1 });
+    const weeklyCard = page.locator("div.bg-card").filter({ has: page.getByRole("heading", { name: "Weekly matches", exact: true }) });
+    const nextCard = page.locator("div.bg-card").filter({ has: page.getByRole("heading", { name: "Most requested subjects", exact: true }) });
+    const weeklyBox = await weeklyCard.boundingBox();
+    const nextBox = await nextCard.boundingBox();
+    expect(weeklyBox!.x + weeklyBox!.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (width < 768) expect(nextBox!.y).toBeGreaterThanOrEqual(weeklyBox!.y + weeklyBox!.height);
+  });
+}

@@ -277,11 +277,12 @@ paths:
       parameters:
         - name: type
           in: query
+          description: Filter by district type; omit to return all supported districts.
           schema:
             type: string
             enum:
               - high_school
-              - all
+              - unified
         - name: search
           in: query
           schema:
@@ -373,6 +374,20 @@ paths:
               - open
               - matched
               - closed
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: before
+          in: query
+          description: Older than this timezone-aware createdAt and positive id tuple.
+          schema:
+            type: string
+            maxLength: 96
+            pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*$'
       responses:
         "200":
           description: List of requests
@@ -418,6 +433,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -444,6 +461,7 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "200":
           description: Request details
@@ -454,6 +472,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -479,6 +499,7 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       requestBody:
         required: true
         content:
@@ -495,6 +516,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "409":
+          $ref: "#/components/responses/Error409"
         "401":
           $ref: "#/components/responses/Error401"
         "403":
@@ -524,12 +547,15 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "204":
           description: Deleted
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "403":
@@ -552,12 +578,14 @@ paths:
       tags:
         - requests
       summary: Match/respond to a mentorship request
+      description: Returns 403 when either participant blocks the other.
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "200":
           description: Matched successfully
@@ -568,8 +596,14 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
         "404":
           $ref: "#/components/responses/Error404"
         "429":
@@ -634,6 +668,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -699,6 +737,10 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "404":
+          $ref: "#/components/responses/Error404"
         "401":
           $ref: "#/components/responses/Error401"
         "422":
@@ -725,12 +767,15 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "204":
           description: Unblocked
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -1161,6 +1206,8 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
+        "422":
+          $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
         "404":
@@ -1466,14 +1513,14 @@ paths:
       operationId: getWeeklyMatches
       tags:
         - analytics
-      summary: getWeeklyMatches
+      summary: Eight UTC calendar weeks of observed matches, ending with the current week-to-date
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/WeeklyMatchesEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -1494,14 +1541,14 @@ paths:
       operationId: getPopularSubjects
       tags:
         - analytics
-      summary: getPopularSubjects
+      summary: Top ten tags by current request demand, ordered by count descending then tag ID
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/PopularSubjectsEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -1550,14 +1597,15 @@ paths:
       operationId: getMentorResponseRates
       tags:
         - analytics
-      summary: getMentorResponseRates
+      summary: Mentor matching activity observed after tracking started
+      description: Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/MentorActivityEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -1954,6 +2002,9 @@ components:
           type: string
         description:
           type: string
+        descriptionTruncated:
+          type: boolean
+          description: True when the list description is a bounded preview. Detail reads return false.
         tags:
           type: array
           items:
@@ -1990,6 +2041,7 @@ components:
         - districtName
         - title
         - description
+        - descriptionTruncated
         - tags
         - status
         - createdAt
@@ -1998,14 +2050,20 @@ components:
       properties:
         districtId:
           type: integer
+          minimum: 1
         title:
           type: string
+          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
         description:
           type: string
+          description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
+          maxItems: 20
+          uniqueItems: true
           items:
             type: integer
+            minimum: 1
         role:
           type: string
           enum:
@@ -2024,20 +2082,25 @@ components:
         - districtId
         - title
         - description
-        - tagIds
         - role
     UpdateRequestBody:
       type: object
       properties:
         title:
           type: string
+          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
         description:
           type: string
+          description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
+          maxItems: 20
+          uniqueItems: true
           items:
             type: integer
+            minimum: 1
         status:
+          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
           type: string
           enum:
             - open
@@ -2048,6 +2111,7 @@ components:
       properties:
         reportedUserId:
           type: integer
+          minimum: 1
         reason:
           type: string
           enum:
@@ -2068,6 +2132,7 @@ components:
       properties:
         blockedUserId:
           type: integer
+          minimum: 1
       required:
         - blockedUserId
     BlockedUser:
@@ -2366,6 +2431,91 @@ components:
         - source
         - student_module
         - data
+    WeeklyMatch:
+      type: object
+      required: [week, matches, coverage]
+      properties:
+        week:
+          type: string
+          format: date
+          description: Monday of the UTC calendar week; the final row is week-to-date.
+        matches:
+          type: [integer, "null"]
+          minimum: 0
+          description: Observed match count; null means the entire week was untracked.
+        coverage:
+          type: string
+          enum: [untracked, partial, complete]
+          description: Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.
+    SubjectDemand:
+      type: object
+      required: [subject, requests, color]
+      properties:
+        subject:
+          type: string
+        requests:
+          type: integer
+          minimum: 0
+        color:
+          type: string
+    MentorActivity:
+      type: object
+      required: [trackingStartedAt, mentors]
+      properties:
+        trackingStartedAt:
+          type: string
+          format: date-time
+        mentors:
+          type: array
+          description: Current mentor/both users, including zero matches, ordered by totalMatches descending then ID.
+          items:
+            $ref: "#/components/schemas/MentorActivityRow"
+    MentorActivityRow:
+      type: object
+      required: [mentorId, mentorName, totalMatches, avgTimeToMatchHours]
+      properties:
+        mentorId:
+          type: integer
+        mentorName:
+          type: string
+        totalMatches:
+          type: integer
+          minimum: 0
+        avgTimeToMatchHours:
+          type: [number, "null"]
+          minimum: 0
+          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.
+    WeeklyMatchesEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/WeeklyMatch"
+                - type: "null"
+    PopularSubjectsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/SubjectDemand"
+                - type: "null"
+    MentorActivityEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - $ref: "#/components/schemas/MentorActivity"
+                - type: "null"
     PracticeStatus:
       type: object
       properties:
