@@ -278,13 +278,16 @@ export const ListRequestsResponse = zod.array(ListRequestsResponseItem);
 /**
  * @summary Post a mentorship request
  */
+
+export const createRequestBodyTagIdsMax = 20;
+
 export const createRequestBodyPreferredTimesItemRegExp = new RegExp(
   "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$",
 );
 export const createRequestBodyPreferredTimesMax = 30;
 
 export const CreateRequestBody = zod.object({
-  districtId: zod.number().int(),
+  districtId: zod.number().int().min(1),
   title: zod
     .string()
     .describe("Non-whitespace text, at most 200 UTF-8 bytes before trimming."),
@@ -293,7 +296,10 @@ export const CreateRequestBody = zod.object({
     .describe(
       "Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.",
     ),
-  tagIds: zod.array(zod.number().int()),
+  tagIds: zod
+    .array(zod.number().int().min(1))
+    .max(createRequestBodyTagIdsMax)
+    .optional(),
   role: zod.enum(["mentor", "mentee"]),
   preferredTimes: zod
     .array(zod.string().regex(createRequestBodyPreferredTimesItemRegExp))
@@ -341,8 +347,9 @@ export const CreateRequestResponse = zod.object({
 /**
  * @summary Get a mentorship request
  */
+
 export const GetRequestParams = zod.object({
-  id: zod.coerce.number().int(),
+  id: zod.coerce.number().int().min(1),
 });
 
 export const GetRequestResponse = zod.object({
@@ -382,9 +389,12 @@ export const GetRequestResponse = zod.object({
 /**
  * @summary Update a mentorship request
  */
+
 export const UpdateRequestParams = zod.object({
-  id: zod.coerce.number().int(),
+  id: zod.coerce.number().int().min(1),
 });
+
+export const updateRequestBodyTagIdsMax = 20;
 
 export const UpdateRequestBody = zod.object({
   title: zod
@@ -397,8 +407,16 @@ export const UpdateRequestBody = zod.object({
     .describe(
       "Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.",
     ),
-  tagIds: zod.array(zod.number().int()).optional(),
-  status: zod.enum(["open", "matched", "closed"]).optional(),
+  tagIds: zod
+    .array(zod.number().int().min(1))
+    .max(updateRequestBodyTagIdsMax)
+    .optional(),
+  status: zod
+    .enum(["open", "matched", "closed"])
+    .optional()
+    .describe(
+      "Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.",
+    ),
 });
 
 export const UpdateRequestResponse = zod.object({
@@ -438,8 +456,9 @@ export const UpdateRequestResponse = zod.object({
 /**
  * @summary Delete a mentorship request
  */
+
 export const DeleteRequestParams = zod.object({
-  id: zod.coerce.number().int(),
+  id: zod.coerce.number().int().min(1),
 });
 
 export const DeleteRequestResponse = zod.void();
@@ -447,8 +466,9 @@ export const DeleteRequestResponse = zod.void();
 /**
  * @summary Match/respond to a mentorship request
  */
+
 export const MatchRequestParams = zod.object({
-  id: zod.coerce.number().int(),
+  id: zod.coerce.number().int().min(1),
 });
 
 export const MatchRequestResponse = zod.object({
@@ -499,8 +519,9 @@ export const ListTagsResponse = zod.array(ListTagsResponseItem);
 /**
  * @summary Report a user
  */
+
 export const CreateReportBody = zod.object({
-  reportedUserId: zod.number().int(),
+  reportedUserId: zod.number().int().min(1),
   reason: zod.enum([
     "spam",
     "harassment",
@@ -529,8 +550,9 @@ export const ListBlocksResponse = zod.array(ListBlocksResponseItem);
 /**
  * @summary Block a user
  */
+
 export const BlockUserBody = zod.object({
-  blockedUserId: zod.number().int(),
+  blockedUserId: zod.number().int().min(1),
 });
 
 export const BlockUserResponse = zod.object({
@@ -540,8 +562,9 @@ export const BlockUserResponse = zod.object({
 /**
  * @summary Unblock a user
  */
+
 export const UnblockUserParams = zod.object({
-  blockedUserId: zod.coerce.number().int(),
+  blockedUserId: zod.coerce.number().int().min(1),
 });
 
 export const UnblockUserResponse = zod.void();

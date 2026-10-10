@@ -7,5 +7,6 @@
  */
 
 export interface BlockUserBody {
+  /** @minimum 1 */
   blockedUserId: number;
 }

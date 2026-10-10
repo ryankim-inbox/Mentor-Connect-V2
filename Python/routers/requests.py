@@ -2,8 +2,9 @@ import re
 from datetime import datetime
 
 from fastapi import APIRouter, Request, HTTPException, Response, Query
-from pydantic import BaseModel, field_validator
-from typing import Annotated, Optional, List
+from pydantic import BaseModel, Field, PositiveInt, field_validator
+from psycopg2.errors import ForeignKeyViolation
+from typing import Annotated, Literal, Optional, List
 from db import db
 
 router = APIRouter()
@@ -12,6 +13,7 @@ router = APIRouter()
 # 'Ddd HH:00' on a 24-hour clock, e.g. 'Mon 17:00' .. 'Sun 23:00'.
 TIME_SLOT_RE = re.compile(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$")
 MAX_PREFERRED_TIMES = 30
+TagIds = Annotated[List[PositiveInt], Field(max_length=20)]
 
 def validate_preferred_times(value):
     if value is None:
@@ -46,13 +48,20 @@ class RequestTextBody(BaseModel):
     def check_description(cls, value):
         return validate_request_text(value, 4000)
 
+    @field_validator("tagIds", check_fields=False)
+    @classmethod
+    def check_tag_ids(cls, value):
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("tagIds cannot contain duplicates")
+        return value
+
 
 class CreateRequestBody(RequestTextBody):
-    districtId: int
+    districtId: PositiveInt
     title: str
     description: str
-    role: str
-    tagIds: Optional[List[int]] = []
+    role: Literal["mentor", "mentee"]
+    tagIds: Optional[TagIds] = Field(default_factory=list)
     preferredTimes: Optional[List[str]] = []
 
     @field_validator("preferredTimes")
@@ -63,8 +72,15 @@ class CreateRequestBody(RequestTextBody):
 class UpdateRequestBody(RequestTextBody):
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[str] = None
-    tagIds: Optional[List[int]] = None
+    status: Optional[Literal["open", "matched", "closed"]] = None
+    tagIds: Optional[TagIds] = None
+
+
+def validate_tag_references(cur, tag_ids):
+    if tag_ids:
+        cur.execute("SELECT id FROM tags WHERE id = ANY(%s)", (tag_ids,))
+        if len(cur.fetchall()) != len(tag_ids):
+            raise HTTPException(status_code=404, detail="Tag not found")
 
 def request_list_preview(value: str, max_bytes: int) -> str:
     return value.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
@@ -170,26 +186,35 @@ def create_request(body: CreateRequestBody, request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    with db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO requests (author_id, district_id, title, description, role, status, preferred_times)
-               VALUES (%s, %s, %s, %s, %s, 'open', %s) RETURNING *""",
-            (user_id, body.districtId, body.title, body.description, body.role, body.preferredTimes or []),
-        )
-        req = cur.fetchone()
+    try:
+        with db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM districts WHERE id = %s", (body.districtId,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail="District not found")
+            validate_tag_references(cur, body.tagIds)
+            cur.execute(
+                """INSERT INTO requests (author_id, district_id, title, description, role, status, preferred_times)
+                   VALUES (%s, %s, %s, %s, %s, 'open', %s) RETURNING *""",
+                (user_id, body.districtId, body.title, body.description, body.role, body.preferredTimes or []),
+            )
+            req = cur.fetchone()
 
-        if body.tagIds:
-            for tag_id in body.tagIds:
-                cur.execute(
-                    "INSERT INTO request_tags (request_id, tag_id) VALUES (%s, %s)",
-                    (req["id"], tag_id),
-                )
+            if body.tagIds:
+                for tag_id in body.tagIds:
+                    cur.execute(
+                        "INSERT INTO request_tags (request_id, tag_id) VALUES (%s, %s)",
+                        (req["id"], tag_id),
+                    )
 
-        return build_request_response(cur, req)
+            return build_request_response(cur, req)
+    except ForeignKeyViolation as exc:
+        if exc.diag.constraint_name in ("requests_district_id_fkey", "request_tags_tag_id_fkey"):
+            raise HTTPException(status_code=404, detail="District or tag not found") from None
+        raise
 
 @router.get("/requests/{request_id}")
-def get_request(request_id: int):
+def get_request(request_id: PositiveInt):
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM requests WHERE id = %s", (request_id,))
@@ -199,54 +224,65 @@ def get_request(request_id: int):
         return build_request_response(cur, req)
 
 @router.patch("/requests/{request_id}")
-def update_request(request_id: int, body: UpdateRequestBody, request: Request):
+def update_request(request_id: PositiveInt, body: UpdateRequestBody, request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    with db() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM requests WHERE id = %s", (request_id,))
-        existing = cur.fetchone()
-        if not existing:
-            raise HTTPException(status_code=404, detail="Request not found")
-        if existing["author_id"] != user_id:
-            raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        with db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM requests WHERE id = %s FOR UPDATE", (request_id,))
+            existing = cur.fetchone()
+            if not existing:
+                raise HTTPException(status_code=404, detail="Request not found")
+            if existing["author_id"] != user_id:
+                raise HTTPException(status_code=403, detail="Forbidden")
+            if body.status == "matched" and existing["status"] != "matched":
+                raise HTTPException(status_code=409, detail="Use Connect to match a request")
+            validate_tag_references(cur, body.tagIds)
 
-        fields = []
-        values = []
-        if body.title is not None:
-            fields.append("title = %s")
-            values.append(body.title)
-        if body.description is not None:
-            fields.append("description = %s")
-            values.append(body.description)
-        if body.status is not None:
-            fields.append("status = %s")
-            values.append(body.status)
+            fields = []
+            values = []
+            if body.title is not None:
+                fields.append("title = %s")
+                values.append(body.title)
+            if body.description is not None:
+                fields.append("description = %s")
+                values.append(body.description)
+            if body.status is not None and body.status != existing["status"]:
+                fields.append("status = %s")
+                values.append(body.status)
+                fields.append("updated_at = now()")
+            if body.status == "open":
+                fields.append("matched_user_id = NULL")
 
-        if fields:
-            values.append(request_id)
-            cur.execute(
-                f"UPDATE requests SET {', '.join(fields)} WHERE id = %s RETURNING *",
-                values,
-            )
-            req = cur.fetchone()
-        else:
-            req = existing
-
-        if body.tagIds is not None:
-            cur.execute("DELETE FROM request_tags WHERE request_id = %s", (request_id,))
-            for tag_id in body.tagIds:
+            if fields:
+                values.append(request_id)
                 cur.execute(
-                    "INSERT INTO request_tags (request_id, tag_id) VALUES (%s, %s)",
-                    (request_id, tag_id),
+                    f"UPDATE requests SET {', '.join(fields)} WHERE id = %s RETURNING *",
+                    values,
                 )
+                req = cur.fetchone()
+            else:
+                req = existing
 
-        return build_request_response(cur, req)
+            if body.tagIds is not None:
+                cur.execute("DELETE FROM request_tags WHERE request_id = %s", (request_id,))
+                for tag_id in body.tagIds:
+                    cur.execute(
+                        "INSERT INTO request_tags (request_id, tag_id) VALUES (%s, %s)",
+                        (request_id, tag_id),
+                    )
+
+            return build_request_response(cur, req)
+    except ForeignKeyViolation as exc:
+        if exc.diag.constraint_name == "request_tags_tag_id_fkey":
+            raise HTTPException(status_code=404, detail="Tag not found") from None
+        raise
 
 @router.delete("/requests/{request_id}", status_code=204)
-def delete_request(request_id: int, request: Request):
+def delete_request(request_id: PositiveInt, request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -263,7 +299,7 @@ def delete_request(request_id: int, request: Request):
         cur.execute("DELETE FROM requests WHERE id = %s", (request_id,))
 
 @router.post("/requests/{request_id}/match")
-def match_request(request_id: int, request: Request):
+def match_request(request_id: PositiveInt, request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -280,7 +316,7 @@ def match_request(request_id: int, request: Request):
             raise HTTPException(status_code=400, detail="Request is not open")
 
         cur.execute(
-            "UPDATE requests SET status = 'matched', matched_user_id = %s WHERE id = %s RETURNING *",
+            "UPDATE requests SET status = 'matched', matched_user_id = %s, updated_at = now() WHERE id = %s RETURNING *",
             (user_id, request_id),
         )
         updated = cur.fetchone()

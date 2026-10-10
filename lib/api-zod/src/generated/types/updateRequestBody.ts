@@ -12,6 +12,11 @@ export interface UpdateRequestBody {
   title?: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;
+  /**
+   * @maxItems 20
+   * @items.minimum 1
+   */
   tagIds?: number[];
+  /** Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId. */
   status?: UpdateRequestBodyStatus;
 }
