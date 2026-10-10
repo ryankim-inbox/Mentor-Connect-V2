@@ -234,8 +234,8 @@ A later whole-branch review at `9385f402` reproduced three additional integratio
 gaps in tasks 4, 11 and 16. This dated follow-up supersedes the earlier claims
 that no code review remained pending and every requirement was complete at that
 point. Earlier approvals, tests and failed attempts remain historical evidence.
-The three reported gaps are now fixed and verified locally; independent controller
-review of this fix wave remains pending.
+The three reported gaps are now fixed and verified locally. Independent review
+has passed, as recorded at the end of this follow-up.
 
 - The shared chat thread watches the newest message ID as well as count, so a
   latest-50 window scrolls after send or polling replaces its oldest message.
@@ -267,8 +267,9 @@ Commands ran in the isolated worktree with
 pnpm 10.33.0, uv 0.11.16, root `.venv` Python 3.12.13 and disposable PostgreSQL
 16.13. `CLASSROOM_TEST_PYTHON` remained set by the gate, preventing required DB
 checks from silently skipping. Full logs, browser traces, screenshots and the
-detailed `task-1-report.md` are retained in the ignored workspace
-`.superpowers/sdd/2026-10-10-backend-review-followups/`.
+detailed `task-1-report.md` were generated in the ignored workspace
+`.superpowers/sdd/2026-10-10-backend-review-followups/` and archived with local
+review evidence outside the checkout before that scratch workspace was removed.
 
 | Exact command (after the PATH assignment above) | Result and retained log |
 | --- | --- |
@@ -312,11 +313,35 @@ and the task report preserves the tooling error.
 
 Code and tests remain identical to successful gate commit `e838899c`; subsequent
 tracked edits update only this results record and the runbook's coverage sentence.
-Generated browser output is retained in the ignored follow-up workspace. Existing
+Generated browser output is retained in the local review evidence archive. Existing
 tooltip sourcemap/color notices remain nonblocking and the legacy-schema warning
 remains an intentional safeguard. One moderate build-tool finding remains in
 `postcss-selector-parser` via `@tailwindcss/typography` (read-only moderate audit
 exit 1; `audit-moderate-context.json`); its patched major version was outside the
 authorized high/critical patch. Both required local audits pass; separate CI
-audit status is unknown. Independent review remains pending. No push, PR, merge,
-deployment, populated-database operation or primary checkout change was performed.
+audit status was unknown at verification time. At implementer handoff, independent
+review was pending and no push, PR, merge, deployment, populated-database operation
+or primary checkout change had been performed.
+
+### Independent follow-up review and integration readiness
+
+A fresh independent reviewer inspected `9385f402..a5a5fc1b`, connected code and
+fixtures, the earlier full-branch requirements matrix, actual gate/audit output,
+mobile screenshots and keyboard evidence. Spec compliance and code quality both
+passed. All three original findings are addressed; tasks 4, 11 and 16 now meet
+their local acceptance requirements, and the other 13 task conclusions remain
+supported. No actionable follow-up finding remains. This was a scoped independent
+re-review with the prior whole-branch audit as context, not another full test run.
+
+The controller accepted the explicitly excluded deployment, multiworker,
+historical reconstruction, public lesson routing, full-history pagination and
+other unchanged scope boundaries. Browser and audit limitations above remain
+disclosed. Code/tests/lock remain identical to the successful `e838899c` gate;
+subsequent commits contain evidence documentation only. The user authorized
+pushing `codex/backend-completion` and creating a PR against `main` after review.
+
+Ruling: Patch existing `source-map-js` from 1.2.1 to 1.2.2 to meet the separate
+required high/critical release audit. If that decision is wrong, changed build
+behavior could require compatibility rework or reverting the pin. The narrow
+lock diff, successful build/full gate and independent review check that risk;
+dependency-age and audit policies were preserved.
