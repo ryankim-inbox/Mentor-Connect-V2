@@ -210,7 +210,8 @@ for (const width of [1440, 375, 320]) {
       data: { method: "GET", path: "/api/analytics/weekly-matches", status: 200,
         body: pythonEnvelope("analysis", weekly) },
     })).ok()).toBe(true);
-    await signIn(page);
+    // Keep this file below the gateway's real per-account login limit.
+    await signIn(page, "mentee");
     await page.goto("/analytics");
     await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
     await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
