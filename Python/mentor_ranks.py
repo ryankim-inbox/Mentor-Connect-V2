@@ -9,7 +9,6 @@ from fastapi import APIRouter, HTTPException, Request
 from psycopg2.extras import RealDictCursor
 
 from db import db
-from routers.chat import _require_user
 
 router = APIRouter()
 
