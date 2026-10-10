@@ -518,3 +518,13 @@ test("each ordinary wire-model family agrees with generated validation and rejec
     assert.deepEqual(await r.json(), { error: "backend_error" });
   }
 });
+
+test("request preview disclosure is preserved and required by the public contract", async () => {
+  const { requestFixture } = await import("./contract-fixtures.ts");
+  for (const descriptionTruncated of [false, true]) {
+    const row = { ...requestFixture, descriptionTruncated };
+    assert.deepEqual(projectPublicPayload([row], "/api/requests", "GET"), [row]);
+  }
+  const { descriptionTruncated: _discarded, ...missing } = { ...requestFixture, descriptionTruncated: false };
+  assert.throws(() => projectPublicPayload([missing], "/api/requests", "GET"));
+});

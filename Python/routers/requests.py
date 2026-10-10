@@ -1,8 +1,9 @@
 import re
+from datetime import datetime
 
-from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi import APIRouter, Request, HTTPException, Response, Query
 from pydantic import BaseModel, field_validator
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from db import db
 
 router = APIRouter()
@@ -26,7 +27,27 @@ def validate_preferred_times(value):
             )
     return value
 
-class CreateRequestBody(BaseModel):
+def validate_request_text(value, max_bytes):
+    if value is None:
+        return None
+    if len(value.encode("utf-8")) > max_bytes or not value.strip():
+        raise ValueError(f"must contain text and be at most {max_bytes} UTF-8 bytes")
+    return value.strip()
+
+
+class RequestTextBody(BaseModel):
+    @field_validator("title", check_fields=False)
+    @classmethod
+    def check_title(cls, value):
+        return validate_request_text(value, 200)
+
+    @field_validator("description", check_fields=False)
+    @classmethod
+    def check_description(cls, value):
+        return validate_request_text(value, 4000)
+
+
+class CreateRequestBody(RequestTextBody):
     districtId: int
     title: str
     description: str
@@ -39,13 +60,37 @@ class CreateRequestBody(BaseModel):
     def check_preferred_times(cls, value):
         return validate_preferred_times(value)
 
-class UpdateRequestBody(BaseModel):
+class UpdateRequestBody(RequestTextBody):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
     tagIds: Optional[List[int]] = None
 
-def build_request_response(cur, req):
+def request_list_preview(value: str, max_bytes: int) -> str:
+    return value.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+
+
+def parse_request_cursor(value: str) -> tuple[datetime, int]:
+    if len(value) > 96 or not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+        r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*", value
+    ):
+        raise HTTPException(status_code=422, detail="Invalid request cursor")
+    timestamp, request_id = value.split("|")
+    try:
+        created_at = datetime.fromisoformat(timestamp)
+        # fromisoformat normalizes oversized offset minutes; reject that syntax.
+        if not timestamp.endswith("Z") and int(timestamp[-2:]) > 59:
+            raise ValueError("Invalid offset")
+        identifier = int(request_id)
+        if identifier > 9007199254740991:
+            raise ValueError("Invalid identifier")
+        return created_at, identifier
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid request cursor") from None
+
+
+def build_request_response(cur, req, *, preview=False):
     cur.execute("SELECT id, name FROM users WHERE id = %s", (req["author_id"],))
     author = cur.fetchone()
     cur.execute("SELECT name FROM districts WHERE id = %s", (req["district_id"],))
@@ -68,8 +113,9 @@ def build_request_response(cur, req):
         "authorRole": req["role"],
         "districtId": req["district_id"],
         "districtName": district["name"] if district else "Unknown",
-        "title": req["title"],
-        "description": req["description"],
+        "title": request_list_preview(req["title"], 200) if preview else req["title"],
+        "description": request_list_preview(req["description"], 4000) if preview else req["description"],
+        "descriptionTruncated": preview and len(req["description"].encode("utf-8")) > 4000,
         "tags": [{"id": t["id"], "name": t["name"], "color": t["color"], "requestCount": 0} for t in tags],
         "status": req["status"],
         "matchedUserId": req["matched_user_id"],
@@ -85,6 +131,8 @@ def list_requests(
     role: Optional[str] = None,
     status: Optional[str] = None,
     tagId: Optional[int] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 50,
+    before: Optional[str] = None,
 ):
     conditions = []
     params = []
@@ -98,20 +146,23 @@ def list_requests(
         conditions.append("r.role = %s")
         params.append(role)
 
+    if tagId:
+        conditions.append("EXISTS (SELECT 1 FROM request_tags rt WHERE rt.request_id = r.id AND rt.tag_id = %s)")
+        params.append(tagId)
+    if before is not None:
+        created_at, request_id = parse_request_cursor(before)
+        conditions.append("(r.created_at, r.id) < (%s, %s)")
+        params.extend([created_at, request_id])
+    params.append(limit)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    query = f"SELECT r.* FROM requests r {where} ORDER BY r.created_at DESC"
+    query = f"SELECT r.* FROM requests r {where} ORDER BY r.created_at DESC, r.id DESC LIMIT %s"
 
     with db() as conn:
         cur = conn.cursor()
         cur.execute(query, params)
         reqs = cur.fetchall()
 
-        if tagId:
-            cur.execute("SELECT request_id FROM request_tags WHERE tag_id = %s", (tagId,))
-            ids = {row["request_id"] for row in cur.fetchall()}
-            reqs = [r for r in reqs if r["id"] in ids]
-
-        return [build_request_response(cur, r) for r in reqs]
+        return [build_request_response(cur, r, preview=True) for r in reqs]
 
 @router.post("/requests", status_code=201)
 def create_request(body: CreateRequestBody, request: Request):

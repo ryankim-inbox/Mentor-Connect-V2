@@ -34,6 +34,7 @@ export const request = {
   districtName: "Classroom North",
   title: "Calculus study session",
   description: "Practice derivatives together.",
+  descriptionTruncated: false,
   tags: [tag],
   status: "open",
   matchedUserId: null,

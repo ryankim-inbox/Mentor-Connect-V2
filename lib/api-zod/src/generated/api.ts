@@ -210,11 +210,34 @@ export const GetDistrictResponse = zod.object({
 /**
  * @summary List mentorship requests
  */
+export const listRequestsQueryLimitDefault = 50;
+export const listRequestsQueryLimitMax = 50;
+
+export const listRequestsQueryBeforeMax = 96;
+
+export const listRequestsQueryBeforeRegExp = new RegExp(
+  "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\\|[1-9][0-9]*$",
+);
+
 export const ListRequestsQueryParams = zod.object({
   districtId: zod.coerce.number().int().optional(),
   tagId: zod.coerce.number().int().optional(),
   role: zod.enum(["mentor", "mentee"]).optional(),
   status: zod.enum(["open", "matched", "closed"]).optional(),
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestsQueryLimitMax)
+    .default(listRequestsQueryLimitDefault),
+  before: zod.coerce
+    .string()
+    .max(listRequestsQueryBeforeMax)
+    .regex(listRequestsQueryBeforeRegExp)
+    .optional()
+    .describe(
+      "Older than this timezone-aware createdAt and positive id tuple.",
+    ),
 });
 
 export const ListRequestsResponseItem = zod.object({
@@ -226,6 +249,11 @@ export const ListRequestsResponseItem = zod.object({
   districtName: zod.string(),
   title: zod.string(),
   description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
   tags: zod.array(
     zod.object({
       id: zod.number().int(),
@@ -257,8 +285,14 @@ export const createRequestBodyPreferredTimesMax = 30;
 
 export const CreateRequestBody = zod.object({
   districtId: zod.number().int(),
-  title: zod.string(),
-  description: zod.string(),
+  title: zod
+    .string()
+    .describe("Non-whitespace text, at most 200 UTF-8 bytes before trimming."),
+  description: zod
+    .string()
+    .describe(
+      "Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.",
+    ),
   tagIds: zod.array(zod.number().int()),
   role: zod.enum(["mentor", "mentee"]),
   preferredTimes: zod
@@ -279,6 +313,11 @@ export const CreateRequestResponse = zod.object({
   districtName: zod.string(),
   title: zod.string(),
   description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
   tags: zod.array(
     zod.object({
       id: zod.number().int(),
@@ -315,6 +354,11 @@ export const GetRequestResponse = zod.object({
   districtName: zod.string(),
   title: zod.string(),
   description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
   tags: zod.array(
     zod.object({
       id: zod.number().int(),
@@ -343,8 +387,16 @@ export const UpdateRequestParams = zod.object({
 });
 
 export const UpdateRequestBody = zod.object({
-  title: zod.string().optional(),
-  description: zod.string().optional(),
+  title: zod
+    .string()
+    .optional()
+    .describe("Non-whitespace text, at most 200 UTF-8 bytes before trimming."),
+  description: zod
+    .string()
+    .optional()
+    .describe(
+      "Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.",
+    ),
   tagIds: zod.array(zod.number().int()).optional(),
   status: zod.enum(["open", "matched", "closed"]).optional(),
 });
@@ -358,6 +410,11 @@ export const UpdateRequestResponse = zod.object({
   districtName: zod.string(),
   title: zod.string(),
   description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
   tags: zod.array(
     zod.object({
       id: zod.number().int(),
@@ -403,6 +460,11 @@ export const MatchRequestResponse = zod.object({
   districtName: zod.string(),
   title: zod.string(),
   description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
   tags: zod.array(
     zod.object({
       id: zod.number().int(),

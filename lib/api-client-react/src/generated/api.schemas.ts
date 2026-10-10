@@ -142,6 +142,8 @@ export interface MentorshipRequest {
   districtName: string;
   title: string;
   description: string;
+  /** True when the list description is a bounded preview. Detail reads return false. */
+  descriptionTruncated: boolean;
   tags: Tag[];
   status: MentorshipRequestStatus;
   /** @nullable */
@@ -163,7 +165,9 @@ export const CreateRequestBodyRole = {
 
 export interface CreateRequestBody {
   districtId: number;
+  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title: string;
+  /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;
   tagIds: number[];
   role: CreateRequestBodyRole;
@@ -185,7 +189,9 @@ export const UpdateRequestBodyStatus = {
 } as const;
 
 export interface UpdateRequestBody {
+  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title?: string;
+  /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;
   tagIds?: number[];
   status?: UpdateRequestBodyStatus;
@@ -648,6 +654,17 @@ export type ListRequestsParams = {
   tagId?: number;
   role?: ListRequestsRole;
   status?: ListRequestsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * Older than this timezone-aware createdAt and positive id tuple.
+   * @maxLength 96
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*$
+   */
+  before?: string;
 };
 
 export type ListRequestsRole =

@@ -118,6 +118,7 @@ const mentorshipRequest = z.object({
   districtName: string,
   title: string,
   description: string,
+  descriptionTruncated: z.boolean(),
   tags: tag.array(),
   status: z.enum(["open", "matched", "closed"]),
   matchedUserId: integer.nullable().optional(),

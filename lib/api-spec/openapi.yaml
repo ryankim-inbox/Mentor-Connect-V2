@@ -373,6 +373,20 @@ paths:
               - open
               - matched
               - closed
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: before
+          in: query
+          description: Older than this timezone-aware createdAt and positive id tuple.
+          schema:
+            type: string
+            maxLength: 96
+            pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*$'
       responses:
         "200":
           description: List of requests
@@ -1954,6 +1968,9 @@ components:
           type: string
         description:
           type: string
+        descriptionTruncated:
+          type: boolean
+          description: True when the list description is a bounded preview. Detail reads return false.
         tags:
           type: array
           items:
@@ -1990,6 +2007,7 @@ components:
         - districtName
         - title
         - description
+        - descriptionTruncated
         - tags
         - status
         - createdAt
@@ -2000,8 +2018,10 @@ components:
           type: integer
         title:
           type: string
+          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
         description:
           type: string
+          description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
           items:
@@ -2031,8 +2051,10 @@ components:
       properties:
         title:
           type: string
+          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
         description:
           type: string
+          description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
         tagIds:
           type: array
           items:
