@@ -122,6 +122,58 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
             assert stored_request["matchedUserId"] == successful_caller_id
 
 
+def test_concurrent_dm_start_returns_one_conversation(chat_server, chat_database):
+    with chat_server() as base:
+        mentor, _ = login(base, "mentor501@test.edu")
+        other, _ = login(base, "both951@test.edu")
+        with closing(psycopg2.connect(chat_database)) as blocker, \
+             closing(psycopg2.connect(chat_database)) as observer, \
+             blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
+            observer.autocommit = True
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            assert activity_cursor.fetchone()[0] == 0
+            lock_cursor.execute("LOCK TABLE dm_conversations IN SHARE MODE")
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                futures = [workers.submit(api, client, base, "POST", "/api/dms/start",
+                                          {"toUserId": target})
+                           for client, target in [(mentor, 951), (other, 501)]]
+                try:
+                    # Both requests must pass the missing-pair read before either inserts.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        activity_cursor.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND state = 'active' "
+                            "AND wait_event_type = 'Lock' AND query LIKE %s",
+                            ("%INSERT INTO dm_conversations%",),
+                        )
+                        if activity_cursor.fetchone()[0] == 2:
+                            break
+                        assert not any(future.done() for future in futures), "DM start finished before both INSERT waits"
+                        time.sleep(0.01)
+                    else:
+                        pytest.fail("Both DM starts did not wait for the conversation table lock")
+                finally:
+                    blocker.rollback()
+                results = [future.result(timeout=3) for future in futures]
+
+            statuses = [status for status, _ in results]
+            responses = [response for _, response in results]
+            assert sorted(statuses) == [200, 200]
+            assert responses[0]["id"] == responses[1]["id"]
+            assert responses[0]["otherUserId"] == 951
+            assert responses[1]["otherUserId"] == 501
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            stored_pair_count = activity_cursor.fetchone()[0]
+            assert stored_pair_count == 1
+
+
 def test_room_history_returns_latest_visible_window(chat_server, chat_database):
     with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
         cur.execute("INSERT INTO districts (name, county, type) VALUES (%s, %s, %s) RETURNING id",
