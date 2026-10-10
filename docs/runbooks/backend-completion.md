@@ -47,9 +47,10 @@ CI exports its explicit isolated virtualenv and both interpreter variables.
 `Python/` without importing it. Its real gateway flow covers registration/login,
 profile clear/privacy, request create/page/filter/edit/match/delete, exactly one
 observed event, blocked recommendations, reports, room/DM persistence and errors,
-and successful nonempty/empty learning results. Real WebSocket behavior remains
-in `tests/test_chat_integration.py`. Rank endpoints are exercised separately
-through the lesson server. Injected error-envelope/UI tests remain alongside
+and successful nonempty/empty learning results. Actual gateway/Python room and DM
+WebSocket coverage is in `tests/test_backend_completion.py`, alongside retained
+direct Python socket tests in `tests/test_chat_integration.py`. Rank endpoints
+are exercised separately through the lesson server. Injected error-envelope/UI tests remain alongside
 these healthy-path tests.
 
 | Original finding | Permanent regression |
