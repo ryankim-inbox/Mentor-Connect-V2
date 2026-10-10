@@ -62,7 +62,7 @@ def _normalize_subjects(result):
         if not isinstance(item, dict):
             return None
         subject = item.get("subject") or item.get("name")
-        count = item.get("requests") or item.get("count") or item.get("total")
+        count = item.get("requests", item.get("count", item.get("total")))
         if subject is None or not isinstance(count, (int, float)):
             return None
         normalized.append(
@@ -112,7 +112,7 @@ def _normalize_mentor_ranks(result):
     for item in result:
         if not isinstance(item, dict):
             return None
-        mentor_id = item.get("mentorId") or item.get("mentor_id") or item.get("id")
+        mentor_id = item.get("mentorId", item.get("mentor_id", item.get("id")))
         name = item.get("mentorName") or item.get("mentor_name") or item.get("name")
         if mentor_id is None or name is None:
             return None
@@ -120,10 +120,10 @@ def _normalize_mentor_ranks(result):
             {
                 "mentorId": int(mentor_id),
                 "mentorName": str(name),
-                "responseRate": float(item.get("responseRate") or item.get("response_rate") or 0),
-                "totalRequests": int(item.get("totalRequests") or item.get("total_requests") or 0),
+                "responseRate": float(item.get("responseRate", item.get("response_rate", 0))),
+                "totalRequests": int(item.get("totalRequests", item.get("total_requests", 0))),
                 "avgResponseHours": float(
-                    item.get("avgResponseHours") or item.get("avg_response_hours") or 0
+                    item.get("avgResponseHours", item.get("avg_response_hours", 0))
                 ),
             }
         )

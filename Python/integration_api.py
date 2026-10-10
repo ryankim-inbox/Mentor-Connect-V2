@@ -4,10 +4,12 @@ from __future__ import annotations
 import inspect
 import sys
 from importlib import import_module, invalidate_caches
+from threading import RLock
 from typing import Any
 
 
 ALLOWED_RAW_MODULES = {"find_matches", "locations", "get_blocks"}
+_MODULE_RELOAD_LOCK = RLock()
 
 
 def _error_status(error: BaseException) -> str:
@@ -48,11 +50,11 @@ def _json_safe(value: Any) -> Any:
 
 
 def _import_student_module(module_name: str) -> tuple[Any | None, dict[str, Any] | None]:
-    invalidate_caches()
-    sys.modules.pop(module_name, None)
-
     try:
-        return import_module(module_name), None
+        with _MODULE_RELOAD_LOCK:
+            invalidate_caches()
+            sys.modules.pop(module_name, None)
+            return import_module(module_name), None
     except Exception as error:
         return None, _safe_error(
             feature=module_name,

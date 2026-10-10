@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import integration_api
+import pytest
 from api.adapters import analysis_adapter, scheduling_adapter
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -145,6 +146,81 @@ def test_unusable_student_output_is_an_error_not_fallback(monkeypatch):
     assert envelope["student_module"]["status"] == "invalid output"
     # The raw student result stays visible for debugging, but not as data.
     assert envelope["student_result"] == "Math"
+
+
+@pytest.mark.parametrize("mentor_id", ["invalid ID", [1], float("inf")])
+def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_mentor_ranks=lambda: [
+            {"mentorId": mentor_id, "mentorName": "Ada"}
+        ]),
+    )
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False
+    assert envelope["ok"] is False
+    assert envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_module"]["error"] == envelope["error"]
+
+
+def test_zero_subject_count_is_preserved(monkeypatch):
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_most_popular_subject=lambda: [
+            {"subject": "Math", "requests": 0, "count": 8},
+            {"subject": "Physics", "count": 0},
+        ]),
+    )
+    envelope = analysis_adapter.get_popular_subjects()
+    assert envelope["success"] is True
+    assert [row["requests"] for row in envelope["data"]] == [0, 0]
+
+
+def test_zero_mentor_values_are_preserved(monkeypatch):
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_mentor_ranks=lambda: [{
+            "mentorId": 0, "id": 9, "mentorName": "Ada",
+            "responseRate": 0, "response_rate": 99,
+            "totalRequests": 0, "total_requests": 8,
+            "avgResponseHours": 0, "avg_response_hours": 4,
+        }]),
+    )
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is True
+    assert envelope["data"] == [{
+        "mentorId": 0, "mentorName": "Ada", "responseRate": 0.0,
+        "totalRequests": 0, "avgResponseHours": 0.0,
+    }]
+
+
+@pytest.mark.parametrize("function_name,endpoint", [
+    ("receive_weekly_matches", analysis_adapter.get_weekly_matches),
+    ("receive_most_popular_subject", analysis_adapter.get_popular_subjects),
+    ("receive_time_data", analysis_adapter.get_popular_time_slots),
+    ("receive_mentor_ranks", analysis_adapter.get_mentor_response_rates),
+])
+def test_empty_analytics_arrays_are_successful(monkeypatch, function_name, endpoint):
+    patch_student_module(monkeypatch, fake_module("analysis", **{function_name: lambda: []}))
+    envelope = endpoint()
+    assert envelope["success"] is True
+    assert envelope["data"] == []
+
+
+def test_unexpected_normalizer_failure_remains_visible(monkeypatch):
+    class BrokenId:
+        def __int__(self):
+            raise RuntimeError("unexpected normalization failure")
+
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_mentor_ranks=lambda: [
+            {"mentorId": BrokenId(), "mentorName": "Ada"}
+        ]),
+    )
+    with pytest.raises(RuntimeError, match="unexpected normalization failure"):
+        analysis_adapter.get_mentor_response_rates()
 
 
 def test_overview_success_normalizes_student_rows(monkeypatch):
