@@ -443,11 +443,19 @@ def start_dm_conversation(body: StartDmBody, request: Request):
         user_b_id = max(user_id, body.toUserId)
         cur.execute(
             """INSERT INTO dm_conversations (user_a_id, user_b_id)
-               VALUES (%s, %s) RETURNING id""",
+               VALUES (%s, %s)
+               ON CONFLICT (user_a_id, user_b_id) DO NOTHING RETURNING id""",
             (user_a_id, user_b_id),
         )
-        new_id = cur.fetchone()["id"]
-        return _fetch_conversation(cur, new_id, user_id)
+        conversation = cur.fetchone()
+        if not conversation:
+            cur.execute(
+                """SELECT id FROM dm_conversations
+                   WHERE user_a_id = %s AND user_b_id = %s""",
+                (user_a_id, user_b_id),
+            )
+            conversation = cur.fetchone()
+        return _fetch_conversation(cur, conversation["id"], user_id)
 
 
 @router.get("/dms/{conversation_id}/messages")
