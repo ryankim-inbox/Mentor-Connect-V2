@@ -20,27 +20,29 @@ function pythonData<T>(envelope: PyEnvelope<T[]> | undefined): T[] {
 function MiniBarChart({ data }: { data: WeeklyMatch[] }) {
   const max = Math.max(...data.map((d) => d.matches ?? 0), 1);
   return (
-    <div className="flex items-end gap-3 h-40">
-      {data.map((d, index) => {
-        const heightPct = ((d.matches ?? 0) / max) * 100;
-        return (
-          <div key={d.week} className="flex-1 h-full flex flex-col items-center gap-2">
-            <div className="w-full flex-1 min-h-0 flex items-end">
-              <div
-                className="w-full bg-gradient-to-t from-primary to-primary/60 rounded-t-md transition-all"
-                style={{ height: `${heightPct}%` }}
-                title={d.matches === null ? "Untracked" : `${d.matches} observed matches (${d.coverage})`}
-              />
+    <div className="overflow-x-auto">
+      <div className="flex items-end gap-3 h-40 min-w-[36rem]">
+        {data.map((d, index) => {
+          const heightPct = ((d.matches ?? 0) / max) * 100;
+          return (
+            <div key={d.week} className="flex-1 h-full flex flex-col items-center gap-2">
+              <div className="w-full flex-1 min-h-0 flex items-end">
+                <div
+                  className="w-full bg-gradient-to-t from-primary to-primary/60 rounded-t-md transition-all"
+                  style={{ height: `${heightPct}%` }}
+                  title={d.matches === null ? "Untracked" : `${d.matches} observed matches (${d.coverage})`}
+                />
+              </div>
+              <div className="h-20 shrink-0 flex flex-col items-center gap-2 whitespace-nowrap">
+                <span className="text-[10px] text-muted-foreground">{d.week}</span>
+                {index === data.length - 1 && <span className="text-[10px] text-muted-foreground">Week-to-date</span>}
+                <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches ?? "—"}</span>
+                {d.coverage !== "complete" && <span className="text-[10px] text-muted-foreground">{d.coverage === "untracked" ? "Untracked" : "Partial"}</span>}
+              </div>
             </div>
-            <div className="h-20 shrink-0 flex flex-col items-center gap-2">
-              <span className="text-[10px] text-muted-foreground">{d.week}</span>
-              {index === data.length - 1 && <span className="text-[10px] text-muted-foreground">Week-to-date</span>}
-              <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches ?? "—"}</span>
-              {d.coverage !== "complete" && <span className="text-[10px] text-muted-foreground">{d.coverage === "untracked" ? "Untracked" : "Partial"}</span>}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -258,7 +260,7 @@ export default function Analytics() {
       )}
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-card border border-card-border rounded-2xl p-5">
+        <div className="min-w-0 bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="font-semibold text-lg">Weekly matches</h2>
             <span className="text-xs text-muted-foreground font-mono">analysis.py</span>

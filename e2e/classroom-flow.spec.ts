@@ -193,38 +193,61 @@ for (const update of ["send", "poll"] as const) {
   });
 }
 
-test("weekly bars share a plot scale and baseline across coverage and current-week labels", async ({ page, request }) => {
-  const weekly = [
-    { week: "2026-09-07", matches: null, coverage: "untracked" },
-    { week: "2026-09-14", matches: 0, coverage: "complete" },
-    { week: "2026-09-21", matches: 5, coverage: "partial" },
-    { week: "2026-09-28", matches: 9, coverage: "complete" },
-    { week: "2026-10-05", matches: 10, coverage: "complete" },
-  ];
-  expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
-    data: { method: "GET", path: "/api/analytics/weekly-matches", status: 200,
-      body: pythonEnvelope("analysis", weekly) },
-  })).ok()).toBe(true);
-  await signIn(page);
-  await page.goto("/analytics");
-  await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
-  await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
-  await expect(page.getByText("Partial", { exact: true })).toBeVisible();
-  const bars = page.locator('[title="Untracked"], [title*="observed matches ("]');
-  await expect(bars).toHaveCount(5);
-  const geometry = await bars.evaluateAll(elements => elements.map(element => {
-    const bar = element.getBoundingClientRect();
-    const plot = element.parentElement!.getBoundingClientRect();
-    return { height: bar.height, bottom: bar.bottom, plotHeight: plot.height, plotBottom: plot.bottom };
-  }));
-  for (const bar of geometry) {
-    expect(Math.abs(bar.plotHeight - geometry[0].plotHeight)).toBeLessThan(1);
-    expect(Math.abs(bar.plotBottom - geometry[0].plotBottom)).toBeLessThan(1);
-    expect(Math.abs(bar.bottom - geometry[0].bottom)).toBeLessThan(1);
-  }
-  expect(geometry[0].height).toBe(0);
-  expect(geometry[1].height).toBe(0);
-  expect(geometry[4].height).toBeGreaterThan(geometry[3].height);
-  expect(geometry[2].height / geometry[4].height).toBeCloseTo(0.5, 1);
-  expect(geometry[3].height / geometry[4].height).toBeCloseTo(0.9, 1);
-});
+for (const width of [1440, 375, 320]) {
+  test(`weekly bars share a plot scale and readable labels at ${width}px`, async ({ page, request }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    const weekly = [
+      { week: "2026-08-17", matches: null, coverage: "untracked" },
+      { week: "2026-08-24", matches: 0, coverage: "complete" },
+      { week: "2026-08-31", matches: 0, coverage: "complete" },
+      { week: "2026-09-07", matches: 0, coverage: "complete" },
+      { week: "2026-09-14", matches: 0, coverage: "complete" },
+      { week: "2026-09-21", matches: 5, coverage: "partial" },
+      { week: "2026-09-28", matches: 9, coverage: "complete" },
+      { week: "2026-10-05", matches: 10, coverage: "partial" },
+    ];
+    expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
+      data: { method: "GET", path: "/api/analytics/weekly-matches", status: 200,
+        body: pythonEnvelope("analysis", weekly) },
+    })).ok()).toBe(true);
+    await signIn(page);
+    await page.goto("/analytics");
+    await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
+    await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
+    await expect(page.getByText("Partial", { exact: true })).toHaveCount(2);
+    const bars = page.locator('[title="Untracked"], [title*="observed matches ("]');
+    await expect(bars).toHaveCount(8);
+    const geometry = await bars.evaluateAll(elements => elements.map(element => {
+      const bar = element.getBoundingClientRect();
+      const plot = element.parentElement!.getBoundingClientRect();
+      const column = element.parentElement!.parentElement!;
+      const labels = column.children[1];
+      return { height: bar.height, bottom: bar.bottom, plotHeight: plot.height, plotBottom: plot.bottom,
+        columnBottom: column.getBoundingClientRect().bottom,
+        labelsBottom: Math.max(...Array.from(labels.children, label => label.getBoundingClientRect().bottom)) };
+    }));
+    for (const bar of geometry) {
+      expect(Math.abs(bar.plotHeight - geometry[0].plotHeight)).toBeLessThan(1);
+      expect(Math.abs(bar.plotBottom - geometry[0].plotBottom)).toBeLessThan(1);
+      expect(Math.abs(bar.bottom - geometry[0].bottom)).toBeLessThan(1);
+      expect(bar.labelsBottom).toBeLessThanOrEqual(bar.columnBottom + 1);
+    }
+    expect(geometry[0].height).toBe(0);
+    expect(geometry[1].height).toBe(0);
+    expect(geometry[7].height).toBeGreaterThan(geometry[6].height);
+    expect(geometry[5].height / geometry[7].height).toBeCloseTo(0.5, 1);
+    expect(geometry[6].height / geometry[7].height).toBeCloseTo(0.9, 1);
+    const latestLabel = page.getByText("2026-10-05", { exact: true });
+    await page.getByText("Week-to-date", { exact: true }).scrollIntoViewIfNeeded();
+    await expect(latestLabel).toBeInViewport({ ratio: 1 });
+    await expect(page.getByText("Week-to-date", { exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByText("Partial", { exact: true }).last()).toBeInViewport({ ratio: 1 });
+    const weeklyCard = page.locator("div.bg-card").filter({ has: page.getByRole("heading", { name: "Weekly matches", exact: true }) });
+    const nextCard = page.locator("div.bg-card").filter({ has: page.getByRole("heading", { name: "Most requested subjects", exact: true }) });
+    const weeklyBox = await weeklyCard.boundingBox();
+    const nextBox = await nextCard.boundingBox();
+    expect(weeklyBox!.x + weeklyBox!.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (width < 768) expect(nextBox!.y).toBeGreaterThanOrEqual(weeklyBox!.y + weeklyBox!.height);
+  });
+}
