@@ -4,7 +4,9 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-PYTHON_BIN=${PYTHON_BIN:-"$ROOT/.venv/bin/python"}
+UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-"$ROOT/.venv"}
+export UV_PROJECT_ENVIRONMENT
+PYTHON_BIN=${PYTHON_BIN:-"$UV_PROJECT_ENVIRONMENT/bin/python"}
 CLASSROOM_TEST_PYTHON=$PYTHON_BIN
 export PYTHON_BIN CLASSROOM_TEST_PYTHON
 
@@ -37,9 +39,13 @@ case "$MODE" in
 esac
 
 run pnpm install --frozen-lockfile
+run uv sync --frozen --group dev
+run "$PYTHON_BIN" -c "import pytest, psycopg, psycopg2, uvicorn, websockets"
 run node scripts/test-python-runtime.mjs
 run node scripts/test-python-freeze.mjs
+unset MENTOR_RANKS_MODULE
 run sh scripts/test-python.sh
+run env MENTOR_RANKS_MODULE=mentor_ranks sh scripts/test-python.sh tests/test_mentor_ranks.py -q
 run pnpm typecheck
 run pnpm build:release
 run pnpm test:gateway

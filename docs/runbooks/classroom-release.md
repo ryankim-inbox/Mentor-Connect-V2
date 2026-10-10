@@ -23,7 +23,8 @@ uv sync --frozen --group dev
 pnpm verify:release
 ```
 
-The command installs from the frozen lockfile, runs the full Python suite before typechecking and
+The command installs frozen Node and Python dependencies, preflights the selected Python interpreter,
+runs the full reference/default Python suite and the student-selected rank suite before typechecking and
 building the frontend, then runs gateway, migration, disposable PostgreSQL, frontend unit, contract,
 boundary, secret, smoke self-tests, and browser tests in
 the CI order, then verifies both Python baselines. A code-generation diff is a failure: commit the
@@ -32,7 +33,10 @@ destroy runner-owned PostgreSQL 16 clusters; do not point them at a shared or de
 
 Local verification requires Node 24.21.0, pnpm 10.33.0, Python 3.12 or newer, and PostgreSQL 16 tools
 (`initdb` and `pg_ctl`) on `PATH`. The release gate defaults to the checkout's absolute
-`.venv/bin/python` path. Set `PYTHON_BIN` to another compatible interpreter's absolute path if needed;
+`.venv/bin/python` path. `uv sync` writes only to `UV_PROJECT_ENVIRONMENT` (default checkout `.venv`).
+Set that variable explicitly to provision another virtualenv. `PYTHON_BIN` can select another
+compatible absolute interpreter; its dependencies must already satisfy the lock and the gate preflight.
+The gate never derives a writable sync directory from `PYTHON_BIN`;
 the gate exports the same interpreter as `CLASSROOM_TEST_PYTHON` so the canonical classroom bootstrap
 test exercises its real Python path. Missing tools or failing pytest checks stop the release sequence.
 For focused backend checks, use the disposable runner, for example:
@@ -43,7 +47,7 @@ sh scripts/test-python.sh tests/test_chat_integration.py
 
 CI installs pinned `uv==0.11.16` in an isolated tools environment under `RUNNER_TEMP`, then uses
 `uv sync --frozen --python 3.12 --group dev` to provision a separate locked test environment there.
-It exports absolute `PYTHON_BIN` and `CLASSROOM_TEST_PYTHON` paths and reuses PostgreSQL 16 tools;
+It exports the explicit `UV_PROJECT_ENVIRONMENT` plus absolute `PYTHON_BIN` and `CLASSROOM_TEST_PYTHON` paths and reuses PostgreSQL 16 tools;
 these checks require no production credentials.
 
 CI separately runs and retains both `pnpm audit --prod --audit-level high --json` and the complete
@@ -119,8 +123,11 @@ Confirm every desktop and mobile menu destination is reachable. With the synthet
 registration followed by Dashboard, Requests filters, another user's minimal profile and rejected
 cross-user edit, Connect, persisted room chat, the DM learning state, and matching, analytics, and
 scheduling learning results. A student-module `todo`, syntax/import/runtime error, or invalid output is
-recorded as a visible learning state with retry where applicable; it does not hide the page or become a
-false success. Transport, authorization, and gateway failures are release failures.
+supported as an injected learning state with retry where applicable; the completed shipped modules
+must return successful real results in synthetic happy paths. A real module failure blocks backend
+completion, just as transport, authorization and gateway failures block release. See
+[backend completion](backend-completion.md) for evidence, partial analytics coverage, legacy detail
+inspection and the 50-message DM window.
 
 Check the following at the public origin:
 
@@ -179,9 +186,9 @@ Compute digests from the exact deployed release checkout and built files. `schem
 transport-failure plus its protected evidence reference; do not copy credentials, cookies, raw bodies,
 or database URLs into the record.
 
-Approve the classroom release only after all required routes, sessions, chat persistence, gateway
-boundaries, readiness, headers, and both WebSocket handshakes pass. Keep DM and student matching,
-analytics, or scheduling errors in the exposed assignment-state list.
+Approve the classroom release only after all required routes, real module results, sessions, chat
+persistence, gateway boundaries, readiness, headers and both WebSocket handshakes pass.
+Learning-error UI coverage alone does not satisfy backend completion.
 
 ## Rollback
 
