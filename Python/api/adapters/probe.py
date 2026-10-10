@@ -1,17 +1,15 @@
 """
 Shared helpers for wrapping the student practice modules in Python/.
 
-The student files (analysis.py, reports.py, scheduling.py, get_blocks.py, ...)
-must never be edited, so every endpoint that depends on one re-imports the
-module at request time (same pattern as integration_api).
+Student modules are re-imported at request time so lesson edits take effect
+without restarting the server (the same pattern as integration_api).
 
-Analytics and scheduling endpoints use student_envelope/student_status_envelope:
-the student module is the only source of data (source="python"), and any
-import/call/output failure is reported as an error instead of being replaced
-by adapter-computed numbers.
+Analytics, scheduling, reporting and moderation endpoints use
+student_envelope/student_status_envelope: module output is their only data
+source, and import/call/output failures remain explicit errors.
 
-make_envelope keeps the older fallback behavior and remains only for the
-admin/reports endpoints, which are outside the python-only requirement.
+make_envelope is retained as a legacy compatibility helper; current endpoints
+do not use its adapter fallback behavior.
 """
 
 from __future__ import annotations

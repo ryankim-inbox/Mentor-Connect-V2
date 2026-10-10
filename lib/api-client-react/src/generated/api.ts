@@ -1710,6 +1710,7 @@ export const getMatchRequestUrl = (id: number) => {
 };
 
 /**
+ * Returns 403 when either participant blocks the other.
  * @summary Match/respond to a mentorship request
  */
 export const matchRequest = async (
@@ -1728,6 +1729,7 @@ export const getMatchRequestMutationOptions = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -1778,6 +1780,7 @@ export type MatchRequestMutationResult = NonNullable<
 export type MatchRequestMutationError = ErrorType<
   | Error400Response
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -1794,6 +1797,7 @@ export const useMatchRequest = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response

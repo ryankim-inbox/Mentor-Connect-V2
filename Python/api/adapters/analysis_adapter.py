@@ -1,5 +1,7 @@
 """Validate student analytics output; the student module owns every aggregate."""
 import math
+import re
+from datetime import date, datetime
 
 from api.adapters.probe import probe_student_call, student_envelope, student_status_envelope
 
@@ -31,6 +33,8 @@ def _normalize_weekly(result):
         matches = item.get("matches")
         coverage = item.get("coverage")
         if not isinstance(week, str) or coverage not in ("untracked", "partial", "complete"):
+            return None
+        if date.fromisoformat(week).isoformat() != week:
             return None
         if matches is None:
             if coverage != "untracked":
@@ -102,6 +106,14 @@ def get_popular_time_slots():
 def _normalize_mentor_ranks(result):
     if (not isinstance(result, dict) or not isinstance(result.get("trackingStartedAt"), str)
             or not isinstance(result.get("mentors"), list)):
+        return None
+    timestamp = result["trackingStartedAt"]
+    if not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+        r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-5][0-9])", timestamp
+    ):
+        return None
+    if datetime.fromisoformat(timestamp).utcoffset() is None:
         return None
     mentors = []
     for item in result["mentors"]:

@@ -317,6 +317,16 @@ def match_request(request_id: PositiveInt, request: Request):
             raise HTTPException(status_code=400, detail="Request is not open")
 
         cur.execute(
+            """SELECT 1 FROM blocks
+               WHERE (blocker_id = %s AND blocked_user_id = %s)
+                  OR (blocker_id = %s AND blocked_user_id = %s)
+               LIMIT 1""",
+            (req["author_id"], user_id, user_id, req["author_id"]),
+        )
+        if cur.fetchone():
+            raise HTTPException(status_code=403, detail="Connection is blocked between these users")
+
+        cur.execute(
             "UPDATE requests SET status = 'matched', matched_user_id = %s, updated_at = now() WHERE id = %s RETURNING *",
             (user_id, request_id),
         )

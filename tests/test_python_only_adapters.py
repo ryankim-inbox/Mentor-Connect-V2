@@ -477,3 +477,34 @@ def test_moderation_invalid_output_is_explicit(monkeypatch, rows):
     result = admin_adapter.get_flagged_users()
     assert result["ok"] is False and result["data"] is None
     assert result["student_module"]["status"] == "invalid output"
+
+
+@pytest.mark.parametrize("week", ["not-a-date", "2025-02-29", "2025-13-01", "20250106", "2025-W02-1", "2025-01-06T00:00:00Z"])
+def test_invalid_week_date_is_invalid_output(monkeypatch, week):
+    weekly = [{"week": week, "matches": 0, "coverage": "complete"}]
+    patch_student_module(monkeypatch, fake_module("analysis", receive_weekly_matches=lambda: weekly))
+    envelope = analysis_adapter.get_weekly_matches()
+    assert envelope["success"] is False and envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_result"] == weekly
+    JSONResponse(envelope)
+
+
+@pytest.mark.parametrize("timestamp", ["not-a-date", "2025-02-29T12:00:00Z", "2025-01-01", "2025-01-01T12:00:00", "2025-01-01T12:00:00+25:00", "2025-01-01 12:00:00Z", "20250101T120000Z", "2025-W01-3T12:00:00Z", "2025-01-01T12:00:00+01:60"])
+def test_invalid_tracking_timestamp_is_invalid_output(monkeypatch, timestamp):
+    activity = {"trackingStartedAt": timestamp, "mentors": []}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False and envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_result"] == activity
+    JSONResponse(envelope)
+
+
+@pytest.mark.parametrize("timestamp", ["2024-02-29T12:00:00Z", "2025-01-01T12:00:00.123456+00:00", "2025-01-01T12:00:00-07:00"])
+def test_valid_tracking_timestamps_are_preserved(monkeypatch, timestamp):
+    activity = {"trackingStartedAt": timestamp, "mentors": []}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is True and envelope["data"] == activity
+    JSONResponse(envelope)
