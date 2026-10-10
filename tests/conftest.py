@@ -53,7 +53,7 @@ def backend_database():
 @pytest.fixture
 def backend_server(backend_database, tmp_path_factory):
     @contextmanager
-    def running():
+    def running(app="main:app", *, factory=False):
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
@@ -61,8 +61,8 @@ def backend_server(backend_database, tmp_path_factory):
         log_path = tmp_path_factory.mktemp("chat-server") / "server.log"
         with log_path.open("w+") as log:
             process = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-                 "--port", str(port), "--ws", "websockets-sansio"],
+                [sys.executable, "-m", "uvicorn", app, "--host", "127.0.0.1",
+                 "--port", str(port), "--ws", "websockets-sansio"] + (["--factory"] if factory else []),
                 cwd=ROOT / "Python", stdout=log, stderr=log,
                 env={**os.environ, "DATABASE_URL": backend_database,
                      "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},
