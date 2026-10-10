@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from psycopg2.extras import RealDictCursor
 
 from db import db
-
+from routers.chat import _require_user
 
 router = APIRouter()
 
@@ -284,24 +284,16 @@ def list_mentor_ranks(request: Request) -> list[dict] | dict:
 #   4. Find ``mentor_id`` in those globally ranked rows and return
 #      ``_public_row(row)``; raise HTTP 404 if no row matches.
 #
-# Literal example:
-#   Global counts ``[(1, 4), (2, 2)]`` mean requesting mentor 2 returns rank 2
-#   with badge Platinum. Ranking only mentor 2 would incorrectly return rank 1.
-#
-# Edge cases:
-#   Anonymous access is 401 before ID validation. Zero/negative IDs are 422.
-#   Missing IDs and mentee-only IDs are 404. Zero-match mentors are still found
-#   and return ``rank: null`` and ``badge: null``.
-#
-# Verify from the repository root:
-#   MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
-#     tests/test_mentor_ranks.py -k test_mission_6
+
 # ---------------------------------------------------------------------------
 @router.get("/mentor-ranks/{mentor_id}")
 def get_mentor_rank(mentor_id: int, request: Request) -> dict:
-    """Return one rank, or a safe Mission 6 TODO envelope while unfinished."""
+    """Return one mentor's position in the global ranking."""
     _require_user(request)
     if mentor_id <= 0:
         raise HTTPException(status_code=422, detail="Mentor ID must be positive")
-    # TODO 6.3-6.4: build the global ranking, find the ID, or raise HTTP 404.
-    return _todo(6, "Complete Mission 6 to return one mentor's global rank.")
+    ranked = assign_ranks(sort_mentors(rank_data()))
+    for row in ranked:
+        if row["id"] == mentor_id:
+            return _public_row(row)
+    raise HTTPException(status_code=404, detail="Mentor not found")
