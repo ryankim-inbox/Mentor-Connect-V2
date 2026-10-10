@@ -9,7 +9,9 @@ import type { CreateRequestBodyRole } from "./createRequestBodyRole";
 
 export interface CreateRequestBody {
   districtId: number;
+  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title: string;
+  /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;
   tagIds: number[];
   role: CreateRequestBodyRole;

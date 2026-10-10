@@ -33,6 +33,7 @@ const request = {
   districtName: "Classroom North",
   title: "Calculus study session",
   description: "Practice derivatives together.",
+  descriptionTruncated: false,
   tags: [tag],
   status: "open",
   matchedUserId: null,
@@ -396,4 +397,70 @@ test("failed report fixtures keep the page and retryable learning states visible
   await expect(flaggedSection.getByText("We had a connection problem. Please try again.", { exact: true })).toBeVisible();
   await expect(flaggedSection.getByRole("button", { name: "Retry flagged users" })).toBeVisible();
   expect(unknownRequests).toEqual([]);
+});
+
+test("request browsing pages older and newer, resets filters, and discloses previews", async ({ page }) => {
+  await interceptApi(page);
+  const calls: URL[] = [];
+  const firstPage = Array.from({ length: 50 }, (_, index) => ({
+    ...request, id: 100 - index, title: `Page request ${100 - index}`, descriptionTruncated: index === 0,
+  }));
+  await page.route("**/api/requests?*", async (route) => {
+    const url = new URL(route.request().url());
+    calls.push(url);
+    await route.fulfill({ json: url.searchParams.has("before")
+      ? [{ ...request, id: 50, title: "Older request", descriptionTruncated: false }]
+      : firstPage });
+  });
+  await page.goto("/requests");
+  await expect(page.getByText("50 requests shown", { exact: true })).toBeVisible();
+  await expect(page.getByText("Preview — open request for full description", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Newer requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.get("before")).toBe(`${request.createdAt}|51`);
+  await expect(page.getByRole("button", { name: "Older requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Newer requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Offering mentorship", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.has("before")).toBe(false);
+  expect(calls.at(-1)?.searchParams.get("role")).toBe("mentor");
+  await expect(page.getByRole("button", { name: "Newer requests", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Math", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.has("before")).toBe(false);
+  expect(calls.at(-1)?.searchParams.get("tagId")).toBe("1");
+
+  await page.route("**/api/districts/1", (route) => route.fulfill({ json: district }));
+  await page.route("**/api/stats/district/1", (route) => route.fulfill({ json: {
+    districtId: 1, districtName: district.name, memberCount: 12, mentorCount: 6,
+    menteeCount: 6, openRequests: 51, successfulMatches: 3, topTags: [tag],
+  } }));
+  await page.goto("/districts/1");
+  await expect(page.getByRole("heading", { name: "Open requests (50 shown)", exact: true })).toBeVisible();
+  expect(calls.at(-1)?.searchParams.get("districtId")).toBe("1");
+  await page.getByRole("button", { name: "Older requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Older request", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Newer requests", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
+});
+
+test("request creation validates UTF-8 byte lengths before sending", async ({ page }) => {
+  await interceptApi(page);
+  await page.goto("/requests/new");
+  const title = page.getByPlaceholder("e.g. Need help with AP Calculus BC");
+  const description = page.getByPlaceholder("Describe what you're looking for, your background, and your goals...");
+  await title.fill("é".repeat(100) + "a");
+  await description.fill("Description");
+  await page.getByRole("button", { name: "Post request", exact: true }).click();
+  await expect(page.getByText("Title must contain text and be at most 200 UTF-8 bytes.", { exact: true })).toBeVisible();
+  await title.fill("Valid title");
+  await description.fill("🦉".repeat(1000) + "a");
+  await page.getByRole("button", { name: "Post request", exact: true }).click();
+  await expect(page.getByText("Description must contain text and be at most 4,000 UTF-8 bytes.", { exact: true })).toBeVisible();
 });

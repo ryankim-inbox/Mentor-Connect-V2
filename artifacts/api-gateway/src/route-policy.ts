@@ -104,7 +104,7 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     authentication: "session",
     allowsBody: false,
     requiresJson: false,
-    queryKeys: ["districtId", "role", "status", "tagId"],
+    queryKeys: ["districtId", "role", "status", "tagId", "limit", "before"],
   },
   {
     method: "POST",
@@ -497,6 +497,19 @@ function isPositiveSafeInteger(value: string): boolean {
   return /^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value));
 }
 
+function isRequestCursor(value: string): boolean {
+  if (value.length > 96) return false;
+  const parts = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))\|([1-9][0-9]*)$/.exec(value);
+  if (!parts) return false;
+  const [, date, hour, minute, second, offsetHour, offsetMinute, id] = parts;
+  const calendarDate = new Date(`${date}T00:00:00Z`);
+  return Number(date!.slice(0, 4)) >= 1 &&
+    Number.isFinite(calendarDate.getTime()) && calendarDate.toISOString().slice(0, 10) === date &&
+    Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59 &&
+    (offsetHour === undefined || (Number(offsetHour) <= 23 && Number(offsetMinute) <= 59)) &&
+    isPositiveSafeInteger(id!);
+}
+
 function validateQuery(
   route: PublicRoute,
   searchParams: URLSearchParams,
@@ -513,7 +526,10 @@ function validateQuery(
     if (["districtId", "tagId", "user_a", "user_b"].includes(key)) {
       if (!isPositiveSafeInteger(value)) invalidQuery();
     } else if (key === "limit") {
-      if (!isPositiveSafeInteger(value) || Number(value) > 20) invalidQuery();
+      const maximum = route.template === "/api/requests" ? 50 : 20;
+      if (!isPositiveSafeInteger(value) || Number(value) > maximum) invalidQuery();
+    } else if (key === "before") {
+      if (!isRequestCursor(value)) invalidQuery();
     } else if (key === "role") {
       if (value !== "mentor" && value !== "mentee") invalidQuery();
     } else if (key === "status") {

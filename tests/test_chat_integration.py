@@ -7,24 +7,21 @@ drops its own database using the canonical schema and small data-only fixture.
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing, contextmanager
-from http.cookiejar import CookieJar
+from contextlib import closing
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from http.cookiejar import CookieJar
+from urllib.request import HTTPCookieProcessor, build_opener
 
 import psycopg2
-from psycopg2 import sql
-from psycopg2.extensions import make_dsn
 import pytest
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
+
+from backend_support import api, login
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,94 +36,6 @@ def test_backend_starts_with_declared_dependencies():
         capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture
-def chat_database():
-    admin_dsn = os.environ.get("CHAT_TEST_ADMIN_DSN")
-    if not admin_dsn:
-        pytest.skip("Set CHAT_TEST_ADMIN_DSN to run isolated PostgreSQL integration tests")
-    name = "chat_test_" + uuid.uuid4().hex
-    admin = psycopg2.connect(admin_dsn)
-    admin.autocommit = True
-    with admin.cursor() as cur:
-        cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    dsn = make_dsn(admin_dsn, dbname=name)
-    try:
-        with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
-            cur.execute((ROOT / "database/schema/canonical.sql").read_text())
-            cur.execute((ROOT / "tests/fixtures/chat-canonical.sql").read_text())
-            conn.commit()
-        yield dsn
-    finally:
-        with admin.cursor() as cur:
-            cur.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
-        admin.close()
-
-
-@pytest.fixture
-def chat_server(chat_database, tmp_path_factory):
-    @contextmanager
-    def running():
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        base = f"http://127.0.0.1:{port}"
-        log_path = tmp_path_factory.mktemp("chat-server") / "server.log"
-        with log_path.open("w+") as log:
-            process = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-                 "--port", str(port), "--ws", "websockets-sansio"],
-                cwd=ROOT / "Python", stdout=log, stderr=log,
-                env={**os.environ, "DATABASE_URL": chat_database,
-                     "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},
-            )
-            try:
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline and process.poll() is None:
-                    try:
-                        if api(build_opener(), base, "GET", "/api/healthz")[0] == 200:
-                            break
-                    except URLError:
-                        time.sleep(0.05)
-                else:
-                    pytest.fail("Chat server failed to start:\n" + log_path.read_text())
-                yield base
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
-    return running
-
-
-def api(client, base, method, path, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    request = Request(base + path, data=data, method=method,
-                      headers={"Content-Type": "application/json"})
-    try:
-        response = client.open(request, timeout=3)
-    except HTTPError as exc:
-        response = exc
-    with response:
-        payload = response.read().decode()
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError:
-            pass
-        return response.status, payload
-
-
-def login(base, email):
-    jar = CookieJar()
-    client = build_opener(HTTPCookieProcessor(jar))
-    status, result = api(client, base, "POST", "/api/auth/login",
-                         {"email": email, "password": "Password123!"})
-    assert status == 200, result
-    cookie = "; ".join(f"{item.name}={item.value}" for item in jar)
-    return client, cookie
 
 
 def test_districts_are_available_before_login(chat_server):
