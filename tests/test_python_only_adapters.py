@@ -358,3 +358,24 @@ def test_analytics_and_scheduling_adapters_have_no_fallback_paths():
         assert "fallback_data" not in source
     # The analytics adapter must not read the product database at all.
     assert "from db import" not in (adapters_dir / "analysis_adapter.py").read_text()
+
+
+@pytest.mark.parametrize("slots", [[], [
+    {"slot": "Mon 17:00", "count": 2}, {"slot": "Wed 19:00", "count": 2},
+]])
+def test_scheduling_slot_rows_reach_both_endpoints(monkeypatch, slots):
+    patch_student_module(monkeypatch, fake_module("scheduling", receive_time_data=lambda: slots))
+    for endpoint, expected in [(scheduling_adapter.get_overview, {"topSlots": slots}),
+                               (analysis_adapter.get_popular_time_slots, slots)]:
+        envelope = endpoint()
+        assert envelope["success"] is True
+        assert envelope["data"] == expected
+
+
+@pytest.mark.parametrize("overlap", [[], ["Mon 17:00", "Wed 19:00"]])
+def test_scheduling_suggestions_preserve_users_and_overlap(monkeypatch, overlap):
+    patch_users(monkeypatch, USER_A, USER_B)
+    patch_student_module(monkeypatch, fake_module("scheduling", time_dict=lambda student, teacher: overlap))
+    envelope = scheduling_adapter.suggest_times(1, 2)
+    assert envelope["success"] is True
+    assert envelope["data"] == {"userA": USER_A, "userB": USER_B, "overlap": overlap}

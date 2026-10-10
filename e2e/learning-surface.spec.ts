@@ -481,3 +481,37 @@ test("analytics discloses observed coverage and creation-to-match duration", asy
   await expect(page.getByText(/avg reply|Mentor response rates|100%/)).toHaveCount(0);
   expect(unknownRequests).toEqual([]);
 });
+
+
+test("scheduling shows weekly availability and successful overlapping or disjoint suggestions", async ({ page }) => {
+  const unknownRequests = await interceptApi(page);
+  const calls: URL[] = [];
+  await page.route("**/api/scheduling/suggest?*", async route => {
+    const url = new URL(route.request().url());
+    calls.push(url);
+    const disjoint = url.searchParams.get("user_b") === "3";
+    await route.fulfill({ json: pythonEnvelope("scheduling", {
+      userA: { id: 1, name: "Classroom Mentor", role: "mentor", available_times: ["Mon 17:00", "Wed 19:00"] },
+      userB: { id: disjoint ? 3 : 2, name: "Learning Partner", role: "mentee", available_times: disjoint ? ["Fri 12:00"] : ["Wed 19:00", "Mon 17:00"] },
+      overlap: disjoint ? [] : ["Mon 17:00", "Wed 19:00"],
+    }) });
+  });
+  await page.goto("/scheduling");
+  const overview = page.locator("section").filter({ has: page.getByRole("heading", { name: "Availability overview", exact: true }) });
+  await expect(overview.getByText("Mon 17:00", { exact: true })).toBeVisible();
+  await expect(overview.getByText("2", { exact: true })).toBeVisible();
+  await page.getByLabel("User A id").fill("1");
+  await page.getByLabel("User B id").fill("2");
+  await page.getByRole("button", { name: "Suggest times", exact: true }).click();
+  await expect(page.getByText("Overlapping times (2)", { exact: true })).toBeVisible();
+  const overlap = page.locator("div.rounded-xl").filter({ has: page.getByText("Overlapping times (2)", { exact: true }) });
+  await expect(overlap.getByText("Mon 17:00", { exact: true })).toBeVisible();
+  await expect(overlap.getByText("Wed 19:00", { exact: true })).toBeVisible();
+  await page.getByLabel("User B id").fill("3");
+  await page.getByRole("button", { name: "Suggest times", exact: true }).click();
+  await expect(page.getByText("Overlapping times (0)", { exact: true })).toBeVisible();
+  await expect(page.getByText("No overlapping availability found.", { exact: true })).toBeVisible();
+  expect(calls.map(url => [url.searchParams.get("user_a"), url.searchParams.get("user_b")])).toEqual([["1", "2"], ["1", "3"]]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(unknownRequests).toEqual([]);
+});
