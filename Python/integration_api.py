@@ -185,7 +185,7 @@ def get_matching_result(question_id: int, limit: int = 5) -> dict[str, Any]:
         safe_result.setdefault("available_functions", available)
         safe_result.setdefault("message", "Matches returned by find_matches.py.")
         safe_result["is_todo"] = False
-        safe_result["is_real"] = True
+        safe_result.setdefault("is_real", True)
         return safe_result
 
     if isinstance(result, list):
