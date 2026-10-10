@@ -86,3 +86,63 @@ def test_connect_rollback_removes_event_and_state(backend_database, monkeypatch)
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
         cur.execute("SELECT status, matched_user_id, updated_at FROM requests WHERE id = %s", (request_id,))
         assert cur.fetchone() == ("open", None, updated_at)
+
+
+def request_state(dsn, request_id):
+    with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
+        cur.execute("SELECT status, matched_user_id, updated_at FROM requests WHERE id = %s", (request_id,))
+        return cur.fetchone()
+
+
+@pytest.mark.parametrize("role,author_email,matcher_email,author_id,matcher_id", [
+    ("mentee", "student001@test.edu", "santiago.khan.0502@test.edu", 1, 502),
+    ("mentor", "santiago.khan.0502@test.edu", "student001@test.edu", 502, 1),
+])
+@pytest.mark.parametrize("author_blocks", [True, False])
+def test_gateway_connect_rejects_either_block_direction_until_unblocked(
+    backend_database, gateway_server, role, author_email, matcher_email, author_id, matcher_id, author_blocks
+):
+    base = gateway_server
+    author, _ = login(base, author_email)
+    matcher, _ = login(base, matcher_email)
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM blocks")
+        conn.commit()
+    blocker, blocked_id = (author, matcher_id) if author_blocks else (matcher, author_id)
+    assert api(blocker, base, "POST", "/api/blocks", {"blockedUserId": blocked_id})[0] == 201
+    status, created = api(author, base, "POST", "/api/requests", {
+        "districtId": 1, "title": "Blocked Connect", "description": "Keep this open", "role": role,
+    })
+    assert status == 201
+    path = f'/api/requests/{created["id"]}/match'
+    before = request_state(backend_database, created["id"])
+    before_events = events(backend_database)
+    status, response = api(matcher, base, "POST", path)
+    assert (status, response) == (403, {"error": "forbidden"})
+    assert request_state(backend_database, created["id"]) == before
+    assert events(backend_database) == before_events
+    assert api(blocker, base, "DELETE", f"/api/blocks/{blocked_id}")[0] == 204
+    status, matched = api(matcher, base, "POST", path)
+    assert status == 200 and matched["matchedUserId"] == matcher_id
+    assert request_state(backend_database, created["id"])[:2] == ("matched", matcher_id)
+    assert len(events(backend_database)) == len(before_events) + 1
+    assert events(backend_database)[-1][:3] == ("matched", created["id"], 502)
+
+
+def test_gateway_connect_block_lookup_failure_leaves_request_and_events_unchanged(backend_database, gateway_server):
+    base = gateway_server
+    author, _ = login(base, "student001@test.edu")
+    matcher, _ = login(base, "mentor501@test.edu")
+    status, created = api(author, base, "POST", "/api/requests", {
+        "districtId": 1, "title": "Unavailable blocks", "description": "Fail closed", "role": "mentee",
+    })
+    assert status == 201
+    before = request_state(backend_database, created["id"])
+    before_events = events(backend_database)
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("DROP TABLE blocks")
+        conn.commit()
+    status, response = api(matcher, base, "POST", f'/api/requests/{created["id"]}/match')
+    assert (status, response) == (500, {"error": "backend_error"})
+    assert request_state(backend_database, created["id"]) == before
+    assert events(backend_database) == before_events

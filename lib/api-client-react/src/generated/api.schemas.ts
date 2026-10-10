@@ -715,6 +715,9 @@ export type Error503Response = ErrorResponse;
 export type Error504Response = ErrorResponse;
 
 export type ListDistrictsParams = {
+  /**
+   * Filter by district type; omit to return all supported districts.
+   */
   type?: ListDistrictsType;
   search?: string;
 };
@@ -724,7 +727,7 @@ export type ListDistrictsType =
 
 export const ListDistrictsType = {
   high_school: "high_school",
-  all: "all",
+  unified: "unified",
 } as const;
 
 export type ListRequestsParams = {

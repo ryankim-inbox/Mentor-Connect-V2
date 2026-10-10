@@ -50,3 +50,18 @@ def test_district_rejects_unsupported_type(chat_server):
         status, _ = api(build_opener(), base, "GET", "/api/districts?type=elementary")
 
     assert status == 422
+
+
+def test_gateway_unified_search_and_omitted_type(backend_database, gateway_server):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO districts (name, county, type) VALUES (%s, %s, %s) RETURNING id",
+                    ("Fremont Unified School District", "Santa Clara", "unified"))
+        unified_id = cur.fetchone()[0]
+        conn.commit()
+    client = build_opener()
+    status, rows = api(client, gateway_server, "GET", "/api/districts?type=unified&search=Fremont")
+    assert status == 200
+    assert [(row["id"], row["type"]) for row in rows] == [(unified_id, "unified")]
+    status, rows = api(client, gateway_server, "GET", "/api/districts")
+    assert status == 200 and {row["id"] for row in rows} == {1, 2, unified_id}
+    assert api(client, gateway_server, "GET", "/api/districts?type=all")[0] == 400

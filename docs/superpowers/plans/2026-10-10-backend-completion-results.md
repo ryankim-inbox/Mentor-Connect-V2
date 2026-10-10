@@ -129,3 +129,76 @@ this record does not declare them resolved:
   Both existing high/critical audit policies remain unchanged, with no new exceptions.
 - Independent final whole-branch review is pending. No push, merge or deployment
   was performed, and no populated database or primary checkout was touched.
+
+## Final review remediation (2026-10-10)
+
+The whole-branch review of `6fc77162` required two Important fixes and retained
+one Minor date-validation issue. This section supersedes the earlier pending
+whole-branch-review statement; the scoped follow-up review remains pending.
+The historical runs and failed-attempt evidence above are unchanged.
+
+- Important 1: Connect checks both block directions inside its existing locked
+  transaction before updating the request or recording an event. Rejection is
+  403, and a failed block read aborts the transaction. The gateway retains its
+  private-error projection. Real gateway tests cover both request roles and
+  block directions, unchanged state/timestamps/events, unblock then success,
+  and a missing block table. Existing single-winner, rollback and rematch
+  regressions remain in the verification scope. OpenAPI now documents 403.
+- Important 2: the OpenAPI district query enum is `high_school|unified`; omitted
+  type returns all supported districts and literal `all` remains invalid.
+  All clients were regenerated. Permanent tests compare generated Zod and
+  gateway validation, and query unified districts plus search through the real
+  gateway and disposable database.
+- Minor 3: analytics adapters validate canonical calendar dates and aware ISO
+  timestamps with the standard library. Invalid dates, naive timestamps,
+  malformed syntax and invalid offsets produce the existing invalid-output
+  envelope. Valid emitted timestamps, empty arrays, nulls, zero values and
+  unexpected-exception diagnostics retain their behavior.
+- Header cleanup: the probe module now describes editable lessons and real
+  reporting/moderation output; its compatibility helper was not refactored.
+
+> Final review: Ruling: Enforce either-direction blocks inside Connect before any state/event write and return controlled403 — a block must prevent direct mentorship connection as well as recommendations; the final review demonstrated persisted blocked matches — cost if wrong: previously allowed blocked-pair Connect calls now fail until unblocked; valid unblocked calls stay unchanged.
+
+The existing Task 16 provisional-commit ruling also applies to this fix wave.
+Tested changes were committed as `9d060966`, then `pnpm verify:release` ran on
+that clean code tree and exited 0. The subsequent amendment changes only this
+non-Python evidence file. Scoped re-review remains pending; this local gate
+is not a release, merge or deployment approval.
+
+RED evidence is retained in the ignored plan workspace
+`.superpowers/sdd/2026-10-10-backend-completion/`:
+
+- `final-fix-red-python.log`: first focused attempt, 16 failed/62 passed. Four
+  Connect cases initially failed at login because the test used an incorrect
+  synthetic email; the actual canonical fixture email was then used.
+- `final-fix-red-connect.log`: corrected Connect cases, 5 failed with actual
+  200 instead of expected 403 (four blocked cases) or 500 (failed block read).
+- `final-fix-red-contract.log`: generated/gateway parity, 2 failed/10 passed;
+  generated schema rejected unified and accepted all.
+- `final-fix-red-dates.log`: 14 malformed date/time cases failed, 3 valid cases
+  passed. `final-fix-red-offset.log`: the initial date fix still accepted
+  `+01:60` (1 failed/8 passed); timestamp syntax now rejects that normalization.
+- `final-fix-generation.log`: initial generation failed on a mistaken response
+  schema reference; it was replaced with the existing shared Error403 response.
+  `final-fix-generation-green.log` records successful regeneration.
+
+Focused GREEN verification (same Node/Python/PostgreSQL versions as above):
+
+| Exact command | Result and log |
+| --- | --- |
+| `sh scripts/test-python.sh tests/test_request_events.py tests/test_python_only_adapters.py tests/test_district_filters.py tests/test_analysis.py tests/test_chat_integration.py tests/test_chat_missions_1_6.py tests/test_dm_history.py tests/test_backend_input_validation.py tests/test_backend_completion.py -q` | Exit 0; 184 passed, zero skipped, including real event/chat/Connect/adapter/district regressions and active-source compilation; `final-fix-green-focused-python.log`. |
+| `pnpm test:gateway` | Exit 0; 114 gateway tests plus 8 shield tests passed, zero skipped; `final-fix-green-gateway.log`. |
+| `pnpm api:contract-test` | Exit 0; all 48 Python/OpenAPI/gateway REST operations and 2 WS operations agree; `final-fix-green-contract.log`. |
+| `pnpm build:release` | Exit 0; typechecks and both release bundles passed; existing tooltip sourcemap diagnostic retained; `final-fix-green-build.log`. |
+| `pnpm api:generate` (corrected schema) | Exit 0; React and Zod generation succeeded; `final-fix-generation-green.log`. |
+| `git diff --check` | Exit 0; no whitespace errors. |
+| `sh scripts/test-python.sh` (final fixes, before commit) | Exit 0; 348 passed, zero skipped; `final-fix-green-full-python.log`. |
+| `pnpm verify:release` (final fixes on clean `9d060966`) | Exit 0; runtime 8, freeze self-tests 8, full Python 348, student ranks 45, gateway 114+8 shield, mockup 1, canonical DB 58 plus four operator checks, frontend unit 3, smoke 4 and browser 63 all passed. Zero required skips. Locked installation, migration/post-merge checks, 48 REST/2 WS contract agreement, 154 boundary checks, secret checks and reproducible API generation also passed; `final-fix-verify-release.log`. Historical branch freeze checks retained their original branch scope. |
+
+Final-review triage retains the tooltip sourcemap and NO_COLOR/FORCE_COLOR
+notices as nonblocking diagnostics and the legacy-fixture warning as intentional
+protection. No warnings or release policies were suppressed. The dependency-audit
+CI result remains unknown; deployment, populated databases, multiworker WS,
+historical backfill, automated suspension, full DM pagination, public ranks and
+legacy backend activation remain outside scope. No push, merge or deployment
+was performed. Scoped re-review remains pending the controller's verdict.

@@ -277,11 +277,12 @@ paths:
       parameters:
         - name: type
           in: query
+          description: Filter by district type; omit to return all supported districts.
           schema:
             type: string
             enum:
               - high_school
-              - all
+              - unified
         - name: search
           in: query
           schema:
@@ -577,6 +578,7 @@ paths:
       tags:
         - requests
       summary: Match/respond to a mentorship request
+      description: Returns 403 when either participant blocks the other.
       parameters:
         - name: id
           in: path
@@ -600,6 +602,8 @@ paths:
           $ref: "#/components/responses/Error422"
         "401":
           $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
         "404":
           $ref: "#/components/responses/Error404"
         "429":

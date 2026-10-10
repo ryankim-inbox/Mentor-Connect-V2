@@ -177,7 +177,12 @@ export const UpdateUserResponse = zod
  * @summary List all school districts
  */
 export const ListDistrictsQueryParams = zod.object({
-  type: zod.enum(["high_school", "all"]).optional(),
+  type: zod
+    .enum(["high_school", "unified"])
+    .optional()
+    .describe(
+      "Filter by district type; omit to return all supported districts.",
+    ),
   search: zod.coerce.string().optional(),
 });
 
@@ -464,6 +469,7 @@ export const DeleteRequestParams = zod.object({
 export const DeleteRequestResponse = zod.void();
 
 /**
+ * Returns 403 when either participant blocks the other.
  * @summary Match/respond to a mentorship request
  */
 

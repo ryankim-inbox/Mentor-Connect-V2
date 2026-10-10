@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ListDistrictsQueryParams } from "../../../lib/api-zod/src/generated/api.js";
+
 import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
 
 test("registers the complete 48-operation REST contract", () => {
@@ -176,3 +178,13 @@ test("request paging accepts 50 while matching retains its separate 20 limit", (
   for (const path of ["/api/matches/1?limit=21", "/api/practice/matching/1?limit=21"])
     assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/);
 });
+
+for (const [type, accepted] of [[undefined, true], ["high_school", true], ["unified", true], ["all", false], ["elementary", false]] as const) {
+  test(`generated and gateway district filters agree for ${type ?? "omitted"}`, () => {
+    const query = type === undefined ? {} : { type };
+    assert.equal(ListDistrictsQueryParams.safeParse(query).success, accepted);
+    const path = `/api/districts?${new URLSearchParams(query)}`;
+    if (accepted) assert.ok(resolvePublicRoute("GET", path));
+    else assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/);
+  });
+}
