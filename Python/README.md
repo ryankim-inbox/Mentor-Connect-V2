@@ -119,6 +119,30 @@ Student-code integrations:
 | `GET /api/scheduling/{status,overview}`, `GET /api/scheduling/suggest?user_a=&user_b=` | `scheduling.py` | `/scheduling` |
 | `GET /api/admin/flagged-users` | `get_blocks.py` | `/admin/reports` |
 
+### Location lesson
+
+`locations.location_data(student, mentor, question)` compares trimmed,
+case-folded location labels and returns a sorted, deduplicated intersection.
+The practice form posts the following to `/api/practice/locations/test`:
+
+```json
+{
+  "student": {"id": 1, "locations": ["San Jose"]},
+  "mentor": {"id": 2, "locations": ["San Jose", "Cupertino"]},
+  "question": {"id": 1, "subject": "math"}
+}
+```
+
+The existing success envelope identifies `function_called: "location_data"`
+and contains `result: {"compatible": true, "overlap": ["san jose"]}`.
+Disjoint or missing labels return `{"compatible": false, "overlap": []}`
+with `success: true`. Each person accepts `locations: list[str]` or a single
+`location: str`; the list takes precedence, including an empty list. Omit
+missing fields or use `[]`. Supplied nulls, incorrect types, and blank labels
+raise `ValueError`, surfaced by the existing failure envelope. All three
+arguments must be objects; question content is unused. This lesson makes no
+geographic inference and performs no database or network calls.
+
 ## The adapter contract (`source` field)
 
 Adapter endpoints never fail just because a student file is broken. Each
