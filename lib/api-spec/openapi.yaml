@@ -1509,14 +1509,14 @@ paths:
       operationId: getWeeklyMatches
       tags:
         - analytics
-      summary: getWeeklyMatches
+      summary: Eight UTC calendar weeks of observed matches, ending with the current week-to-date
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/WeeklyMatchesEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -1537,14 +1537,14 @@ paths:
       operationId: getPopularSubjects
       tags:
         - analytics
-      summary: getPopularSubjects
+      summary: Top ten tags by current request demand, ordered by count descending then tag ID
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/PopularSubjectsEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -1593,14 +1593,15 @@ paths:
       operationId: getMentorResponseRates
       tags:
         - analytics
-      summary: getMentorResponseRates
+      summary: Mentor matching activity observed after tracking started
+      description: Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
       responses:
         "200":
           description: Python learning result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/MentorActivityEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -2426,6 +2427,91 @@ components:
         - source
         - student_module
         - data
+    WeeklyMatch:
+      type: object
+      required: [week, matches, coverage]
+      properties:
+        week:
+          type: string
+          format: date
+          description: Monday of the UTC calendar week; the final row is week-to-date.
+        matches:
+          type: [integer, "null"]
+          minimum: 0
+          description: Observed match count; null means the entire week was untracked.
+        coverage:
+          type: string
+          enum: [untracked, partial, complete]
+          description: Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.
+    SubjectDemand:
+      type: object
+      required: [subject, requests, color]
+      properties:
+        subject:
+          type: string
+        requests:
+          type: integer
+          minimum: 0
+        color:
+          type: string
+    MentorActivity:
+      type: object
+      required: [trackingStartedAt, mentors]
+      properties:
+        trackingStartedAt:
+          type: string
+          format: date-time
+        mentors:
+          type: array
+          description: Current mentor/both users, including zero matches, ordered by totalMatches descending then ID.
+          items:
+            $ref: "#/components/schemas/MentorActivityRow"
+    MentorActivityRow:
+      type: object
+      required: [mentorId, mentorName, totalMatches, avgTimeToMatchHours]
+      properties:
+        mentorId:
+          type: integer
+        mentorName:
+          type: string
+        totalMatches:
+          type: integer
+          minimum: 0
+        avgTimeToMatchHours:
+          type: [number, "null"]
+          minimum: 0
+          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.
+    WeeklyMatchesEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/WeeklyMatch"
+                - type: "null"
+    PopularSubjectsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/SubjectDemand"
+                - type: "null"
+    MentorActivityEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - $ref: "#/components/schemas/MentorActivity"
+                - type: "null"
     PracticeStatus:
       type: object
       properties:

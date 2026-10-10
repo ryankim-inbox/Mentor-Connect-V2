@@ -48,8 +48,10 @@ import type {
   LoginBody,
   MatchRequest,
   MatchingResult,
+  MentorActivityEnvelope,
   MentorshipRequest,
   MessageResponse,
+  PopularSubjectsEnvelope,
   PracticeStatus,
   ProfileSummary,
   PyEnvelope,
@@ -63,6 +65,7 @@ import type {
   UpdateRequestBody,
   UpdateUserBody,
   User,
+  WeeklyMatchesEnvelope,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -4506,12 +4509,12 @@ export const getGetWeeklyMatchesUrl = () => {
 };
 
 /**
- * @summary getWeeklyMatches
+ * @summary Eight UTC calendar weeks of observed matches, ending with the current week-to-date
  */
 export const getWeeklyMatches = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetWeeklyMatchesUrl(), {
+): Promise<WeeklyMatchesEnvelope> => {
+  return customFetch<WeeklyMatchesEnvelope>(getGetWeeklyMatchesUrl(), {
     ...options,
     method: "GET",
   });
@@ -4565,7 +4568,7 @@ export type GetWeeklyMatchesQueryError = ErrorType<
 >;
 
 /**
- * @summary getWeeklyMatches
+ * @summary Eight UTC calendar weeks of observed matches, ending with the current week-to-date
  */
 
 export function useGetWeeklyMatches<
@@ -4599,12 +4602,12 @@ export const getGetPopularSubjectsUrl = () => {
 };
 
 /**
- * @summary getPopularSubjects
+ * @summary Top ten tags by current request demand, ordered by count descending then tag ID
  */
 export const getPopularSubjects = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetPopularSubjectsUrl(), {
+): Promise<PopularSubjectsEnvelope> => {
+  return customFetch<PopularSubjectsEnvelope>(getGetPopularSubjectsUrl(), {
     ...options,
     method: "GET",
   });
@@ -4658,7 +4661,7 @@ export type GetPopularSubjectsQueryError = ErrorType<
 >;
 
 /**
- * @summary getPopularSubjects
+ * @summary Top ten tags by current request demand, ordered by count descending then tag ID
  */
 
 export function useGetPopularSubjects<
@@ -4785,12 +4788,13 @@ export const getGetMentorResponseRatesUrl = () => {
 };
 
 /**
- * @summary getMentorResponseRates
+ * Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
+ * @summary Mentor matching activity observed after tracking started
  */
 export const getMentorResponseRates = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetMentorResponseRatesUrl(), {
+): Promise<MentorActivityEnvelope> => {
+  return customFetch<MentorActivityEnvelope>(getGetMentorResponseRatesUrl(), {
     ...options,
     method: "GET",
   });
@@ -4845,7 +4849,7 @@ export type GetMentorResponseRatesQueryError = ErrorType<
 >;
 
 /**
- * @summary getMentorResponseRates
+ * @summary Mentor matching activity observed after tracking started
  */
 
 export function useGetMentorResponseRates<

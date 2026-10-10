@@ -466,6 +466,69 @@ export interface PyEnvelope {
   data: unknown;
 }
 
+/**
+ * Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.
+ */
+export type WeeklyMatchCoverage =
+  (typeof WeeklyMatchCoverage)[keyof typeof WeeklyMatchCoverage];
+
+export const WeeklyMatchCoverage = {
+  untracked: "untracked",
+  partial: "partial",
+  complete: "complete",
+} as const;
+
+export interface WeeklyMatch {
+  /** Monday of the UTC calendar week; the final row is week-to-date. */
+  week: string;
+  /**
+   * Observed match count; null means the entire week was untracked.
+   * @minimum 0
+   * @nullable
+   */
+  matches: number | null;
+  /** Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight. */
+  coverage: WeeklyMatchCoverage;
+}
+
+export interface SubjectDemand {
+  subject: string;
+  /** @minimum 0 */
+  requests: number;
+  color: string;
+}
+
+export interface MentorActivityRow {
+  mentorId: number;
+  mentorName: string;
+  /** @minimum 0 */
+  totalMatches: number;
+  /**
+   * Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.
+   * @minimum 0
+   * @nullable
+   */
+  avgTimeToMatchHours: number | null;
+}
+
+export interface MentorActivity {
+  trackingStartedAt: string;
+  /** Current mentor/both users, including zero matches, ordered by totalMatches descending then ID. */
+  mentors: MentorActivityRow[];
+}
+
+export type WeeklyMatchesEnvelope = PyEnvelope & {
+  data?: WeeklyMatch[] | null;
+};
+
+export type PopularSubjectsEnvelope = PyEnvelope & {
+  data?: SubjectDemand[] | null;
+};
+
+export type MentorActivityEnvelope = PyEnvelope & {
+  data?: MentorActivity | null;
+};
+
 export interface PracticeStatus {
   success: boolean;
   /** @minLength 1 */

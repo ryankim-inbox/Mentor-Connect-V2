@@ -157,11 +157,11 @@ def test_unusable_student_output_is_an_error_not_fallback(monkeypatch):
 def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
     patch_student_module(
         monkeypatch,
-        fake_module("analysis", receive_mentor_ranks=lambda: [
-            {"mentorId": mentor_id, "mentorName": "Ada", "debug": {
+        fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
+            {"mentorId": mentor_id, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None, "debug": {
                 "values": (float("inf"), [float("-inf"), {"value": float("nan")}]),
             }}
-        ]),
+        ]}),
     )
     envelope = analysis_adapter.get_mentor_response_rates()
     assert envelope["success"] is False
@@ -173,7 +173,7 @@ def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
     payload = json.loads(response.body)
     assert payload["success"] is False
     assert payload["data"] is None
-    raw_row = payload["student_result"][0]
+    raw_row = payload["student_result"]["mentors"][0]
     assert raw_row["debug"] == {"values": ["inf", ["-inf", {"value": "nan"}]]}
     if isinstance(mentor_id, float) and not math.isfinite(mentor_id):
         assert raw_row["mentorId"] == repr(mentor_id)
@@ -193,28 +193,52 @@ def test_zero_subject_count_is_preserved(monkeypatch):
 
 
 def test_zero_mentor_values_are_preserved(monkeypatch):
-    patch_student_module(
-        monkeypatch,
-        fake_module("analysis", receive_mentor_ranks=lambda: [{
-            "mentorId": 0, "id": 9, "mentorName": "Ada",
-            "responseRate": 0, "response_rate": 99,
-            "totalRequests": 0, "total_requests": 8,
-            "avgResponseHours": 0, "avg_response_hours": 4,
-        }]),
-    )
+    activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [{
+        "mentorId": 0, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": 0,
+    }]}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
     envelope = analysis_adapter.get_mentor_response_rates()
     assert envelope["success"] is True
-    assert envelope["data"] == [{
-        "mentorId": 0, "mentorName": "Ada", "responseRate": 0.0,
-        "totalRequests": 0, "avgResponseHours": 0.0,
-    }]
+    assert envelope["data"] == activity
+
+
+def test_empty_activity_and_null_duration_are_successful(monkeypatch):
+    for mentors in [[], [{"mentorId": 1, "mentorName": "Ada", "totalMatches": 2,
+                          "avgTimeToMatchHours": None}]]:
+        activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": mentors}
+        patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+        envelope = analysis_adapter.get_mentor_response_rates()
+        assert envelope["success"] is True
+        assert envelope["data"] == activity
+
+
+def test_weekly_coverage_and_null_gaps_are_preserved(monkeypatch):
+    weekly = [{"week": "2024-12-23", "matches": None, "coverage": "untracked"},
+              {"week": "2024-12-30", "matches": 0, "coverage": "partial"},
+              {"week": "2025-01-06", "matches": 0, "coverage": "complete"}]
+    patch_student_module(monkeypatch, fake_module("analysis", receive_weekly_matches=lambda: weekly))
+    envelope = analysis_adapter.get_weekly_matches()
+    assert envelope["success"] is True
+    assert envelope["data"] == weekly
+
+
+@pytest.mark.parametrize("field,value", [("totalMatches", float("inf")),
+    ("avgTimeToMatchHours", float("nan")), ("avgTimeToMatchHours", -1)])
+def test_invalid_activity_numbers_fail_without_fallback(monkeypatch, field, value):
+    row = {"mentorId": 1, "mentorName": "Ada", "totalMatches": 2, "avgTimeToMatchHours": 3}
+    row[field] = value
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: {
+        "trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [row]}))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False
+    assert envelope["data"] is None
+    JSONResponse(envelope)
 
 
 @pytest.mark.parametrize("function_name,endpoint", [
     ("receive_weekly_matches", analysis_adapter.get_weekly_matches),
     ("receive_most_popular_subject", analysis_adapter.get_popular_subjects),
     ("receive_time_data", analysis_adapter.get_popular_time_slots),
-    ("receive_mentor_ranks", analysis_adapter.get_mentor_response_rates),
 ])
 def test_empty_analytics_arrays_are_successful(monkeypatch, function_name, endpoint):
     patch_student_module(monkeypatch, fake_module("analysis", **{function_name: lambda: []}))
@@ -230,9 +254,9 @@ def test_unexpected_normalizer_failure_remains_visible(monkeypatch):
 
     patch_student_module(
         monkeypatch,
-        fake_module("analysis", receive_mentor_ranks=lambda: [
-            {"mentorId": BrokenId(), "mentorName": "Ada"}
-        ]),
+        fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
+            {"mentorId": BrokenId(), "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None}
+        ]}),
     )
     with pytest.raises(RuntimeError, match="unexpected normalization failure"):
         analysis_adapter.get_mentor_response_rates()

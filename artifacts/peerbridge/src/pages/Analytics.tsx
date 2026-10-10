@@ -1,31 +1,13 @@
 import { Link } from "wouter";
+import type { WeeklyMatch, SubjectDemand, MentorActivity } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 
-interface WeeklyMatch {
-  week: string;
-  matches: number;
-}
-
-interface SubjectDemand {
-  subject: string;
-  requests: number;
-  color: string;
-}
-
 interface TimeSlotDemand {
   slot: string;
   count: number;
-}
-
-interface MentorResponseRate {
-  mentorId: number;
-  mentorName: string;
-  responseRate: number;
-  totalRequests: number;
-  avgResponseHours: number;
 }
 
 function pythonData<T>(envelope: PyEnvelope<T[]> | undefined): T[] {
@@ -36,22 +18,24 @@ function pythonData<T>(envelope: PyEnvelope<T[]> | undefined): T[] {
 }
 
 function MiniBarChart({ data }: { data: WeeklyMatch[] }) {
-  const max = Math.max(...data.map((d) => d.matches), 1);
+  const max = Math.max(...data.map((d) => d.matches ?? 0), 1);
   return (
     <div className="flex items-end gap-3 h-40">
-      {data.map((d) => {
-        const heightPct = (d.matches / max) * 100;
+      {data.map((d, index) => {
+        const heightPct = ((d.matches ?? 0) / max) * 100;
         return (
-          <div key={d.week} className="flex-1 flex flex-col items-center gap-2">
+          <div key={d.week} className="flex-1 h-full flex flex-col items-center gap-2">
             <div className="w-full flex-1 flex items-end">
               <div
                 className="w-full bg-gradient-to-t from-primary to-primary/60 rounded-t-md transition-all"
                 style={{ height: `${heightPct}%` }}
-                title={`${d.matches} matches`}
+                title={d.matches === null ? "Untracked" : `${d.matches} observed matches (${d.coverage})`}
               />
             </div>
             <span className="text-[10px] text-muted-foreground">{d.week}</span>
-            <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches}</span>
+            {index === data.length - 1 && <span className="text-[10px] text-muted-foreground">Week-to-date</span>}
+            <span className="text-xs font-semibold text-foreground -mt-1.5">{d.matches ?? "—"}</span>
+            {d.coverage !== "complete" && <span className="text-[10px] text-muted-foreground">{d.coverage === "untracked" ? "Untracked" : "Partial"}</span>}
           </div>
         );
       })}
@@ -171,7 +155,7 @@ export default function Analytics() {
   });
   const mentorsQuery = useQuery({
     queryKey: ["analytics", "mentor-response-rates"],
-    queryFn: ({ signal }) => getPythonApi<MentorResponseRate[]>("/api/analytics/mentor-response-rates", { signal }),
+    queryFn: ({ signal }) => getPythonApi<MentorActivity>("/api/analytics/mentor-response-rates", { signal }),
     enabled: !!user,
   });
 
@@ -189,7 +173,7 @@ export default function Analytics() {
   }
 
   const weekly = pythonData<WeeklyMatch>(weeklyQuery.data).filter(
-    (d) => typeof d?.week === "string" && typeof d?.matches === "number",
+    (d) => typeof d?.week === "string" && (d?.matches === null || typeof d?.matches === "number"),
   );
   const subjects = pythonData<SubjectDemand>(subjectsQuery.data).filter(
     (s) => typeof s?.subject === "string" && typeof s?.requests === "number",
@@ -197,9 +181,8 @@ export default function Analytics() {
   const slots = pythonData<TimeSlotDemand>(slotsQuery.data).filter(
     (t) => typeof t?.slot === "string" && typeof t?.count === "number",
   );
-  const mentors = pythonData<MentorResponseRate>(mentorsQuery.data).filter(
-    (m) => typeof m?.mentorName === "string",
-  );
+  const activity = (mentorsQuery.data?.success ?? mentorsQuery.data?.ok) ? mentorsQuery.data.data : null;
+  const mentors = activity?.mentors ?? [];
 
   const maxSubject = Math.max(...subjects.map((s) => s.requests), 1);
   const maxSlot = Math.max(...slots.map((s) => s.count), 1);
@@ -327,42 +310,32 @@ export default function Analytics() {
 
         <div className="bg-card border border-card-border rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="font-semibold text-lg">Mentor response rates</h2>
+            <h2 className="font-semibold text-lg">Mentor matching activity</h2>
             <span className="text-xs text-muted-foreground font-mono">analysis.py</span>
           </div>
           <PanelBody
             query={mentorsQuery}
             isEmpty={mentors.length === 0}
-            emptyText="Python returned no mentor response data."
+            emptyText="No current mentors."
           >
+            <p className="text-xs text-muted-foreground mb-3">
+              Only activity observed after tracking started{activity?.trackingStartedAt ? ` (${activity.trackingStartedAt})` : ""} is counted.
+            </p>
+            <p className="text-sm font-medium mb-2">Average time from request creation to match</p>
             <div className="space-y-2">
-              {mentors.map((m) => {
-                const pct = typeof m.responseRate === "number" ? Math.round(m.responseRate * 100) : null;
-                const color =
-                  pct === null
-                    ? "text-muted-foreground"
-                    : pct >= 90
-                      ? "text-emerald-600"
-                      : pct >= 75
-                        ? "text-blue-600"
-                        : pct >= 60
-                          ? "text-amber-600"
-                          : "text-rose-600";
-                return (
-                  <div key={m.mentorId} className="flex items-center justify-between py-2 px-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{m.mentorName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.totalRequests ?? 0} requests ·{" "}
-                        {typeof m.avgResponseHours === "number" ? `~${m.avgResponseHours.toFixed(1)}h avg reply` : "no reply data"}
-                      </p>
-                    </div>
-                    <span className={`text-lg font-bold tabular-nums ${color}`}>
-                      {pct === null ? "—" : `${pct}%`}
-                    </span>
+              {mentors.map((m) => (
+                <div key={m.mentorId} className="flex items-center justify-between gap-3 py-2 px-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{m.mentorName}</p>
+                    <p className="text-xs text-muted-foreground">{m.totalMatches} observed matches</p>
                   </div>
-                );
-              })}
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {m.totalMatches === 0 ? "No observed matches"
+                      : m.avgTimeToMatchHours === null ? "No valid time-to-match data"
+                      : `${m.avgTimeToMatchHours.toFixed(1)} hours`}
+                  </span>
+                </div>
+              ))}
             </div>
           </PanelBody>
         </div>
