@@ -275,7 +275,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         _, own_view = api(student, base, "GET", "/api/dms/1/messages")
         assert next(m for m in own_view if m["id"] == sent["id"])["readAt"] is None
         _, recipient_view = api(mentor, base, "GET", "/api/dms/1/messages")
-        assert next(m for m in recipient_view if m["id"] == sent["id"])["readAt"] is not None
+        saved_read_at = next(m for m in recipient_view if m["id"] == sent["id"])["readAt"]
+        assert saved_read_at is not None
         status, room_sent = api(student, base, "POST", "/api/chat/rooms/1/messages", {"body": "  persistent room message  "})
         assert status == 201 and room_sent["body"] == "persistent room message"
     with chat_server() as base:
@@ -284,6 +285,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
             status, history = api(student, base, "GET", path)
             assert status == 200
             assert any(m["id"] == expected["id"] and m["body"] == expected["body"] for m in history)
+            if path == "/api/dms/1/messages":
+                assert next(m for m in history if m["id"] == sent["id"])["readAt"] == saved_read_at
 
 
 @pytest.mark.parametrize("path,other_path,history_path", [
