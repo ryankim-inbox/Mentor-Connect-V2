@@ -53,6 +53,30 @@ exception. If a finding is reachable only from the development-only mockup artif
 package version, dependency path, evidence that the artifact has no production service, owner, and
 review date before excluding it. The current dependency remediation record reports no exclusions.
 
+## Match-event migration gate
+
+This release requires ledger tail `0003_request_events`. Before rollout, back up
+and rehearse restore of the approved target, then run the guarded read-only
+migration dry-run for that target and migration. Apply the additive migration
+through the approved deployment procedure before deploying backend code, then
+the client. The dry-run CLI itself does not apply it. Preserve the immutable
+`0001` and `0002` checksums.
+
+Pause Connect writes before applying the migration. Keep them paused until the
+new event-writing backend is healthy, gateway readiness verifies the `0003`
+ledger tail from the built release metadata, and a synthetic Connect smoke check
+confirms one persisted event. The migration's singleton marker defines the start
+of observation, so old code must not accept unrecorded matches after that point.
+Do not backfill historic matched rows. Synthetic seeds retain the actual marker;
+backups and restores retain it together with observed events.
+
+When rolling back code, leave the additive table and history intact. Pause
+Connect writes before any rollback to code without event tracking, and keep them
+paused until the event-writing backend is restored. Do not erase events or reset
+the marker to hide a gap. Continue with one Python worker and one gateway process.
+See [the schema runbook](database-schema-and-migrations.md#observed-match-tracking-and-rollout)
+for the event and retention contract.
+
 ## Provider configuration
 
 In Replit Publishing, keep the application router and PostgreSQL 16. Autoscale is the only deployment

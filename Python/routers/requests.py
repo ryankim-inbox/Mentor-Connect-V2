@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, PositiveInt, field_validator
 from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional, List
 from db import db
+from request_events import record_match_event
 
 router = APIRouter()
 
@@ -320,4 +321,5 @@ def match_request(request_id: PositiveInt, request: Request):
             (user_id, request_id),
         )
         updated = cur.fetchone()
+        record_match_event(cur, updated)
         return build_request_response(cur, updated)

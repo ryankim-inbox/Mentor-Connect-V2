@@ -153,7 +153,7 @@ async function prepareBaseFixtures({
       ORDER BY ordinal
     `);
     if (validateAppliedMigrations(ledger.migrations, applied.rows).length > 0) {
-      throw new Error("classroom seed requires schema version 0002");
+      throw new Error(`classroom seed requires migration ${ledger.migrations.at(-1).id}`);
     }
     const population = await client.query(`
       SELECT EXISTS (

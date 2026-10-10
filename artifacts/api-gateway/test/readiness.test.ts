@@ -9,7 +9,7 @@ import { createGatewayServer } from "../src/gateway.ts";
 import { createReadinessChecker } from "../src/readiness.ts";
 import { writeReleaseMetadata } from "../../../scripts/write-release-metadata.mjs";
 
-const migrationId = "0002_integrity_constraints_indexes";
+const migrationId = "0003_request_events";
 const publicOrigin = "http://127.0.0.1:14200";
 
 async function listen(server: Server): Promise<string> {
@@ -36,7 +36,7 @@ function healthyResponse(): Response {
   return Response.json({ status: "ok", backend: "python-fastapi" });
 }
 
-function successfulPool() {
+function successfulPool(appliedMigrationId = migrationId) {
   const queries: string[] = [];
   const releases: Array<boolean | undefined> = [];
   let ended = false;
@@ -53,7 +53,7 @@ function successfulPool() {
           async query(sql: string) {
             queries.push(sql);
             return sql.includes("migration_id")
-              ? { rows: [{ migrationId }] }
+              ? { rows: [{ migrationId: appliedMigrationId }] }
               : { rows: [] };
           },
           release(destroy?: boolean) {
@@ -100,6 +100,18 @@ test("checks only Python health and the read-only database ledger tail", async (
     'SELECT migration_id AS "migrationId" FROM public.mentor_connect_schema_migrations ORDER BY ordinal DESC LIMIT 1',
     "ROLLBACK",
   ]);
+  assert.deepEqual(database.releases, [undefined]);
+});
+
+test("rejects a database that has not applied the event migration", async () => {
+  const database = successfulPool("0002_integrity_constraints_indexes");
+  const checker = createReadinessChecker({
+    databaseUrl: "postgresql://readiness@127.0.0.1/classroom",
+    expectedMigrationId: migrationId,
+    fetchImplementation: async () => healthyResponse(),
+    poolFactory: () => database.pool,
+  });
+  assert.equal(await checker.checkReadiness(), false);
   assert.deepEqual(database.releases, [undefined]);
 });
 
@@ -352,7 +364,7 @@ test("writes stable release metadata from the schema asset and supplied SHA", as
   });
   await writeFile(
     path.join(rootDir, "database/schema/version.json"),
-    JSON.stringify({ currentMigrationId: migrationId }),
+    await readFile(new URL("../../../database/schema/version.json", import.meta.url), "utf8"),
   );
 
   await writeReleaseMetadata({
@@ -365,7 +377,7 @@ test("writes stable release metadata from the schema asset and supplied SHA", as
       path.join(rootDir, "artifacts/api-gateway/dist/release.json"),
       "utf8",
     ),
-    '{\n  "currentMigrationId": "0002_integrity_constraints_indexes",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
+    '{\n  "currentMigrationId": "0003_request_events",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
   );
 });
 
