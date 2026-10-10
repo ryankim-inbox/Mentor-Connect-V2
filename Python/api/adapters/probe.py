@@ -136,7 +136,10 @@ def student_envelope(
         return envelope
 
     envelope["student_result"] = integration_api._json_safe(probe["result"])
-    normalized = normalize(probe["result"]) if normalize else probe["result"]
+    try:
+        normalized = normalize(probe["result"]) if normalize else probe["result"]
+    except (TypeError, ValueError, OverflowError):
+        normalized = None
     if normalized is None:
         envelope["error"] = invalid_message or (
             f"{probe['module']}.{probe['attempted_function']}() ran, but its return value "
