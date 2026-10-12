@@ -299,9 +299,12 @@ def list_mentor_ranks(request: Request) -> list[dict] | dict:
 # ---------------------------------------------------------------------------
 @router.get("/mentor-ranks/{mentor_id}")
 def get_mentor_rank(mentor_id: int, request: Request) -> dict:
-    """Return one rank, or a safe Mission 6 TODO envelope while unfinished."""
+    """Return one mentor's position in the global ranking."""
     _require_user(request)
     if mentor_id <= 0:
         raise HTTPException(status_code=422, detail="Mentor ID must be positive")
-    # TODO 6.3-6.4: build the global ranking, find the ID, or raise HTTP 404.
-    return _todo(6, "Complete Mission 6 to return one mentor's global rank.")
+    ranked = assign_ranks(sort_mentors(rank_data()))
+    for row in ranked:
+        if row["id"] == mentor_id:
+            return _public_row(row)
+    raise HTTPException(status_code=404, detail="Mentor not found")
