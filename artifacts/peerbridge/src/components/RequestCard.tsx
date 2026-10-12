@@ -13,6 +13,7 @@ interface RequestCardProps {
   id: number;
   title: string;
   description: string;
+  descriptionTruncated: boolean;
   authorName: string;
   authorId: number;
   authorRole: "mentor" | "mentee";
@@ -27,6 +28,7 @@ export function RequestCard({
   id,
   title,
   description,
+  descriptionTruncated,
   authorName,
   authorId,
   authorRole,
@@ -56,6 +58,7 @@ export function RequestCard({
               {title}
             </h3>
             <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{description}</p>
+            {descriptionTruncated && <p className="text-xs text-muted-foreground mt-1">Preview — open request for full description</p>}
           </div>
           <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${roleColor}`}>
             {roleLabel}

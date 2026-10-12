@@ -18,15 +18,17 @@ type SignupSummary = {
   today: number;
   thisMonth: number;
   thisYear: number;
-  total: number | null;
+  total: number;
 };
 
 function QueryError({
   error,
   label,
   retry,
+  moduleFailure,
 }: {
   error: unknown;
+  moduleFailure?: boolean;
   label: string;
   retry: () => void;
 }) {
@@ -35,7 +37,7 @@ function QueryError({
       className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
       role="alert"
     >
-      <p>{apiErrorMessage(error)}</p>
+      <p>{moduleFailure ? "Python reports failed." : apiErrorMessage(error)}</p>
       <button type="button" onClick={retry} className="mt-2 text-xs font-semibold underline">
         Retry {label}
       </button>
@@ -72,9 +74,10 @@ export default function AdminReports() {
         </div>
         {signups.isLoading ? (
           <div className="h-24 animate-pulse rounded-xl bg-muted" role="status" />
-        ) : signups.error ? (
+        ) : signups.error || signups.data?.ok === false ? (
           <QueryError
             error={signups.error}
+            moduleFailure={signups.data?.ok === false}
             label="signup summary"
             retry={() => void signups.refetch()}
           />
@@ -102,11 +105,13 @@ export default function AdminReports() {
           <h2 className="text-lg font-semibold">Flagged users</h2>
           <SourceBadge envelope={flagged.data as PyEnvelope<unknown> | undefined} />
         </div>
+        <p className="mb-4 text-sm text-muted-foreground">At five reports, manual review is recommended.</p>
         {flagged.isLoading ? (
           <div className="h-32 animate-pulse rounded-xl bg-muted" role="status" />
-        ) : flagged.error ? (
+        ) : flagged.error || flagged.data?.ok === false ? (
           <QueryError
             error={flagged.error}
+            moduleFailure={flagged.data?.ok === false}
             label="flagged users"
             retry={() => void flagged.refetch()}
           />
@@ -133,7 +138,7 @@ export default function AdminReports() {
                     </td>
                     <td className="px-3 py-3 tabular-nums">{user.reportCount}</td>
                     <td className="px-3 py-3 tabular-nums">{user.blockCount}</td>
-                    <td className="px-3 py-3">{user.status}</td>
+                    <td className="px-3 py-3">{user.status === "banned" ? "Review recommended" : user.status.replaceAll("_", " ")}</td>
                   </tr>
                 ))}
               </tbody>

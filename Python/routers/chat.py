@@ -443,11 +443,19 @@ def start_dm_conversation(body: StartDmBody, request: Request):
         user_b_id = max(user_id, body.toUserId)
         cur.execute(
             """INSERT INTO dm_conversations (user_a_id, user_b_id)
-               VALUES (%s, %s) RETURNING id""",
+               VALUES (%s, %s)
+               ON CONFLICT (user_a_id, user_b_id) DO NOTHING RETURNING id""",
             (user_a_id, user_b_id),
         )
-        new_id = cur.fetchone()["id"]
-        return _fetch_conversation(cur, new_id, user_id)
+        conversation = cur.fetchone()
+        if not conversation:
+            cur.execute(
+                """SELECT id FROM dm_conversations
+                   WHERE user_a_id = %s AND user_b_id = %s""",
+                (user_a_id, user_b_id),
+            )
+            conversation = cur.fetchone()
+        return _fetch_conversation(cur, conversation["id"], user_id)
 
 
 @router.get("/dms/{conversation_id}/messages")
@@ -458,20 +466,26 @@ def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
         cur = conn.cursor()
         _load_conversation_membership(cur, conversation_id, user_id)
         cur.execute(
-            """UPDATE dm_messages SET read_at = now()
-               WHERE conversation_id = %s AND sender_id <> %s
-                 AND read_at IS NULL AND deleted_at IS NULL""",
-            (conversation_id, user_id),
-        )
-        cur.execute(
             """SELECT id, conversation_id, sender_id, body, created_at, read_at
                FROM dm_messages
                WHERE conversation_id = %s AND deleted_at IS NULL
-               ORDER BY created_at, id""",
+               ORDER BY created_at DESC, id DESC LIMIT 50""",
             (conversation_id,),
         )
         messages = cur.fetchall()
-    return [_format_dm_message(message) for message in messages]
+        incoming_ids = [message["id"] for message in messages if message["sender_id"] != user_id]
+        if incoming_ids:
+            cur.execute(
+                """UPDATE dm_messages SET read_at = COALESCE(read_at, now())
+                   WHERE id = ANY(%s) AND deleted_at IS NULL
+                   RETURNING id, read_at""",
+                (incoming_ids,),
+            )
+            read_times = {row["id"]: row["read_at"] for row in cur.fetchall()}
+            for message in messages:
+                if message["id"] in read_times:
+                    message["read_at"] = read_times[message["id"]]
+    return [_format_dm_message(message) for message in reversed(messages)]
 
 
 @router.post("/dms/{conversation_id}/messages", status_code=201)

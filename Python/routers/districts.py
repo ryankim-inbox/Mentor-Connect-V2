@@ -25,8 +25,11 @@ def build_district_response(cur, district):
 def list_districts(type: Optional[str] = None, search: Optional[str] = None):
     conditions = []
     params = []
-    if type == "high_school":
-        conditions.append("type = 'high_school'")
+    if type is not None:
+        if type not in ("high_school", "unified"):
+            raise HTTPException(status_code=422, detail="Invalid district type")
+        conditions.append("type = %s")
+        params.append(type)
     if search:
         conditions.append("name ILIKE %s")
         params.append(f"%{search}%")

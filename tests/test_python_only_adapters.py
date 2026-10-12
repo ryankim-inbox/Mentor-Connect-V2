@@ -10,13 +10,17 @@ Proves the Analytics and Scheduling adapters are python-only:
 Import and runtime failures are injected independently of lesson progress.
 """
 
+import json
+import math
 import re
 import types
 from contextlib import contextmanager
 from pathlib import Path
 
 import integration_api
-from api.adapters import analysis_adapter, scheduling_adapter
+import pytest
+from api.adapters import admin_adapter, analysis_adapter, reports_adapter, scheduling_adapter
+from starlette.responses import JSONResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -43,6 +47,49 @@ def patch_student_module(monkeypatch, module):
     monkeypatch.setattr(
         integration_api, "_import_student_module", lambda name: (module, None)
     )
+
+
+@pytest.mark.parametrize("mentor,expected", [
+    ({"location": " SAN JOSE "}, {"compatible": True, "overlap": ["san jose"]}),
+    ({"location": "Cupertino"}, {"compatible": False, "overlap": []}),
+])
+def test_location_practice_returns_real_module_output(mentor, expected):
+    envelope = integration_api.run_location_test({
+        "student": {"location": "San Jose"}, "mentor": mentor, "question": {},
+    })
+    assert envelope["success"] is True
+    assert envelope["is_real"] is True and envelope["is_todo"] is False
+    assert envelope["function_called"] == "location_data"
+    assert envelope["result"] == expected
+
+
+def test_location_practice_surfaces_real_validation_error():
+    envelope = integration_api.run_location_test({
+        "student": {"locations": None}, "mentor": {}, "question": {},
+    })
+    assert envelope["success"] is False and envelope["is_real"] is False
+    assert envelope["status"] == "runtime error"
+    assert envelope["error"].startswith("ValueError:")
+    assert "result" not in envelope
+
+
+@pytest.mark.parametrize("failure", ["import", "missing", "runtime"])
+def test_location_practice_preserves_injected_failure_envelopes(monkeypatch, failure):
+    def broken(student, mentor, question):
+        raise ValueError("injected location failure")
+
+    if failure == "import":
+        monkeypatch.setattr(integration_api, "_import_student_module", lambda name: (
+            None, {"success": False, "status": "import error", "error": "ImportError: injected"},
+        ))
+    else:
+        patch_student_module(monkeypatch, fake_module("locations", **(
+            {"location_data": broken} if failure == "runtime" else {})))
+    envelope = integration_api.run_location_test({"student": {}, "mentor": {}, "question": {}})
+    assert envelope["success"] is False
+    assert "result" not in envelope
+    assert envelope["status"] == {"import": "import error", "missing": "missing function",
+                                  "runtime": "runtime error"}[failure]
 
 
 # --- explicit import and runtime failure paths -----------------------------
@@ -147,6 +194,117 @@ def test_unusable_student_output_is_an_error_not_fallback(monkeypatch):
     assert envelope["student_result"] == "Math"
 
 
+@pytest.mark.parametrize("mentor_id", [
+    "invalid ID", [1], float("inf"), float("-inf"), float("nan"),
+])
+def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
+            {"mentorId": mentor_id, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None, "debug": {
+                "values": (float("inf"), [float("-inf"), {"value": float("nan")}]),
+            }}
+        ]}),
+    )
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False
+    assert envelope["ok"] is False
+    assert envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_module"]["error"] == envelope["error"]
+    response = JSONResponse(envelope)
+    payload = json.loads(response.body)
+    assert payload["success"] is False
+    assert payload["data"] is None
+    raw_row = payload["student_result"]["mentors"][0]
+    assert raw_row["debug"] == {"values": ["inf", ["-inf", {"value": "nan"}]]}
+    if isinstance(mentor_id, float) and not math.isfinite(mentor_id):
+        assert raw_row["mentorId"] == repr(mentor_id)
+
+
+def test_zero_subject_count_is_preserved(monkeypatch):
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_most_popular_subject=lambda: [
+            {"subject": "Math", "requests": 0, "count": 8},
+            {"subject": "Physics", "count": 0},
+        ]),
+    )
+    envelope = analysis_adapter.get_popular_subjects()
+    assert envelope["success"] is True
+    assert [row["requests"] for row in envelope["data"]] == [0, 0]
+
+
+def test_zero_mentor_values_are_preserved(monkeypatch):
+    activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [{
+        "mentorId": 0, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": 0,
+    }]}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is True
+    assert envelope["data"] == activity
+
+
+def test_empty_activity_and_null_duration_are_successful(monkeypatch):
+    for mentors in [[], [{"mentorId": 1, "mentorName": "Ada", "totalMatches": 2,
+                          "avgTimeToMatchHours": None}]]:
+        activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": mentors}
+        patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+        envelope = analysis_adapter.get_mentor_response_rates()
+        assert envelope["success"] is True
+        assert envelope["data"] == activity
+
+
+def test_weekly_coverage_and_null_gaps_are_preserved(monkeypatch):
+    weekly = [{"week": "2024-12-23", "matches": None, "coverage": "untracked"},
+              {"week": "2024-12-30", "matches": 0, "coverage": "partial"},
+              {"week": "2025-01-06", "matches": 0, "coverage": "complete"}]
+    patch_student_module(monkeypatch, fake_module("analysis", receive_weekly_matches=lambda: weekly))
+    envelope = analysis_adapter.get_weekly_matches()
+    assert envelope["success"] is True
+    assert envelope["data"] == weekly
+
+
+@pytest.mark.parametrize("field,value", [("totalMatches", float("inf")),
+    ("avgTimeToMatchHours", float("nan")), ("avgTimeToMatchHours", -1)])
+def test_invalid_activity_numbers_fail_without_fallback(monkeypatch, field, value):
+    row = {"mentorId": 1, "mentorName": "Ada", "totalMatches": 2, "avgTimeToMatchHours": 3}
+    row[field] = value
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: {
+        "trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [row]}))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False
+    assert envelope["data"] is None
+    JSONResponse(envelope)
+
+
+@pytest.mark.parametrize("function_name,endpoint", [
+    ("receive_weekly_matches", analysis_adapter.get_weekly_matches),
+    ("receive_most_popular_subject", analysis_adapter.get_popular_subjects),
+    ("receive_time_data", analysis_adapter.get_popular_time_slots),
+])
+def test_empty_analytics_arrays_are_successful(monkeypatch, function_name, endpoint):
+    patch_student_module(monkeypatch, fake_module("analysis", **{function_name: lambda: []}))
+    envelope = endpoint()
+    assert envelope["success"] is True
+    assert envelope["data"] == []
+
+
+def test_unexpected_normalizer_failure_remains_visible(monkeypatch):
+    class BrokenId:
+        def __int__(self):
+            raise RuntimeError("unexpected normalization failure")
+
+    patch_student_module(
+        monkeypatch,
+        fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
+            {"mentorId": BrokenId(), "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None}
+        ]}),
+    )
+    with pytest.raises(RuntimeError, match="unexpected normalization failure"):
+        analysis_adapter.get_mentor_response_rates()
+
+
 def test_overview_success_normalizes_student_rows(monkeypatch):
     patch_student_module(
         monkeypatch,
@@ -243,3 +401,110 @@ def test_analytics_and_scheduling_adapters_have_no_fallback_paths():
         assert "fallback_data" not in source
     # The analytics adapter must not read the product database at all.
     assert "from db import" not in (adapters_dir / "analysis_adapter.py").read_text()
+
+
+@pytest.mark.parametrize("slots", [[], [
+    {"slot": "Mon 17:00", "count": 2}, {"slot": "Wed 19:00", "count": 2},
+]])
+def test_scheduling_slot_rows_reach_both_endpoints(monkeypatch, slots):
+    patch_student_module(monkeypatch, fake_module("scheduling", receive_time_data=lambda: slots))
+    for endpoint, expected in [(scheduling_adapter.get_overview, {"topSlots": slots}),
+                               (analysis_adapter.get_popular_time_slots, slots)]:
+        envelope = endpoint()
+        assert envelope["success"] is True
+        assert envelope["data"] == expected
+
+
+@pytest.mark.parametrize("overlap", [[], ["Mon 17:00", "Wed 19:00"]])
+def test_scheduling_suggestions_preserve_users_and_overlap(monkeypatch, overlap):
+    patch_users(monkeypatch, USER_A, USER_B)
+    patch_student_module(monkeypatch, fake_module("scheduling", time_dict=lambda student, teacher: overlap))
+    envelope = scheduling_adapter.suggest_times(1, 2)
+    assert envelope["success"] is True
+    assert envelope["data"] == {"userA": USER_A, "userB": USER_B, "overlap": overlap}
+
+
+# Reports and moderation must never replace module failures with SQL results.
+@pytest.mark.parametrize("endpoint,module_name,function_name", [
+    (reports_adapter.get_signup_summary, "reports", "signup_summary"),
+    (admin_adapter.get_flagged_users, "get_blocks", "get_flagged_users"),
+])
+@pytest.mark.parametrize("failure", ["import", "missing", "runtime"])
+def test_reporting_module_errors_are_explicit(monkeypatch, endpoint, module_name, function_name, failure):
+    def broken():
+        raise RuntimeError("injected reporting failure")
+    if failure == "import":
+        monkeypatch.setattr(integration_api, "_import_student_module",
+                            lambda name: (None, {"status": "import error", "error": "SyntaxError: injected"}))
+    else:
+        patch_student_module(monkeypatch, fake_module(module_name, **({function_name: broken} if failure == "runtime" else {})))
+    envelope = endpoint()
+    assert ENVELOPE_KEYS <= set(envelope)
+    assert envelope["ok"] is False and envelope["success"] is False
+    assert envelope["data"] is None and envelope["error"]
+    assert envelope["source"] == "python"
+
+
+def test_reporting_adapters_use_single_full_summary_and_empty_module_results(monkeypatch):
+    calls = []
+    def summary():
+        calls.append(True)
+        return {"today": 0, "thisMonth": 0, "thisYear": 0, "total": 0}
+    patch_student_module(monkeypatch, fake_module("reports", signup_summary=summary))
+    result = reports_adapter.get_signup_summary()
+    assert result["ok"] and result["source"] == "student-module"
+    assert result["data"] == {"today": 0, "thisMonth": 0, "thisYear": 0, "total": 0}
+    assert len(calls) == 1
+    patch_student_module(monkeypatch, fake_module("get_blocks", get_flagged_users=lambda: []))
+    result = admin_adapter.get_flagged_users()
+    assert result["ok"] and result["source"] == "student-module" and result["data"] == []
+
+
+@pytest.mark.parametrize("summary", [None, {}, "invalid", {"today": -1, "thisMonth": 0, "thisYear": 0, "total": 0},
+    {"today": True, "thisMonth": 0, "thisYear": 0, "total": 0},
+    {"today": float("nan"), "thisMonth": 0, "thisYear": 0, "total": 0}])
+def test_reporting_invalid_summary_is_explicit_and_json_safe(monkeypatch, summary):
+    patch_student_module(monkeypatch, fake_module("reports", signup_summary=lambda: summary))
+    result = reports_adapter.get_signup_summary()
+    assert result["ok"] is False and result["data"] is None
+    assert result["student_module"]["status"] == "invalid output"
+    JSONResponse(result)
+
+
+@pytest.mark.parametrize("rows", [None, "invalid", {}])
+def test_moderation_invalid_output_is_explicit(monkeypatch, rows):
+    patch_student_module(monkeypatch, fake_module("get_blocks", get_flagged_users=lambda: rows))
+    result = admin_adapter.get_flagged_users()
+    assert result["ok"] is False and result["data"] is None
+    assert result["student_module"]["status"] == "invalid output"
+
+
+@pytest.mark.parametrize("week", ["not-a-date", "2025-02-29", "2025-13-01", "20250106", "2025-W02-1", "2025-01-06T00:00:00Z"])
+def test_invalid_week_date_is_invalid_output(monkeypatch, week):
+    weekly = [{"week": week, "matches": 0, "coverage": "complete"}]
+    patch_student_module(monkeypatch, fake_module("analysis", receive_weekly_matches=lambda: weekly))
+    envelope = analysis_adapter.get_weekly_matches()
+    assert envelope["success"] is False and envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_result"] == weekly
+    JSONResponse(envelope)
+
+
+@pytest.mark.parametrize("timestamp", ["not-a-date", "2025-02-29T12:00:00Z", "2025-01-01", "2025-01-01T12:00:00", "2025-01-01T12:00:00+25:00", "2025-01-01 12:00:00Z", "20250101T120000Z", "2025-W01-3T12:00:00Z", "2025-01-01T12:00:00+01:60"])
+def test_invalid_tracking_timestamp_is_invalid_output(monkeypatch, timestamp):
+    activity = {"trackingStartedAt": timestamp, "mentors": []}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is False and envelope["data"] is None
+    assert envelope["student_module"]["status"] == "invalid output"
+    assert envelope["student_result"] == activity
+    JSONResponse(envelope)
+
+
+@pytest.mark.parametrize("timestamp", ["2024-02-29T12:00:00Z", "2025-01-01T12:00:00.123456+00:00", "2025-01-01T12:00:00-07:00"])
+def test_valid_tracking_timestamps_are_preserved(monkeypatch, timestamp):
+    activity = {"trackingStartedAt": timestamp, "mentors": []}
+    patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
+    envelope = analysis_adapter.get_mentor_response_rates()
+    assert envelope["success"] is True and envelope["data"] == activity
+    JSONResponse(envelope)
