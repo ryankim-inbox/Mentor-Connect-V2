@@ -10,7 +10,7 @@ The gateway serves HTTP/API/WS on Render's `PORT` (default 10000). FastAPI runs 
 
 Only known client routes receive SPA fallback. Missing API/WS/asset paths and unknown routes remain errors. Hashed assets are immutable; HTML revalidates. Security headers include CSP, frame protection, nosniff, referrer policy, and HSTS for HTTPS origins.
 
-REST send is canonical. Only a committed row schedules broadcast. Each broadcast rechecks current recipients' membership/district/block permission; slow sockets are bounded. Browser WS connections receive events and invalidate REST history rather than append frames directly. Reconnect, becoming visible, and returning online resync the latest 50 messages. A 60-second repair poll runs while connected; fallback polling retains error backoff. The UI never sends a text ping or automatically retries an uncertain mutation. Uvicorn handles protocol-level ping/pong. A timeout may mean a message was saved: check history before manually sending again. Recovery is limited to the existing latest-50 window.
+REST send is canonical. Only a committed row schedules broadcast. Each broadcast rechecks current recipients' membership/district/block permission; slow sockets are bounded. Browser WS connections receive events and invalidate REST history rather than append frames directly. First open fetches the latest 50 messages. Reconnect, becoming visible, and returning online page backwards with `beforeId` until the previously displayed history is recovered, including gaps exceeding 50 messages. The cursor uses the channel-scoped `(created_at, id)` ordering, not ID order alone. “Load older messages” retrieves another 50; refresh/relogin start at the newest page, with older messages still available. Each page rechecks access and excludes deleted rows. A 60-second repair poll runs while connected; fallback polling retains error backoff. The UI never sends a text ping or automatically retries an uncertain mutation. Uvicorn handles protocol-level ping/pong. A timeout may mean a message was saved: check history before manually sending again. Long displayed histories and large gaps require multiple REST requests, so monitor Free DB/egress usage.
 
 ## Required operator approvals and login
 
@@ -96,7 +96,7 @@ After the exact HTTPS deployment origin is approved and configured:
 node scripts/smoke-live-chat.mjs
 ```
 
-The runner checks independent sessions, deep links/404/readiness, bidirectional room/DM UI delivery, offline gap recovery/dedup, membership/district/block/Origin/sender guards, reload and relogin. It sends uniquely labeled synthetic messages and removes only the block it creates; messages remain as persistence canaries. It reports restart validation as **pending**, never silently passed.
+The runner checks independent sessions, deep links/404/readiness, bidirectional room/DM UI delivery, 51-message offline gaps in both room and DM, history pagination/dedup, membership/district/block/Origin/sender guards, reload and relogin. It sends uniquely labeled synthetic messages and removes only the block it creates; messages remain as persistence canaries. It reports restart validation as **pending**, never silently passed.
 
 Perform one approved Render service restart/redeploy, then run against the same origin and evidence file:
 

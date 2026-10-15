@@ -100,3 +100,31 @@ export function uniqueMessages<T extends { id: number }>(messages: T[]): T[] {
     ...new Map(messages.map((message) => [message.id, message])).values(),
   ];
 }
+import type { ScaffoldTodo } from "./chat-api";
+
+// Re-read the displayed window from canonical REST pages, including every gap.
+// Undefined means first open (latest page); [] means an empty thread was seen.
+export async function syncChatHistory<T extends { id: number }>(
+  fetchPage: (beforeId?: number) => Promise<T[] | ScaffoldTodo>,
+  previous?: T[],
+  loadOlder = false,
+): Promise<T[] | ScaffoldTodo> {
+  let page = await fetchPage();
+  if (!Array.isArray(page)) return page;
+  let rows = uniqueMessages(page);
+  if (previous === undefined && !loadOlder) return rows;
+  const anchor = previous?.[0]?.id;
+  const cursors = new Set<number>();
+  for (;;) {
+    const index = rows.findIndex((row) => row.id === anchor);
+    if (index >= 0 && !loadOlder) return rows.slice(index);
+    if (index >= 50 && loadOlder) return rows.slice(index - 50);
+    if (page.length < 50) return rows;
+    const cursor = page[0].id;
+    if (cursors.has(cursor)) throw new Error("History cursor did not advance");
+    cursors.add(cursor);
+    page = await fetchPage(cursor);
+    if (!Array.isArray(page)) throw new Error("History paging is unavailable");
+    rows = uniqueMessages([...page, ...rows]);
+  }
+}

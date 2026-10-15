@@ -1,5 +1,5 @@
 import { useChatSocket } from "@/hooks/use-chat-socket";
-import { uniqueMessages, type ChatConnectionState } from "@/lib/chat-socket";
+import { syncChatHistory, type ChatConnectionState } from "@/lib/chat-socket";
 // Floating messenger popup (bottom-right) with Global / My School / DMs tabs.
 //
 // The UI is finished, but the chat backend is a Python practice task: while
@@ -20,6 +20,7 @@ import {
   useQuery,
   useQueryClient,
   type UseQueryResult,
+  type QueryClient,
 } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
 import {
@@ -305,9 +306,14 @@ function RoomThread({
   const connectionStateRef = useRef<ChatConnectionState>("connecting");
   const messagesQuery = useQuery({
     queryKey: ["chat", currentUserId, "room-messages", room.id],
-    queryFn: async ({ signal }) => {
-      const rows = await fetchRoomMessages(room.id, signal);
-      return Array.isArray(rows) ? uniqueMessages(rows) : rows;
+    queryFn: ({ signal, queryKey }) => {
+      const previous = queryClient.getQueryData<ChatMessage[] | ScaffoldTodo>(
+        queryKey,
+      );
+      return syncChatHistory(
+        (beforeId) => fetchRoomMessages(room.id, signal, beforeId),
+        Array.isArray(previous) ? previous : undefined,
+      );
     },
     refetchInterval: (query) =>
       connectionStateRef.current === "connected" && !query.state.error
@@ -365,7 +371,15 @@ function RoomThread({
 
   return (
     <Thread
+      key={`room-${room.id}`}
       title={room.name}
+      onLoadOlder={() =>
+        expandHistory(
+          queryClient,
+          ["chat", currentUserId, "room-messages", room.id],
+          (beforeId) => fetchRoomMessages(room.id, undefined, beforeId),
+        )
+      }
       messages={messages.map((message: ChatMessage) => ({
         id: message.id,
         senderId: message.senderId,
@@ -546,9 +560,14 @@ function DmThread({
   const connectionStateRef = useRef<ChatConnectionState>("connecting");
   const messagesQuery = useQuery({
     queryKey: ["chat", currentUserId, "dm-messages", conversation.id],
-    queryFn: async ({ signal }) => {
-      const rows = await fetchDmMessages(conversation.id, signal);
-      return Array.isArray(rows) ? uniqueMessages(rows) : rows;
+    queryFn: ({ signal, queryKey }) => {
+      const previous = queryClient.getQueryData<DmMessage[] | ScaffoldTodo>(
+        queryKey,
+      );
+      return syncChatHistory(
+        (beforeId) => fetchDmMessages(conversation.id, signal, beforeId),
+        Array.isArray(previous) ? previous : undefined,
+      );
     },
     refetchInterval: (query) =>
       connectionStateRef.current === "connected" && !query.state.error
@@ -624,8 +643,15 @@ function DmThread({
 
   return (
     <Thread
+      key={`dm-${conversation.id}`}
       title={conversation.otherUserName}
-      historyLabel={messages.length === 50 ? "Latest 50 messages" : undefined}
+      onLoadOlder={() =>
+        expandHistory(
+          queryClient,
+          ["chat", currentUserId, "dm-messages", conversation.id],
+          (beforeId) => fetchDmMessages(conversation.id, undefined, beforeId),
+        )
+      }
       leading={back}
       messages={messages.map((message: DmMessage) => ({
         id: message.id,
@@ -658,34 +684,51 @@ interface ThreadMessage {
   createdAt: string;
 }
 
+async function expandHistory<T extends { id: number }>(
+  client: QueryClient,
+  queryKey: (string | number)[],
+  fetchPage: (beforeId?: number) => Promise<T[] | ScaffoldTodo>,
+): Promise<boolean> {
+  await client.cancelQueries({ queryKey, exact: true });
+  const previous = client.getQueryData<T[] | ScaffoldTodo>(queryKey);
+  if (!Array.isArray(previous) || !previous.length) return false;
+  const rows = await syncChatHistory(fetchPage, previous, true);
+  if (!Array.isArray(rows)) throw new Error("History is unavailable");
+  await client.cancelQueries({ queryKey, exact: true });
+  client.setQueryData(queryKey, rows);
+  void client.invalidateQueries({ queryKey, exact: true });
+  return rows[0]?.id !== previous[0]?.id;
+}
+
 function Thread({
   title,
-  historyLabel,
   leading,
   messages,
   currentUserId,
   sendMutation,
   readError,
   connectionState,
+  onLoadOlder,
   emptyText,
 }: {
   title: string;
-  historyLabel?: string;
   leading?: ReactNode;
   messages: ThreadMessage[];
   currentUserId: number;
   sendMutation: SendMutationLike;
   readError?: unknown;
   connectionState: ChatConnectionState;
+  onLoadOlder: () => Promise<boolean>;
   emptyText: string;
 }) {
   const [draft, setDraft] = useState("");
+  const older = useMutation({ mutationFn: onLoadOlder, retry: false });
   const bottomRef = useRef<HTMLDivElement>(null);
   const newestMessageId = messages.at(-1)?.id;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
-  }, [messages.length, newestMessageId]);
+  }, [newestMessageId]);
 
   const sendBlocked = isScaffoldTodo(sendMutation.data)
     ? `${sendMutation.data.message}. Sending isn't implemented yet.`
@@ -709,11 +752,6 @@ function Thread({
         <p className="truncate text-xs font-medium text-muted-foreground">
           {title}
         </p>
-        {historyLabel && (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {historyLabel}
-          </span>
-        )}
       </div>
 
       <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
@@ -724,6 +762,19 @@ function Thread({
             : "Connecting — checking saved messages"}
       </p>
       <ScrollArea className="min-h-0 flex-1">
+        {messages.length >= 50 && older.data !== false && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => older.mutate()}
+            disabled={older.isPending}
+          >
+            {older.isPending ? "Loading history…" : "Load older messages"}
+          </Button>
+        )}
+        {older.isError && (
+          <p role="alert">Could not load older messages. Try again.</p>
+        )}
         {messages.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             {emptyText}

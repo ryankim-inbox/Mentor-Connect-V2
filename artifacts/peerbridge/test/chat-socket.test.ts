@@ -91,3 +91,35 @@ test("dedup preserves canonical REST timestamp order even when IDs differ", () =
   ];
   assert.deepEqual(uniqueMessages(rows), rows);
 });
+
+import * as history from "../src/lib/chat-socket.ts";
+
+test("reconnect pages through 121 missed messages and preserves server order", async () => {
+  assert.equal(typeof history.syncChatHistory, "function");
+  const rows = Array.from({ length: 125 }, (_, index) => ({ id: 200 - index }));
+  const page = async (beforeId?: number) => {
+    const end =
+      beforeId === undefined
+        ? rows.length
+        : rows.findIndex((row) => row.id === beforeId);
+    return rows.slice(Math.max(0, end - 50), end);
+  };
+  assert.deepEqual(await history.syncChatHistory(page, rows.slice(0, 4)), rows);
+  assert.deepEqual(await history.syncChatHistory(page, []), rows);
+  assert.deepEqual(await history.syncChatHistory(page), rows.slice(-50));
+  assert.deepEqual(
+    await history.syncChatHistory(page, rows.slice(-50), true),
+    rows.slice(-100),
+  );
+});
+
+test("resync uses fresh pages so deleted cached messages disappear", async () => {
+  assert.equal(typeof history.syncChatHistory, "function");
+  assert.deepEqual(
+    await history.syncChatHistory(
+      async () => [{ id: 2 }],
+      [{ id: 1 }, { id: 2 }],
+    ),
+    [{ id: 2 }],
+  );
+});

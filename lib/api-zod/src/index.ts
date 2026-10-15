@@ -26,6 +26,10 @@ export type UpdateUserBody = types.UpdateUserBody;
 
 export const GetMatchesParams = api.GetMatchesParams;
 export type GetMatchesParams = types.GetMatchesParams;
+export const ListChatRoomMessagesParams = api.ListChatRoomMessagesParams;
+export type ListChatRoomMessagesParams = types.ListChatRoomMessagesParams;
+export const ListDmMessagesParams = api.ListDmMessagesParams;
+export type ListDmMessagesParams = types.ListDmMessagesParams;
 export const GetPracticeMatchingParams = api.GetPracticeMatchingParams;
 export type GetPracticeMatchingParams = types.GetPracticeMatchingParams;
 export const TestPracticeLocationsBody = api.TestPracticeLocationsBody;
