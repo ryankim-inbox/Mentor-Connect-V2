@@ -90,7 +90,7 @@ test("checks only Python health and the read-only database ledger tail", async (
   assert.deepEqual(fetchTargets, ["http://127.0.0.1:8181/api/healthz"]);
   assert.deepEqual(poolOptions, {
     connectionString: "postgresql://readiness@127.0.0.1/classroom",
-    connectionTimeoutMillis: 1_000,
+    connectionTimeoutMillis: 6_000,
     max: 1,
     statement_timeout: 1_000,
   });
@@ -364,7 +364,10 @@ test("writes stable release metadata from the schema asset and supplied SHA", as
   });
   await writeFile(
     path.join(rootDir, "database/schema/version.json"),
-    await readFile(new URL("../../../database/schema/version.json", import.meta.url), "utf8"),
+    await readFile(
+      new URL("../../../database/schema/version.json", import.meta.url),
+      "utf8",
+    ),
   );
 
   await writeReleaseMetadata({
@@ -544,4 +547,43 @@ test("HTTP logs contain only sanitized family, outcome, status, ids, and timings
     JSON.stringify(logEntries),
     /SQL_LOG_CANARY|COOKIE_LOG_CANARY|email-log-canary|query-log-canary|raw-log-canary|query-canary|UPSTREAM_BODY_CANARY|UNTRUSTED_REQUEST_ID_CANARY|\/api\/|\/readyz|\/unknown/,
   );
+});
+
+test("allows a bounded cold database wakeup longer than two seconds", async () => {
+  const database = successfulPool();
+  const checker = createReadinessChecker({
+    databaseUrl: "postgresql://readiness@127.0.0.1/classroom",
+    expectedMigrationId: migrationId,
+    fetchImplementation: async () => healthyResponse(),
+    poolFactory: (options) => {
+      assert.equal(options.connectionTimeoutMillis, 6_000);
+      return {
+        ...database.pool,
+        async connect() {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          return database.pool.connect();
+        },
+      };
+    },
+  });
+  assert.equal(await checker.checkReadiness(), true);
+  await checker.close();
+});
+
+test("the total deadline also bounds an unresponsive health transport", async () => {
+  const checker = createReadinessChecker({
+    databaseUrl: "postgresql://readiness@127.0.0.1/classroom",
+    expectedMigrationId: migrationId,
+    deadlineMs: 20,
+    fetchImplementation: () => new Promise(() => {}),
+    poolFactory: () => successfulPool().pool,
+  });
+  assert.equal(
+    await Promise.race([
+      checker.checkReadiness(),
+      new Promise((resolve) => setTimeout(() => resolve("hung"), 100)),
+    ]),
+    false,
+  );
+  await checker.close();
 });
