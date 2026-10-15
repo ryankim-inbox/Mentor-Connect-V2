@@ -5,9 +5,10 @@ import pg from "pg";
 const { Pool } = pg;
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
-const PROBE_DEADLINE_MS = 2_000;
+const PROBE_DEADLINE_MS = 8_000;
 const RESULT_CACHE_MS = 2_000;
 const DATABASE_TIMEOUT_MS = 1_000;
+const DATABASE_CONNECT_TIMEOUT_MS = 6_000;
 const MIGRATION_ID = /^\d{4,}_[a-z0-9_]+$/;
 const RELEASE_SHA = /^[a-f0-9]{7,64}$/;
 const LEDGER_QUERY =
@@ -87,7 +88,7 @@ export function createReadinessChecker(
     poolPromise ??= Promise.resolve().then(() =>
       poolFactory({
         connectionString: databaseUrl as string,
-        connectionTimeoutMillis: DATABASE_TIMEOUT_MS,
+        connectionTimeoutMillis: DATABASE_CONNECT_TIMEOUT_MS,
         max: 1,
         statement_timeout: DATABASE_TIMEOUT_MS,
       }),
@@ -109,7 +110,14 @@ export function createReadinessChecker(
     );
 
     inFlight = Promise.all([
-      checkPythonHealth(upstreamOrigin, fetchImplementation, controller.signal),
+      raceWithSignal(
+        checkPythonHealth(
+          upstreamOrigin,
+          fetchImplementation,
+          controller.signal,
+        ),
+        controller.signal,
+      ),
       checkDatabase(getPool(), controller.signal),
       options.expectedMigrationId
         ? Promise.resolve(options.expectedMigrationId)

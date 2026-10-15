@@ -1,3 +1,5 @@
+import { useChatSocket } from "@/hooks/use-chat-socket";
+import { uniqueMessages, type ChatConnectionState } from "@/lib/chat-socket";
 // Floating messenger popup (bottom-right) with Global / My School / DMs tabs.
 //
 // The UI is finished, but the chat backend is a Python practice task: while
@@ -6,7 +8,13 @@
 // The moment the student implements a mission, its tab comes alive — no
 // frontend changes needed.
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   useMutation,
   useQuery,
@@ -14,7 +22,14 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
-import { ArrowLeft, Hammer, MessageCircle, Send, WifiOff, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Hammer,
+  MessageCircle,
+  Send,
+  WifiOff,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,11 +59,17 @@ import {
 // answers with the todo envelope there is nothing new to poll for.
 const POLL_MS = 5000;
 
-function pollDelay(data: unknown, error: unknown, failures: number): number | false {
+function pollDelay(
+  data: unknown,
+  error: unknown,
+  failures: number,
+): number | false {
   if (isScaffoldTodo(data)) return false;
   if (!error) return Array.isArray(data) ? POLL_MS : false;
-  if (error instanceof ApiError && error.status < 500 && error.status !== 429) return false;
-  const retryAfter = error instanceof ApiError ? error.headers.get("retry-after") : null;
+  if (error instanceof ApiError && error.status < 500 && error.status !== 429)
+    return false;
+  const retryAfter =
+    error instanceof ApiError ? error.headers.get("retry-after") : null;
   if (retryAfter && /^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000;
   return Math.min(POLL_MS * 2 ** Math.max(1, failures), 60_000);
 }
@@ -61,20 +82,36 @@ export function ChatWidget() {
 
   return (
     <>
-      {open && <ChatPanel key={user.id} currentUserId={user.id} districtId={user.districtId} />}
+      {open && (
+        <ChatPanel
+          key={user.id}
+          currentUserId={user.id}
+          districtId={user.districtId}
+        />
+      )}
       <Button
         size="icon"
         aria-label={open ? "Close chat" : "Open chat"}
         onClick={() => setOpen((prev) => !prev)}
         className="fixed bottom-4 right-4 z-40 h-12 w-12 rounded-full shadow-lg"
       >
-        {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+        {open ? (
+          <X className="h-5 w-5" />
+        ) : (
+          <MessageCircle className="h-5 w-5" />
+        )}
       </Button>
     </>
   );
 }
 
-function ChatPanel({ currentUserId, districtId }: { currentUserId: number; districtId: number }) {
+function ChatPanel({
+  currentUserId,
+  districtId,
+}: {
+  currentUserId: number;
+  districtId: number;
+}) {
   const roomsQuery = useQuery({
     queryKey: ["chat", currentUserId, "rooms"],
     queryFn: ({ signal }) => fetchChatRooms(signal),
@@ -84,7 +121,9 @@ function ChatPanel({ currentUserId, districtId }: { currentUserId: number; distr
     <div className="fixed bottom-20 right-4 z-40 flex h-[min(28rem,calc(100dvh-7rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-card-border bg-card shadow-xl">
       <div className="flex items-center gap-2 border-b border-card-border px-4 py-3">
         <MessageCircle className="h-4 w-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">PeerBridge Chat</h2>
+        <h2 className="text-sm font-semibold text-foreground">
+          PeerBridge Chat
+        </h2>
       </div>
 
       <Tabs defaultValue="global" className="flex min-h-0 flex-1 flex-col">
@@ -106,7 +145,10 @@ function ChatPanel({ currentUserId, districtId }: { currentUserId: number; distr
           <RoomPane
             roomsQuery={roomsQuery}
             pickRoom={(rooms) =>
-              rooms.find((room) => room.type === "district" && room.districtId === districtId)
+              rooms.find(
+                (room) =>
+                  room.type === "district" && room.districtId === districtId,
+              )
             }
             missingText="No room for your district came back from GET /api/chat/rooms — check your Mission 1 query."
             currentUserId={currentUserId}
@@ -133,14 +175,23 @@ function TodoState({ message }: { message?: string }) {
       </p>
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
       <p className="text-xs text-muted-foreground">
-        Implement <code className="rounded bg-muted px-1 py-0.5">Python/routers/chat.py</code> to
-        activate this tab — see docs/STUDENT_CHAT_BACKEND_GUIDE.md.
+        Implement{" "}
+        <code className="rounded bg-muted px-1 py-0.5">
+          Python/routers/chat.py
+        </code>{" "}
+        to activate this tab — see docs/STUDENT_CHAT_BACKEND_GUIDE.md.
       </p>
     </div>
   );
 }
 
-function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry: () => void;
+}) {
   return (
     <div
       className="flex h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center"
@@ -170,7 +221,10 @@ interface SendMutationLike {
   isPending: boolean;
   isError: boolean;
   error: unknown;
-  mutate: (body: string, options?: { onSuccess?: (created: unknown) => void }) => void;
+  mutate: (
+    body: string,
+    options?: { onSuccess?: (created: unknown) => void },
+  ) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,17 +244,28 @@ function RoomPane({
 }) {
   if (roomsQuery.isLoading) return <LoadingState />;
   if (roomsQuery.isError && !Array.isArray(roomsQuery.data)) {
-    return <ErrorState error={roomsQuery.error} onRetry={() => void roomsQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={roomsQuery.error}
+        onRetry={() => void roomsQuery.refetch()}
+      />
+    );
   }
 
   const rooms = roomsQuery.data;
   if (!rooms || isScaffoldTodo(rooms)) {
-    return <TodoState message={isScaffoldTodo(rooms) ? rooms.message : undefined} />;
+    return (
+      <TodoState message={isScaffoldTodo(rooms) ? rooms.message : undefined} />
+    );
   }
 
   const room = pickRoom(rooms);
   if (!room) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">{missingText}</div>;
+    return (
+      <div className="py-8 text-center text-sm text-muted-foreground">
+        {missingText}
+      </div>
+    );
   }
 
   return (
@@ -209,9 +274,18 @@ function RoomPane({
         <RoomThread room={room} currentUserId={currentUserId} />
       </div>
       {roomsQuery.error && (
-        <div className="border-t border-card-border p-3 text-xs text-destructive" role="alert">
+        <div
+          className="border-t border-card-border p-3 text-xs text-destructive"
+          role="alert"
+        >
           <p>{apiErrorMessage(roomsQuery.error)}</p>
-          <Button variant="outline" size="sm" className="mt-2" onClick={() => void roomsQuery.refetch()} disabled={roomsQuery.isFetching}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => void roomsQuery.refetch()}
+            disabled={roomsQuery.isFetching}
+          >
             Try again
           </Button>
         </div>
@@ -220,16 +294,46 @@ function RoomPane({
   );
 }
 
-function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: number }) {
+function RoomThread({
+  room,
+  currentUserId,
+}: {
+  room: ChatRoom;
+  currentUserId: number;
+}) {
   const queryClient = useQueryClient();
+  const connectionStateRef = useRef<ChatConnectionState>("connecting");
   const messagesQuery = useQuery({
     queryKey: ["chat", currentUserId, "room-messages", room.id],
-    queryFn: ({ signal }) => fetchRoomMessages(room.id, signal),
+    queryFn: async ({ signal }) => {
+      const rows = await fetchRoomMessages(room.id, signal);
+      return Array.isArray(rows) ? uniqueMessages(rows) : rows;
+    },
     refetchInterval: (query) =>
-      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
+      connectionStateRef.current === "connected" && !query.state.error
+        ? 60_000
+        : pollDelay(
+            query.state.data,
+            query.state.error,
+            query.state.fetchFailureCount,
+          ),
   });
 
+  const connectionState = useChatSocket(
+    currentUserId,
+    "room",
+    room.id,
+    Array.isArray(messagesQuery.data) &&
+      !(
+        messagesQuery.error instanceof ApiError &&
+        [401, 403, 404].includes(messagesQuery.error.status)
+      ),
+  );
+
+  connectionStateRef.current = connectionState;
+
   const sendMutation = useMutation({
+    retry: false,
     mutationFn: (body: string) => sendRoomMessage(room.id, body),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
@@ -242,12 +346,21 @@ function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: nu
 
   if (messagesQuery.isLoading) return <LoadingState />;
   if (messagesQuery.isError && !Array.isArray(messagesQuery.data)) {
-    return <ErrorState error={messagesQuery.error} onRetry={() => void messagesQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={messagesQuery.error}
+        onRetry={() => void messagesQuery.refetch()}
+      />
+    );
   }
 
   const messages = messagesQuery.data;
   if (!messages || isScaffoldTodo(messages)) {
-    return <TodoState message={isScaffoldTodo(messages) ? messages.message : undefined} />;
+    return (
+      <TodoState
+        message={isScaffoldTodo(messages) ? messages.message : undefined}
+      />
+    );
   }
 
   return (
@@ -262,6 +375,7 @@ function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: nu
       }))}
       currentUserId={currentUserId}
       sendMutation={sendMutation}
+      connectionState={connectionState}
       readError={messagesQuery.error}
       emptyText="No messages yet — say hi!"
     />
@@ -273,7 +387,8 @@ function RoomThread({ room, currentUserId }: { room: ChatRoom; currentUserId: nu
 // ---------------------------------------------------------------------------
 
 function DmsPane({ currentUserId }: { currentUserId: number }) {
-  const [openConversation, setOpenConversation] = useState<DmConversation | null>(null);
+  const [openConversation, setOpenConversation] =
+    useState<DmConversation | null>(null);
 
   if (openConversation) {
     return (
@@ -302,7 +417,11 @@ function DmList({
     queryKey: ["chat", currentUserId, "dms"],
     queryFn: ({ signal }) => fetchDmConversations(signal),
     refetchInterval: (query) =>
-      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
+      pollDelay(
+        query.state.data,
+        query.state.error,
+        query.state.fetchFailureCount,
+      ),
   });
 
   const startMutation = useMutation({
@@ -313,7 +432,9 @@ function DmList({
       } else {
         setStartNotice(null);
         setNewDmUserId("");
-        void queryClient.invalidateQueries({ queryKey: ["chat", currentUserId, "dms"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["chat", currentUserId, "dms"],
+        });
         onOpen(created);
       }
     },
@@ -322,13 +443,22 @@ function DmList({
 
   if (dmsQuery.isLoading) return <LoadingState />;
   if (dmsQuery.isError && !Array.isArray(dmsQuery.data)) {
-    return <ErrorState error={dmsQuery.error} onRetry={() => void dmsQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={dmsQuery.error}
+        onRetry={() => void dmsQuery.refetch()}
+      />
+    );
   }
 
   const conversations = dmsQuery.data;
   if (!conversations || isScaffoldTodo(conversations)) {
     return (
-      <TodoState message={isScaffoldTodo(conversations) ? conversations.message : undefined} />
+      <TodoState
+        message={
+          isScaffoldTodo(conversations) ? conversations.message : undefined
+        }
+      />
     );
   }
 
@@ -379,7 +509,12 @@ function DmList({
             inputMode="numeric"
             className="h-9"
           />
-          <Button type="submit" size="sm" className="h-9" disabled={startMutation.isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            className="h-9"
+            disabled={startMutation.isPending}
+          >
             Start
           </Button>
         </div>
@@ -408,14 +543,38 @@ function DmThread({
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
+  const connectionStateRef = useRef<ChatConnectionState>("connecting");
   const messagesQuery = useQuery({
     queryKey: ["chat", currentUserId, "dm-messages", conversation.id],
-    queryFn: ({ signal }) => fetchDmMessages(conversation.id, signal),
+    queryFn: async ({ signal }) => {
+      const rows = await fetchDmMessages(conversation.id, signal);
+      return Array.isArray(rows) ? uniqueMessages(rows) : rows;
+    },
     refetchInterval: (query) =>
-      pollDelay(query.state.data, query.state.error, query.state.fetchFailureCount),
+      connectionStateRef.current === "connected" && !query.state.error
+        ? 60_000
+        : pollDelay(
+            query.state.data,
+            query.state.error,
+            query.state.fetchFailureCount,
+          ),
   });
 
+  const connectionState = useChatSocket(
+    currentUserId,
+    "dm",
+    conversation.id,
+    Array.isArray(messagesQuery.data) &&
+      !(
+        messagesQuery.error instanceof ApiError &&
+        [401, 403, 404].includes(messagesQuery.error.status)
+      ),
+  );
+
+  connectionStateRef.current = connectionState;
+
   const sendMutation = useMutation({
+    retry: false,
     mutationFn: (body: string) => sendDmMessage(conversation.id, body),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
@@ -439,16 +598,25 @@ function DmThread({
 
   if (messagesQuery.isLoading) return <LoadingState />;
   if (messagesQuery.isError && !Array.isArray(messagesQuery.data)) {
-    return <ErrorState error={messagesQuery.error} onRetry={() => void messagesQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={messagesQuery.error}
+        onRetry={() => void messagesQuery.refetch()}
+      />
+    );
   }
 
   const messages = messagesQuery.data;
   if (!messages || isScaffoldTodo(messages)) {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2 border-b border-card-border px-3 py-2">{back}</div>
+        <div className="flex items-center gap-2 border-b border-card-border px-3 py-2">
+          {back}
+        </div>
         <div className="min-h-0 flex-1">
-          <TodoState message={isScaffoldTodo(messages) ? messages.message : undefined} />
+          <TodoState
+            message={isScaffoldTodo(messages) ? messages.message : undefined}
+          />
         </div>
       </div>
     );
@@ -462,12 +630,16 @@ function DmThread({
       messages={messages.map((message: DmMessage) => ({
         id: message.id,
         senderId: message.senderId,
-        senderName: message.senderId === currentUserId ? "You" : conversation.otherUserName,
+        senderName:
+          message.senderId === currentUserId
+            ? "You"
+            : conversation.otherUserName,
         body: message.body,
         createdAt: message.createdAt,
       }))}
       currentUserId={currentUserId}
       sendMutation={sendMutation}
+      connectionState={connectionState}
       readError={messagesQuery.error}
       emptyText="No messages yet — send the first one."
     />
@@ -494,6 +666,7 @@ function Thread({
   currentUserId,
   sendMutation,
   readError,
+  connectionState,
   emptyText,
 }: {
   title: string;
@@ -503,6 +676,7 @@ function Thread({
   currentUserId: number;
   sendMutation: SendMutationLike;
   readError?: unknown;
+  connectionState: ChatConnectionState;
   emptyText: string;
 }) {
   const [draft, setDraft] = useState("");
@@ -532,13 +706,28 @@ function Thread({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-card-border px-3 py-2">
         {leading}
-        <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
-        {historyLabel && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{historyLabel}</span>}
+        <p className="truncate text-xs font-medium text-muted-foreground">
+          {title}
+        </p>
+        {historyLabel && (
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+            {historyLabel}
+          </span>
+        )}
       </div>
 
+      <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+        {connectionState === "connected"
+          ? "Live"
+          : connectionState === "offline"
+            ? "Offline — history will sync when connected"
+            : "Connecting — checking saved messages"}
+      </p>
       <ScrollArea className="min-h-0 flex-1">
         {messages.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">{emptyText}</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {emptyText}
+          </div>
         ) : (
           <div className="flex flex-col gap-2 p-3">
             {messages.map((message) => {
@@ -550,13 +739,16 @@ function Thread({
                 >
                   <div
                     className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
-                      own ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                      own
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
                     }`}
                   >
                     {message.body}
                   </div>
                   <span className="mt-0.5 text-[10px] text-muted-foreground">
-                    {own ? "You" : message.senderName} · {relativeTime(message.createdAt)}
+                    {own ? "You" : message.senderName} ·{" "}
+                    {relativeTime(message.createdAt)}
                   </span>
                 </div>
               );
@@ -596,7 +788,8 @@ function Thread({
         )}
         {sendMutation.isError && (
           <p className="mt-2 text-xs text-destructive" role="alert">
-            {apiErrorMessage(sendMutation.error)}
+            {apiErrorMessage(sendMutation.error)} Check the conversation before
+            sending again; your message may already be saved.
           </p>
         )}
       </form>

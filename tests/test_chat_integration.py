@@ -372,6 +372,7 @@ def test_existing_dm_enforces_new_blocks(chat_server, chat_database, blocker_id)
             assert api(blocker, base, "DELETE", f"/api/blocks/{blocked_id}")[0] == 204
             status, restored = api(sender, base, "POST", "/api/dms/1/messages", {"body": "unblocked REST"})
             assert status == 201 and restored["body"] == "unblocked REST"
+            assert json.loads(recipient_socket.recv(timeout=3)) == restored
             with connect(url, additional_headers={"Cookie": sender_cookie}, open_timeout=3) as reconnected:
                 reconnected.send("unblocked socket")
                 confirmed = json.loads(reconnected.recv(timeout=3))
@@ -401,3 +402,55 @@ def test_registration_names_cannot_poison_room_history(chat_server, chat_databas
         status, history = api(client, base, "GET", "/api/chat/rooms/1/messages")
         assert status == 200
         assert any(m["id"] == sent["id"] and m["senderName"] == "New Student" for m in history)
+
+
+@pytest.mark.parametrize("socket_path,rest_path", [
+    ("/ws/chat/rooms/1", "/api/chat/rooms/1/messages"),
+    ("/ws/dms/1", "/api/dms/1/messages"),
+])
+def test_rest_commit_is_broadcast_to_both_peers(chat_server, socket_path, rest_path):
+    with chat_server() as base:
+        student, cookie = login(base, "student001@test.edu")
+        mentor, other_cookie = login(base, "mentor501@test.edu")
+        url = base.replace("http://", "ws://") + socket_path
+        with connect(url, additional_headers={"Cookie": cookie}) as first, \
+             connect(url, additional_headers={"Cookie": other_cookie}) as second:
+            for client, author in [(student, 1), (mentor, 501)]:
+                status, saved = api(client, base, "POST", rest_path, {"body": "REST live", "senderId": 999})
+                assert status == 201 and saved["senderId"] == author
+                assert json.loads(first.recv(timeout=2)) == saved
+                assert json.loads(second.recv(timeout=2)) == saved
+                # A separate connection observes the durable row when the event arrives.
+                status, history = api(student, base, "GET", rest_path)
+                assert status == 200 and any(row["id"] == saved["id"] for row in history)
+
+
+def test_rest_broadcast_rechecks_existing_socket_district_access(chat_server, chat_database):
+    with chat_server() as base:
+        student, cookie = login(base, 'student001@test.edu')
+        mentor, _ = login(base, 'mentor501@test.edu')
+        with connect(base.replace('http://', 'ws://') + '/ws/chat/rooms/2', additional_headers={'Cookie': cookie}) as socket:
+            with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+                cur.execute('UPDATE users SET district_id = 2 WHERE id = 1')
+                conn.commit()
+            assert api(student, base, 'GET', '/api/chat/rooms/2/messages')[0] == 403
+            assert api(mentor, base, 'POST', '/api/chat/rooms/2/messages', {'body': 'private district update'})[0] == 201
+            with pytest.raises(ConnectionClosed) as closed:
+                socket.recv(timeout=3)
+            assert closed.value.rcvd.code == 4403
+
+
+def test_existing_room_socket_cannot_send_after_district_change(chat_server, chat_database):
+    with chat_server() as base:
+        _, cookie = login(base, 'student001@test.edu')
+        with connect(base.replace('http://', 'ws://') + '/ws/chat/rooms/2', additional_headers={'Cookie': cookie}) as socket:
+            with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+                cur.execute('UPDATE users SET district_id = 2 WHERE id = 1')
+                conn.commit()
+            socket.send('revoked sender canary')
+            with pytest.raises(ConnectionClosed) as closed:
+                socket.recv(timeout=3)
+            assert closed.value.rcvd.code == 4403
+            with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+                cur.execute('SELECT count(*) FROM chat_messages WHERE body = %s', ('revoked sender canary',))
+                assert cur.fetchone()[0] == 0

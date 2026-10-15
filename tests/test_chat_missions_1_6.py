@@ -99,6 +99,8 @@ def patch_db(monkeypatch, *steps):
         yield FakeConnection(cursor)
 
     monkeypatch.setattr(chat, "db", fake_db)
+    # Recipient authorization has real-DB coverage in test_chat_integration.py.
+    monkeypatch.setattr(chat, "_authorized_recipients", lambda sockets, message: sockets)
     return cursor
 
 
@@ -315,6 +317,11 @@ def test_mission_3_rejects_invalid_message_bodies(raw_body):
 def test_mission_4_persists_and_broadcasts_a_formatted_room_message(monkeypatch):
     cursor = patch_db(
         monkeypatch,
+        QueryStep(
+            "from chat_rooms",
+            params=(1,),
+            one={"id": 1, "type": "global", "district_id": None, "name": "Global Chat"},
+        ),
         QueryStep(
             "from chat_rooms",
             params=(1,),
