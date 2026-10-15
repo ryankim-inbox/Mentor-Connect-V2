@@ -673,6 +673,20 @@ export const ListChatRoomMessagesParams = zod.object({
   roomId: zod.coerce.number().int(),
 });
 
+export const listChatRoomMessagesQueryBeforeIdMax = 2147483647;
+
+export const ListChatRoomMessagesQueryParams = zod.object({
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listChatRoomMessagesQueryBeforeIdMax)
+    .optional()
+    .describe(
+      "Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.",
+    ),
+});
+
 export const listChatRoomMessagesResponseOneItemIdMax = 9007199254740991;
 
 export const listChatRoomMessagesResponseOneItemRoomIdMax = 9007199254740991;
@@ -911,6 +925,20 @@ export const StartDmConversationResponse = zod.union([
  */
 export const ListDmMessagesParams = zod.object({
   conversationId: zod.coerce.number().int(),
+});
+
+export const listDmMessagesQueryBeforeIdMax = 2147483647;
+
+export const ListDmMessagesQueryParams = zod.object({
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listDmMessagesQueryBeforeIdMax)
+    .optional()
+    .describe(
+      "Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.",
+    ),
 });
 
 export const listDmMessagesResponseOneItemIdMax = 9007199254740991;

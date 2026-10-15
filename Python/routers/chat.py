@@ -18,8 +18,9 @@
 # already calls these endpoints, including the private message thread.
 
 import asyncio
+from typing import Annotated
 
-from fastapi import BackgroundTasks, APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import BackgroundTasks, APIRouter, Query, Request, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -354,22 +355,26 @@ def list_chat_rooms(request: Request):
 
 
 @router.get("/chat/rooms/{room_id}/messages")
-def list_room_messages(room_id: int, request: Request):
-    """Mission 2 — latest 50 visible room messages, oldest -> newest."""
+def list_room_messages(room_id: int, request: Request,
+                       before_id: Annotated[int | None, Query(alias="beforeId", gt=0, le=2147483647)] = None):
+    """Up to 50 visible messages before a channel-scoped cursor, oldest first."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
         _load_room_for_user(cur, room_id, user_id)
+        cursor_filter = "" if before_id is None else """
+                 AND (m.created_at, m.id) <
+                     (SELECT created_at, id FROM chat_messages WHERE room_id = %s AND id = %s)"""
         cur.execute(
             """SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name,
                       m.body, m.created_at
                FROM chat_messages m
                JOIN users u ON u.id = m.sender_id
                WHERE m.room_id = %s
-                 AND m.deleted_at IS NULL
+                 AND m.deleted_at IS NULL""" + cursor_filter + """
                ORDER BY m.created_at DESC, m.id DESC
                LIMIT 50""",
-            (room_id,),
+            (room_id,) if before_id is None else (room_id, room_id, before_id),
         )
         messages = cur.fetchall()
     return [_format_chat_message(message) for message in reversed(messages)]
@@ -465,18 +470,22 @@ def start_dm_conversation(body: StartDmBody, request: Request):
 
 
 @router.get("/dms/{conversation_id}/messages")
-def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
+def list_dm_messages(conversation_id: int, request: Request,
+                     before_id: Annotated[int | None, Query(alias="beforeId", gt=0, le=2147483647)] = None) -> list[dict]:
     """Mission 7a — visible message history for a conversation's participants."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
         _load_conversation_membership(cur, conversation_id, user_id)
+        cursor_filter = "" if before_id is None else """
+                 AND (created_at, id) <
+                     (SELECT created_at, id FROM dm_messages WHERE conversation_id = %s AND id = %s)"""
         cur.execute(
             """SELECT id, conversation_id, sender_id, body, created_at, read_at
                FROM dm_messages
-               WHERE conversation_id = %s AND deleted_at IS NULL
+               WHERE conversation_id = %s AND deleted_at IS NULL""" + cursor_filter + """
                ORDER BY created_at DESC, id DESC LIMIT 50""",
-            (conversation_id,),
+            (conversation_id,) if before_id is None else (conversation_id, conversation_id, before_id),
         )
         messages = cur.fetchall()
         incoming_ids = [message["id"] for message in messages if message["sender_id"] != user_id]

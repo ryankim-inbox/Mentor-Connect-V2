@@ -64,9 +64,15 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function fields(value: unknown, shape: Record<string, "number" | "string">): boolean {
+function fields(
+  value: unknown,
+  shape: Record<string, "number" | "string">,
+): boolean {
   const item = record(value);
-  return !!item && Object.entries(shape).every(([key, type]) => typeof item[key] === type);
+  return (
+    !!item &&
+    Object.entries(shape).every(([key, type]) => typeof item[key] === type)
+  );
 }
 
 async function chatFetch<T>(
@@ -125,9 +131,13 @@ const arrayOf = (accepts: (value: unknown) => boolean) => (value: unknown) =>
 export const fetchChatRooms = (signal?: AbortSignal) =>
   chatFetch<ChatRoom[]>("/api/chat/rooms", { signal }, arrayOf(chatRoom));
 
-export const fetchRoomMessages = (roomId: number, signal?: AbortSignal) =>
+export const fetchRoomMessages = (
+  roomId: number,
+  signal?: AbortSignal,
+  beforeId?: number,
+) =>
   chatFetch<ChatMessage[]>(
-    `/api/chat/rooms/${roomId}/messages`,
+    `/api/chat/rooms/${roomId}/messages${beforeId === undefined ? "" : `?beforeId=${beforeId}`}`,
     { signal },
     arrayOf(chatMessage),
   );
@@ -149,9 +159,13 @@ export const startDmConversation = (toUserId: number) =>
     dmConversation,
   );
 
-export const fetchDmMessages = (conversationId: number, signal?: AbortSignal) =>
+export const fetchDmMessages = (
+  conversationId: number,
+  signal?: AbortSignal,
+  beforeId?: number,
+) =>
   chatFetch<DmMessage[]>(
-    `/api/dms/${conversationId}/messages`,
+    `/api/dms/${conversationId}/messages${beforeId === undefined ? "" : `?beforeId=${beforeId}`}`,
     { signal },
     arrayOf(dmMessage),
   );

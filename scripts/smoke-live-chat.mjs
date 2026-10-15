@@ -35,6 +35,23 @@ export async function runLiveChat(
       },
       { route, method, body },
     );
+  async function findSaved(page, route, matches) {
+    let cursor;
+    const seen = new Set();
+    for (;;) {
+      const result = await api(
+        page,
+        route + (cursor === undefined ? "" : `?beforeId=${cursor}`),
+      );
+      assert.equal(result.status, 200);
+      const found = result.body.find(matches);
+      if (found) return found;
+      if (result.body.length < 50) return undefined;
+      cursor = result.body[0].id;
+      assert.ok(!seen.has(cursor), "history cursor must advance");
+      seen.add(cursor);
+    }
+  }
   async function login(page, account) {
     await page.goto(origin + "/login");
     await page.getByLabel("School email").fill(account.email);
@@ -83,13 +100,12 @@ export async function runLiveChat(
     const [a, b] = pages;
     if (evidence) {
       for (const message of evidence.messages) {
-        const result = await api(b, message.route);
-        assert.equal(result.status, 200);
-        assert.equal(
-          result.body.filter(
+        assert.ok(
+          await findSaved(
+            b,
+            message.route,
             (row) => row.id === message.id && row.body === message.body,
-          ).length,
-          1,
+          ),
         );
       }
       report("persistence-after-operator-restart");
@@ -115,6 +131,25 @@ export async function runLiveChat(
     await send(a, b, token + "-room-a");
     await send(b, a, token + "-room-b");
     report("room-bidirectional-live-ui");
+    async function recoverGap(sender, recipient, context, route, label) {
+      await context.setOffline(true);
+      for (let index = 0; index < 51; index++) {
+        assert.equal(
+          (
+            await api(sender, route, "POST", {
+              body: `${token}-${label}-${index}`,
+            })
+          ).status,
+          201,
+        );
+      }
+      await context.setOffline(false);
+      await expect(
+        recipient.getByText(new RegExp(`^${token}-${label}-[0-9]+$`)),
+      ).toHaveCount(51, { timeout: 15000 });
+    }
+    await recoverGap(b, a, contexts[0], roomRoute, "room-gap");
+    report("room-reconnect-recovers-51-messages");
     const dm = await api(a, "/api/dms/start", "POST", {
       toUserId: credentials.accounts.mentee.id,
     });
@@ -129,14 +164,7 @@ export async function runLiveChat(
     await send(b, a, token + "-dm-b");
     report("dm-bidirectional-live-ui");
     const dmRoute = `/api/dms/${dm.body.id}/messages`;
-    await contexts[1].setOffline(true);
-    const missed = await api(a, dmRoute, "POST", { body: token + "-offline" });
-    assert.equal(missed.status, 201);
-    await contexts[1].setOffline(false);
-    await expect(b.getByText(token + "-offline", { exact: true })).toHaveCount(
-      1,
-      { timeout: 15000 },
-    );
+    await recoverGap(a, b, contexts[1], dmRoute, "offline");
     report("reconnect-history-resync-dedup");
     const forged = await api(a, dmRoute, "POST", {
       body: token + "-forged",
@@ -249,18 +277,36 @@ export async function runLiveChat(
       [roomRoute, token + "-room-a"],
       [dmRoute, token + "-dm-a"],
     ]) {
-      const row = (await api(b, route)).body.find((row) => row.body === body);
+      const row = await findSaved(b, route, (row) => row.body === body);
       assert.ok(row);
       saved.messages.push({ route, body, id: row.id });
     }
     await b.reload();
     await openRoom(b);
+    await b
+      .getByRole("button", { name: "Load older messages", exact: true })
+      .click();
+    await expect(b.getByText(token + "-room-a", { exact: true })).toHaveCount(
+      1,
+    );
     await openDm(b, reverse.body.otherUserName);
+    await b
+      .getByRole("button", { name: "Load older messages", exact: true })
+      .click();
     await expect(b.getByText(token + "-dm-a", { exact: true })).toHaveCount(1);
     await api(b, "/api/auth/logout", "POST");
     await login(b, credentials.accounts.mentee);
     await openRoom(b);
+    await b
+      .getByRole("button", { name: "Load older messages", exact: true })
+      .click();
+    await expect(b.getByText(token + "-room-a", { exact: true })).toHaveCount(
+      1,
+    );
     await openDm(b, reverse.body.otherUserName);
+    await b
+      .getByRole("button", { name: "Load older messages", exact: true })
+      .click();
     await expect(b.getByText(token + "-dm-a", { exact: true })).toHaveCount(1);
     report("refresh-and-relogin-persistence");
     if (restart) {
@@ -269,12 +315,12 @@ export async function runLiveChat(
         .poll(async () => (await api(a, "/readyz")).status, { timeout: 20000 })
         .toBe(200);
       for (const message of saved.messages) {
-        const rows = (await api(b, message.route)).body;
-        assert.equal(
-          rows.filter(
+        assert.ok(
+          await findSaved(
+            b,
+            message.route,
             (row) => row.id === message.id && row.body === message.body,
-          ).length,
-          1,
+          ),
         );
       }
       report("service-restart-persistence");

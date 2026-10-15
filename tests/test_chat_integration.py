@@ -454,3 +454,36 @@ def test_existing_room_socket_cannot_send_after_district_change(chat_server, cha
             with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
                 cur.execute('SELECT count(*) FROM chat_messages WHERE body = %s', ('revoked sender canary',))
                 assert cur.fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('kind', ['room', 'dm'])
+def test_history_cursor_recovers_more_than_two_pages_without_duplicates(chat_server, chat_database, kind):
+    table, channel = ('chat_messages', 'room_id') if kind == 'room' else ('dm_messages', 'conversation_id')
+    route = '/api/chat/rooms/1/messages' if kind == 'room' else '/api/dms/1/messages'
+    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+        # Identical timestamps exercise the tie breaker; the final ID is older in time.
+        for number in range(121):
+            cur.execute(f'INSERT INTO {table} ({channel}, sender_id, body, created_at) VALUES (1, 1, %s, %s)',
+                        (f'page-{number}', '2020-01-01' if number == 120 else '2026-01-01'))
+        cur.execute(f'SELECT id FROM {table} WHERE {channel}=1 AND deleted_at IS NULL ORDER BY created_at, id')
+        expected = [row[0] for row in cur.fetchall()]
+        conn.commit()
+    with chat_server() as base:
+        student, _ = login(base, 'student001@test.edu')
+        recovered, cursor = [], None
+        for _ in range(10):
+            suffix = '' if cursor is None else f'?beforeId={cursor}'
+            status, page = api(student, base, 'GET', route + suffix)
+            assert status == 200 and len(page) <= 50
+            ids = [row['id'] for row in page]
+            assert not set(ids).intersection(recovered), 'cursor must advance beyond the latest 50'
+            recovered = ids + recovered
+            if len(page) < 50:
+                break
+            cursor = ids[0]
+        assert recovered == expected
+        assert api(student, base, 'GET', route + '?beforeId=0')[0] == 422
+        assert api(build_opener(), base, 'GET', route + f'?beforeId={expected[-1]}')[0] == 401
+        outsider, _ = login(base, 'both951@test.edu')
+        forbidden = '/api/chat/rooms/2/messages' if kind == 'room' else route
+        assert api(outsider, base, 'GET', forbidden + f'?beforeId={expected[-1]}')[0] == 403
