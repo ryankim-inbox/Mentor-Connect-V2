@@ -33,6 +33,7 @@ import type {
   Error401Response,
   Error403Response,
   Error404Response,
+  Error409Response,
   Error422Response,
   Error429Response,
   Error502Response,
@@ -47,8 +48,10 @@ import type {
   LoginBody,
   MatchRequest,
   MatchingResult,
+  MentorActivityEnvelope,
   MentorshipRequest,
   MessageResponse,
+  PopularSubjectsEnvelope,
   PracticeStatus,
   ProfileSummary,
   PyEnvelope,
@@ -62,6 +65,7 @@ import type {
   UpdateRequestBody,
   UpdateUserBody,
   User,
+  WeeklyMatchesEnvelope,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1238,6 +1242,7 @@ export const getCreateRequestMutationKey = () => ["createRequest"] as const;
 export const getCreateRequestMutationOptions = <
   TError = ErrorType<
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1286,6 +1291,7 @@ export type CreateRequestMutationResult = NonNullable<
 export type CreateRequestMutationBody = BodyType<CreateRequestBody>;
 export type CreateRequestMutationError = ErrorType<
   | Error401Response
+  | Error404Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -1302,6 +1308,7 @@ export type CreateRequestMutationVariables = {
 export const useCreateRequest = <
   TError = ErrorType<
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1352,6 +1359,7 @@ export const getGetRequestQueryOptions = <
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1394,6 +1402,7 @@ export type GetRequestQueryResult = NonNullable<
 export type GetRequestQueryError = ErrorType<
   | Error401Response
   | Error404Response
+  | Error422Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -1409,6 +1418,7 @@ export function useGetRequest<
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1485,6 +1495,7 @@ export const getUpdateRequestMutationOptions = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1535,6 +1546,7 @@ export type UpdateRequestMutationError = ErrorType<
   | Error401Response
   | Error403Response
   | Error404Response
+  | Error409Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -1554,6 +1566,7 @@ export const useUpdateRequest = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1602,6 +1615,7 @@ export const getDeleteRequestMutationOptions = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1651,6 +1665,7 @@ export type DeleteRequestMutationError = ErrorType<
   | Error401Response
   | Error403Response
   | Error404Response
+  | Error422Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -1666,6 +1681,7 @@ export const useDeleteRequest = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1694,6 +1710,7 @@ export const getMatchRequestUrl = (id: number) => {
 };
 
 /**
+ * Returns 403 when either participant blocks the other.
  * @summary Match/respond to a mentorship request
  */
 export const matchRequest = async (
@@ -1710,8 +1727,11 @@ export const getMatchRequestMutationKey = () => ["matchRequest"] as const;
 
 export const getMatchRequestMutationOptions = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1758,8 +1778,11 @@ export type MatchRequestMutationResult = NonNullable<
 >;
 
 export type MatchRequestMutationError = ErrorType<
+  | Error400Response
   | Error401Response
+  | Error403Response
   | Error404Response
+  | Error422Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -1772,8 +1795,11 @@ export type MatchRequestMutationVariables = { id: number };
  */
 export const useMatchRequest = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1929,7 +1955,9 @@ export const getCreateReportMutationKey = () => ["createReport"] as const;
 
 export const getCreateReportMutationOptions = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1977,7 +2005,9 @@ export type CreateReportMutationResult = NonNullable<
 >;
 export type CreateReportMutationBody = BodyType<CreateReportBody>;
 export type CreateReportMutationError = ErrorType<
+  | Error400Response
   | Error401Response
+  | Error404Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -1993,7 +2023,9 @@ export type CreateReportMutationVariables = {
  */
 export const useCreateReport = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -2158,7 +2190,9 @@ export const getBlockUserMutationKey = () => ["blockUser"] as const;
 
 export const getBlockUserMutationOptions = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -2206,7 +2240,9 @@ export type BlockUserMutationResult = NonNullable<
 >;
 export type BlockUserMutationBody = BodyType<BlockUserBody>;
 export type BlockUserMutationError = ErrorType<
+  | Error400Response
   | Error401Response
+  | Error404Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -2220,7 +2256,9 @@ export type BlockUserMutationVariables = { data: BodyType<BlockUserBody> };
  */
 export const useBlockUser = <
   TError = ErrorType<
+    | Error400Response
     | Error401Response
+    | Error404Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -2268,6 +2306,7 @@ export const getUnblockUserMutationOptions = <
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -2316,6 +2355,7 @@ export type UnblockUserMutationResult = NonNullable<
 export type UnblockUserMutationError = ErrorType<
   | Error401Response
   | Error404Response
+  | Error422Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -2330,6 +2370,7 @@ export const useUnblockUser = <
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -3477,6 +3518,7 @@ export const getGetMatchesQueryOptions = <
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -3521,6 +3563,7 @@ export type GetMatchesQueryResult = NonNullable<
 export type GetMatchesQueryError = ErrorType<
   | Error401Response
   | Error404Response
+  | Error422Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -3536,6 +3579,7 @@ export function useGetMatches<
   TError = ErrorType<
     | Error401Response
     | Error404Response
+    | Error422Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4469,12 +4513,12 @@ export const getGetWeeklyMatchesUrl = () => {
 };
 
 /**
- * @summary getWeeklyMatches
+ * @summary Eight UTC calendar weeks of observed matches, ending with the current week-to-date
  */
 export const getWeeklyMatches = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetWeeklyMatchesUrl(), {
+): Promise<WeeklyMatchesEnvelope> => {
+  return customFetch<WeeklyMatchesEnvelope>(getGetWeeklyMatchesUrl(), {
     ...options,
     method: "GET",
   });
@@ -4528,7 +4572,7 @@ export type GetWeeklyMatchesQueryError = ErrorType<
 >;
 
 /**
- * @summary getWeeklyMatches
+ * @summary Eight UTC calendar weeks of observed matches, ending with the current week-to-date
  */
 
 export function useGetWeeklyMatches<
@@ -4562,12 +4606,12 @@ export const getGetPopularSubjectsUrl = () => {
 };
 
 /**
- * @summary getPopularSubjects
+ * @summary Top ten tags by current request demand, ordered by count descending then tag ID
  */
 export const getPopularSubjects = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetPopularSubjectsUrl(), {
+): Promise<PopularSubjectsEnvelope> => {
+  return customFetch<PopularSubjectsEnvelope>(getGetPopularSubjectsUrl(), {
     ...options,
     method: "GET",
   });
@@ -4621,7 +4665,7 @@ export type GetPopularSubjectsQueryError = ErrorType<
 >;
 
 /**
- * @summary getPopularSubjects
+ * @summary Top ten tags by current request demand, ordered by count descending then tag ID
  */
 
 export function useGetPopularSubjects<
@@ -4748,12 +4792,13 @@ export const getGetMentorResponseRatesUrl = () => {
 };
 
 /**
- * @summary getMentorResponseRates
+ * Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
+ * @summary Mentor matching activity observed after tracking started
  */
 export const getMentorResponseRates = async (
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetMentorResponseRatesUrl(), {
+): Promise<MentorActivityEnvelope> => {
+  return customFetch<MentorActivityEnvelope>(getGetMentorResponseRatesUrl(), {
     ...options,
     method: "GET",
   });
@@ -4808,7 +4853,7 @@ export type GetMentorResponseRatesQueryError = ErrorType<
 >;
 
 /**
- * @summary getMentorResponseRates
+ * @summary Mentor matching activity observed after tracking started
  */
 
 export function useGetMentorResponseRates<

@@ -5,3 +5,5 @@ export * from "./requests";
 export * from "./reports";
 export * from "./practice";
 export * from "./chat";
+
+export * from "./request-events";

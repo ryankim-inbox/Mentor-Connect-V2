@@ -10,6 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from db import db
 
+
 router = APIRouter()
 
 BADGE_THRESHOLDS = (
@@ -259,7 +260,7 @@ def badge_for_rank(rank: int | None) -> str | None:
 # Verify from the repository root:
 #   MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
 #     tests/test_mentor_ranks.py -k test_mission_5
-
+# ---------------------------------------------------------------------------
 @router.get("/mentor-ranks")
 def list_mentor_ranks(request: Request) -> list[dict] | dict:
     """Return rankings, or a safe Mission 5 TODO envelope while unfinished."""
@@ -283,7 +284,18 @@ def list_mentor_ranks(request: Request) -> list[dict] | dict:
 #   4. Find ``mentor_id`` in those globally ranked rows and return
 #      ``_public_row(row)``; raise HTTP 404 if no row matches.
 #
-
+# Literal example:
+#   Global counts ``[(1, 4), (2, 2)]`` mean requesting mentor 2 returns rank 2
+#   with badge Platinum. Ranking only mentor 2 would incorrectly return rank 1.
+#
+# Edge cases:
+#   Anonymous access is 401 before ID validation. Zero/negative IDs are 422.
+#   Missing IDs and mentee-only IDs are 404. Zero-match mentors are still found
+#   and return ``rank: null`` and ``badge: null``.
+#
+# Verify from the repository root:
+#   MENTOR_RANKS_MODULE=mentor_ranks .venv/bin/python -m pytest -q \
+#     tests/test_mentor_ranks.py -k test_mission_6
 # ---------------------------------------------------------------------------
 @router.get("/mentor-ranks/{mentor_id}")
 def get_mentor_rank(mentor_id: int, request: Request) -> dict:

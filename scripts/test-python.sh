@@ -8,6 +8,10 @@ for tool in "$PYTHON_BIN" node pnpm initdb pg_ctl; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Required test tool missing: $tool" >&2; exit 1; }
 done
 
+"$PYTHON_BIN" -c "import pytest, psycopg, psycopg2, uvicorn, websockets"
+CLASSROOM_TEST_PYTHON=$PYTHON_BIN
+export CLASSROOM_TEST_PYTHON
+
 pnpm --filter @workspace/db schema:check
 
 FIXTURE_DIR=$(mktemp -d /tmp/mentor-connect-python.XXXXXX)
