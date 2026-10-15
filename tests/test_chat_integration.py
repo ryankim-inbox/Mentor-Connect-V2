@@ -1,29 +1,27 @@
 """Real HTTP/WS + PostgreSQL checks for the chat mission completion contract.
 
-Run: CHAT_TEST_ADMIN_DSN='dbname=postgres' .venv/bin/python -m pytest tests/test_chat_integration.py -q
-The admin DSN must point to a LOCAL test server with CREATE DATABASE permission.
-Each run creates and drops its own database; existing databases are never seeded.
+Run: sh scripts/test-python.sh tests/test_chat_integration.py -q
+The runner creates its own loopback PostgreSQL cluster; each test creates and
+drops its own database using the canonical schema and small data-only fixture.
 """
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
-import uuid
-from contextlib import closing, contextmanager
-from http.cookiejar import CookieJar
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from http.cookiejar import CookieJar
+from urllib.request import HTTPCookieProcessor, build_opener
 
 import psycopg2
-from psycopg2 import sql
-from psycopg2.extensions import make_dsn
 import pytest
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
+
+from backend_support import api, login
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,90 +38,188 @@ def test_backend_starts_with_declared_dependencies():
     assert result.returncode == 0, result.stderr
 
 
-@pytest.fixture
-def chat_database():
-    admin_dsn = os.environ.get("CHAT_TEST_ADMIN_DSN")
-    if not admin_dsn:
-        pytest.skip("Set CHAT_TEST_ADMIN_DSN to run isolated PostgreSQL integration tests")
-    name = "chat_test_" + uuid.uuid4().hex
-    admin = psycopg2.connect(admin_dsn)
-    admin.autocommit = True
-    with admin.cursor() as cur:
-        cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    dsn = make_dsn(admin_dsn, dbname=name)
-    try:
-        with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
-            cur.execute((ROOT / "database/mentor_connect_mock_1000.sql").read_text())
-        yield dsn
-    finally:
-        with admin.cursor() as cur:
-            cur.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
-        admin.close()
+def test_districts_are_available_before_login(chat_server):
+    with chat_server() as base:
+        anonymous = build_opener()
+        status, rows = api(anonymous, base, "GET", "/api/districts?type=high_school")
+        assert status == 200
+        assert {row["id"] for row in rows} == {1, 2}
+        assert all(row["type"] == "high_school" for row in rows)
+        assert all({"id", "name", "county", "type", "memberCount",
+                    "openRequestCount"} <= row.keys() for row in rows)
+        status, rows = api(anonymous, base, "GET",
+                           "/api/districts?type=high_school&search=zzzz_no_such_district")
+        assert status == 200
+        assert rows == []
 
 
-@pytest.fixture
-def chat_server(chat_database, tmp_path_factory):
-    @contextmanager
-    def running():
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        base = f"http://127.0.0.1:{port}"
-        log_path = tmp_path_factory.mktemp("chat-server") / "server.log"
-        with log_path.open("w+") as log:
-            process = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1",
-                 "--port", str(port), "--ws", "websockets-sansio"],
-                cwd=ROOT / "Python", stdout=log, stderr=log,
-                env={**os.environ, "DATABASE_URL": chat_database,
-                     "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},
-            )
-            try:
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline and process.poll() is None:
-                    try:
-                        if api(build_opener(), base, "GET", "/api/healthz")[0] == 200:
-                            break
-                    except URLError:
-                        time.sleep(0.05)
-                else:
-                    pytest.fail("Chat server failed to start:\n" + log_path.read_text())
-                yield base
-            finally:
-                process.terminate()
+def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
+    with chat_server() as base:
+        author, _ = login(base, "student001@test.edu")
+        mentor, _ = login(base, "mentor501@test.edu")
+        other, _ = login(base, "both951@test.edu")
+        anonymous = build_opener()
+        status, created = api(author, base, "POST", "/api/requests", {
+            "districtId": 1, "title": "Concurrent Connect", "description": "One match only",
+            "role": "mentee",
+        })
+        assert status == 201 and created["authorId"] == 1
+        request_id = created["id"]
+        match_path = f"/api/requests/{request_id}/match"
+        missing_path = "/api/requests/99999/match"
+        for client, path, expected in [
+            (author, match_path, 400), (anonymous, match_path, 401),
+            (mentor, missing_path, 404),
+        ]:
+            assert api(client, base, "POST", path)[0] == expected
+        _, unchanged = api(author, base, "GET", f"/api/requests/{request_id}")
+        assert unchanged["status"] == "open" and unchanged["matchedUserId"] is None
+
+        with closing(psycopg2.connect(chat_database)) as blocker, \
+             closing(psycopg2.connect(chat_database)) as observer, \
+             blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
+            observer.autocommit = True
+            lock_cursor.execute("SELECT id FROM requests WHERE id = %s FOR UPDATE", (request_id,))
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                callers = [(501, mentor), (951, other)]
+                futures = [workers.submit(api, client, base, "POST", match_path)
+                           for _, client in callers]
                 try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
-    return running
+                    # Release only after both real backend transactions reach the held lock.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        activity_cursor.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND state = 'active' "
+                            "AND wait_event_type = 'Lock' AND query LIKE %s",
+                            (f"%requests%WHERE id = {request_id}%",),
+                        )
+                        if activity_cursor.fetchone()[0] == 2:
+                            break
+                        assert not any(future.done() for future in futures), "Connect finished before both lock waits"
+                        time.sleep(0.01)
+                    else:
+                        pytest.fail("Both Connect transactions did not wait for the request lock")
+                finally:
+                    blocker.rollback()
+                results = [future.result(timeout=3) for future in futures]
+
+        assert sorted(status for status, _ in results) == [200, 400]
+        successful_caller_id, successful_response = next(
+            (user_id, response) for (user_id, _), (status, response) in zip(callers, results)
+            if status == 200
+        )
+        status, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
+        assert status == 200 and stored_request["status"] == "matched"
+        assert stored_request["matchedUserId"] == successful_caller_id
+        assert successful_response["matchedUserId"] == successful_caller_id
+        for client, path, expected in [
+            (author, match_path, 400), (anonymous, match_path, 401),
+            (mentor, missing_path, 404), (mentor, match_path, 400), (other, match_path, 400),
+        ]:
+            assert api(client, base, "POST", path)[0] == expected
+            _, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
+            assert stored_request["matchedUserId"] == successful_caller_id
 
 
-def api(client, base, method, path, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    request = Request(base + path, data=data, method=method,
-                      headers={"Content-Type": "application/json"})
-    try:
-        response = client.open(request, timeout=3)
-    except HTTPError as exc:
-        response = exc
-    with response:
-        payload = response.read().decode()
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError:
-            pass
-        return response.status, payload
+def test_concurrent_dm_start_returns_one_conversation(chat_server, chat_database):
+    with chat_server() as base:
+        mentor, _ = login(base, "mentor501@test.edu")
+        other, _ = login(base, "both951@test.edu")
+        with closing(psycopg2.connect(chat_database)) as blocker, \
+             closing(psycopg2.connect(chat_database)) as observer, \
+             blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
+            observer.autocommit = True
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            assert activity_cursor.fetchone()[0] == 0
+            lock_cursor.execute("LOCK TABLE dm_conversations IN SHARE MODE")
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                futures = [workers.submit(api, client, base, "POST", "/api/dms/start",
+                                          {"toUserId": target})
+                           for client, target in [(mentor, 951), (other, 501)]]
+                try:
+                    # Both requests must pass the missing-pair read before either inserts.
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline:
+                        activity_cursor.execute(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database() AND state = 'active' "
+                            "AND wait_event_type = 'Lock' AND query LIKE %s",
+                            ("%INSERT INTO dm_conversations%",),
+                        )
+                        if activity_cursor.fetchone()[0] == 2:
+                            break
+                        assert not any(future.done() for future in futures), "DM start finished before both INSERT waits"
+                        time.sleep(0.01)
+                    else:
+                        pytest.fail("Both DM starts did not wait for the conversation table lock")
+                finally:
+                    blocker.rollback()
+                results = [future.result(timeout=3) for future in futures]
+
+            statuses = [status for status, _ in results]
+            responses = [response for _, response in results]
+            assert sorted(statuses) == [200, 200]
+            assert responses[0]["id"] == responses[1]["id"]
+            assert responses[0]["otherUserId"] == 951
+            assert responses[1]["otherUserId"] == 501
+            activity_cursor.execute(
+                "SELECT count(*) FROM dm_conversations WHERE user_a_id = %s AND user_b_id = %s",
+                (501, 951),
+            )
+            stored_pair_count = activity_cursor.fetchone()[0]
+            assert stored_pair_count == 1
 
 
-def login(base, email):
-    jar = CookieJar()
-    client = build_opener(HTTPCookieProcessor(jar))
-    status, result = api(client, base, "POST", "/api/auth/login",
-                         {"email": email, "password": "Password123!"})
-    assert status == 200, result
-    cookie = "; ".join(f"{item.name}={item.value}" for item in jar)
-    return client, cookie
+def test_room_history_returns_latest_visible_window(chat_server, chat_database):
+    with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO districts (name, county, type) VALUES (%s, %s, %s) RETURNING id",
+                    ("History test district", "Test county", "high_school"))
+        district_id = cur.fetchone()[0]
+        cur.execute("INSERT INTO chat_rooms (type, district_id, name) VALUES (%s, %s, %s) RETURNING id",
+                    ("district", district_id, "History test room"))
+        room_id = cur.fetchone()[0]
+        cur.execute("UPDATE users SET district_id = %s WHERE id = %s", (district_id, 1))
+        conn.commit()
+
+    with chat_server() as base:
+        student, _ = login(base, "student001@test.edu")
+        history_path = f"/api/chat/rooms/{room_id}/messages"
+        assert api(student, base, "GET", history_path) == (200, [])
+        visible_ids = []
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            for number in range(60):
+                cur.execute(
+                    "INSERT INTO chat_messages (room_id, sender_id, body, created_at) "
+                    "VALUES (%s, %s, %s, %s) RETURNING id",
+                    (room_id, 1, f"Visible message {number + 1}", "2000-01-01 00:00:00+00"),
+                )
+                visible_ids.append(cur.fetchone()[0])
+            cur.execute(
+                "INSERT INTO chat_messages (room_id, sender_id, body, created_at, deleted_at) "
+                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (room_id, 1, "Deleted newer message", "2000-01-02 00:00:00+00", "2000-01-03 00:00:00+00"),
+            )
+            deleted_id = cur.fetchone()[0]
+            conn.commit()
+
+        status, history = api(student, base, "GET", history_path)
+        assert status == 200 and len(history) == 50
+        assert [message["id"] for message in history] == visible_ids[10:]
+        assert deleted_id not in [message["id"] for message in history]
+        ordering = [(message["createdAt"], message["id"]) for message in history]
+        assert ordering == sorted(ordering)
+
+        status, sent = api(student, base, "POST", history_path, {"body": "Visible message 61"})
+        assert status == 201 and sent["roomId"] == room_id
+        status, next_history = api(student, base, "GET", history_path)
+        assert status == 200 and len(next_history) == 50
+        assert [message["id"] for message in next_history] == visible_ids[11:] + [sent["id"]]
+        ordering = [(message["createdAt"], message["id"]) for message in next_history]
+        assert ordering == sorted(ordering)
 
 
 def test_rest_missions_privacy_validation_and_persistence(chat_server):
@@ -146,6 +242,7 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         assert status == 200 and [r["id"] for r in rooms] == [1, 2]
         status, messages = api(student, base, "GET", "/api/chat/rooms/1/messages")
         assert status == 200 and len(messages) == 4
+        assert [message["id"] for message in messages] == [1, 2, 3, 4]
         assert all(m["senderName"] for m in messages)
         assert api(student, base, "GET", "/api/chat/rooms/3/messages")[0] == 403
         assert api(student, base, "GET", "/api/chat/rooms/99999/messages")[0] == 404
@@ -178,7 +275,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         _, own_view = api(student, base, "GET", "/api/dms/1/messages")
         assert next(m for m in own_view if m["id"] == sent["id"])["readAt"] is None
         _, recipient_view = api(mentor, base, "GET", "/api/dms/1/messages")
-        assert next(m for m in recipient_view if m["id"] == sent["id"])["readAt"] is not None
+        saved_read_at = next(m for m in recipient_view if m["id"] == sent["id"])["readAt"]
+        assert saved_read_at is not None
         status, room_sent = api(student, base, "POST", "/api/chat/rooms/1/messages", {"body": "  persistent room message  "})
         assert status == 201 and room_sent["body"] == "persistent room message"
     with chat_server() as base:
@@ -187,6 +285,8 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
             status, history = api(student, base, "GET", path)
             assert status == 200
             assert any(m["id"] == expected["id"] and m["body"] == expected["body"] for m in history)
+            if path == "/api/dms/1/messages":
+                assert next(m for m in history if m["id"] == sent["id"])["readAt"] == saved_read_at
 
 
 @pytest.mark.parametrize("path,other_path,history_path", [
@@ -227,3 +327,77 @@ def test_live_messages_are_private_validated_and_saved(chat_server, path, other_
         status, history = api(student, base, "GET", history_path)
         assert status == 200 and any(m["id"] == confirmed["id"] for m in history)
         assert not any(m["body"] in ("   ", "x" * 2001) for m in history)
+
+
+@pytest.mark.parametrize("blocker_id", [1, 501])
+def test_existing_dm_enforces_new_blocks(chat_server, chat_database, blocker_id):
+    def message_count():
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM dm_messages WHERE conversation_id = %s", (1,))
+            return cur.fetchone()[0]
+
+    with chat_server() as base:
+        sender, sender_cookie = login(base, "student001@test.edu")
+        recipient, recipient_cookie = login(base, "mentor501@test.edu")
+        blocker = sender if blocker_id == 1 else recipient
+        blocked_id = 501 if blocker_id == 1 else 1
+        url = base.replace("http://", "ws://") + "/ws/dms/1"
+        with connect(url, additional_headers={"Cookie": sender_cookie}, open_timeout=3) as sender_socket, \
+             connect(url, additional_headers={"Cookie": recipient_cookie}, open_timeout=3) as recipient_socket:
+            persisted_message_count_before = message_count()
+            assert api(blocker, base, "POST", "/api/blocks", {"blockedUserId": blocked_id})[0] == 201
+            assert api(sender, base, "POST", "/api/dms/1/messages", {"body": "blocked"})[0] == 403
+            sender_socket.send("blocked")
+            with pytest.raises(ConnectionClosed) as closed:
+                sender_socket.recv(timeout=3)
+            closed_code = closed.value.rcvd.code
+            assert closed_code == 4403
+            persisted_message_count_after = message_count()
+            assert persisted_message_count_after == persisted_message_count_before
+            recipient_received_blocked_message = False
+            try:
+                received = json.loads(recipient_socket.recv(timeout=0.2))
+                recipient_received_blocked_message = received["body"] == "blocked"
+            except TimeoutError:
+                pass
+            assert recipient_received_blocked_message is False
+            assert api(sender, base, "GET", "/api/dms/1/messages")[0] == 200
+
+            for cookie in (sender_cookie, recipient_cookie):
+                with pytest.raises(InvalidStatus) as rejected:
+                    with connect(url, additional_headers={"Cookie": cookie}, open_timeout=3):
+                        pytest.fail("Blocked socket accepted")
+                assert rejected.value.response.status_code == 403
+
+            assert api(blocker, base, "DELETE", f"/api/blocks/{blocked_id}")[0] == 204
+            status, restored = api(sender, base, "POST", "/api/dms/1/messages", {"body": "unblocked REST"})
+            assert status == 201 and restored["body"] == "unblocked REST"
+            with connect(url, additional_headers={"Cookie": sender_cookie}, open_timeout=3) as reconnected:
+                reconnected.send("unblocked socket")
+                confirmed = json.loads(reconnected.recv(timeout=3))
+                assert confirmed["body"] == "unblocked socket"
+                assert json.loads(recipient_socket.recv(timeout=3)) == confirmed
+            assert message_count() == persisted_message_count_before + 2
+
+
+def test_registration_names_cannot_poison_room_history(chat_server, chat_database):
+    with chat_server() as base:
+        client = build_opener(HTTPCookieProcessor(CookieJar()))
+        registration = {"email": "new-student@test.edu", "password": "Password123!",
+                        "role": "mentee", "districtId": 1}
+        with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM users")
+            users_before = cur.fetchone()[0]
+            for invalid in ("", "   ", "x" * 121, "한" * 41):
+                assert api(client, base, "POST", "/api/auth/register", {**registration, "name": invalid})[0] == 422
+                cur.execute("SELECT count(*) FROM users")
+                assert cur.fetchone()[0] == users_before
+
+        status, registered = api(client, base, "POST", "/api/auth/register",
+                                 {**registration, "name": "  New Student  "})
+        assert status == 201 and registered["user"]["name"] == "New Student"
+        status, sent = api(client, base, "POST", "/api/chat/rooms/1/messages", {"body": "registered sender"})
+        assert status == 201 and sent["senderName"] == "New Student"
+        status, history = api(client, base, "GET", "/api/chat/rooms/1/messages")
+        assert status == 200
+        assert any(m["id"] == sent["id"] and m["senderName"] == "New Student" for m in history)

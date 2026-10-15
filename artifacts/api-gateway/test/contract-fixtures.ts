@@ -46,6 +46,7 @@ export const requestFixture = {
   districtName: "School",
   title: "Math help",
   description: "Fractions",
+  descriptionTruncated: false,
   tags: [tagFixture],
   status: "open",
   matchedUserId: null,

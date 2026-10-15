@@ -518,3 +518,31 @@ test("each ordinary wire-model family agrees with generated validation and rejec
     assert.deepEqual(await r.json(), { error: "backend_error" });
   }
 });
+
+test("request preview disclosure is preserved and required by the public contract", async () => {
+  const { requestFixture } = await import("./contract-fixtures.ts");
+  for (const descriptionTruncated of [false, true]) {
+    const row = { ...requestFixture, descriptionTruncated };
+    assert.deepEqual(projectPublicPayload([row], "/api/requests", "GET"), [row]);
+  }
+  const { descriptionTruncated: _discarded, ...missing } = { ...requestFixture, descriptionTruncated: false };
+  assert.throws(() => projectPublicPayload([missing], "/api/requests", "GET"));
+});
+
+test("moderation failures preserve null data and redacted diagnostics; malformed successes are rejected", () => {
+  const failed = {
+    ok: false, success: false, feature: "admin.flagged_users", source: "python",
+    student_module: { module: "get_blocks", importable: true, called: false,
+      status: "runtime error", error: "database audit-canary", available_functions: ["get_flagged_users"] },
+    student_result: { email: "private audit-canary" }, error: "database audit-canary", data: null,
+  };
+  const projected = projectPublicPayload(failed, "/api/admin/flagged-users", "GET") as Record<string, unknown>;
+  assert.equal(projected.ok, false);
+  assert.equal(projected.data, null);
+  assert.equal(projected.error, "student_module_error");
+  assert.ok(!JSON.stringify(projected).includes("audit-canary"));
+  for (const data of [null, {}, [{ userId: 1, email: "private audit-canary" }]]) {
+    assert.throws(() => projectPublicPayload({ ...failed, ok: true, success: true, data }, "/api/admin/flagged-users", "GET"));
+  }
+  assert.throws(() => projectPublicPayload({ ...failed, data: { email: "private audit-canary" } }, "/api/admin/flagged-users", "GET"));
+});

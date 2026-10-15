@@ -13,4 +13,15 @@ export type ListRequestsParams = {
   tagId?: number;
   role?: ListRequestsRole;
   status?: ListRequestsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * Older than this timezone-aware createdAt and positive id tuple.
+   * @maxLength 96
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*$
+   */
+  before?: string;
 };

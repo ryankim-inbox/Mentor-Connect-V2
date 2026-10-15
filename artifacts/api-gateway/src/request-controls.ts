@@ -59,12 +59,44 @@ export function validateAuthBody(
     throw new Error("invalid_auth_body");
   }
 
+  if (kind === "register") {
+    const name = readDisplayName(payload.name);
+    if (!name) throw new Error("invalid_auth_body");
+    payload.name = name;
+    body = Buffer.from(JSON.stringify(payload));
+  }
+
   return {
     body,
     accountKey: createHash("sha256")
       .update(payload.email.trim().toLowerCase(), "utf8")
       .digest("hex"),
   };
+}
+
+// Names trim the union of Python whitespace and JavaScript trim whitespace.
+export function readDisplayName(value: unknown): string | undefined {
+  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > 120) {
+    return undefined;
+  }
+  return value.replace(
+    /^[\s\u0085\u001c-\u001f]+|[\s\u0085\u001c-\u001f]+$/g, "",
+  ) || undefined;
+}
+
+export function readBoundedString(
+  value: unknown,
+  maxBytes: number,
+): string | undefined {
+  if (
+    typeof value !== "string" ||
+    Buffer.byteLength(value, "utf8") > maxBytes
+  ) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

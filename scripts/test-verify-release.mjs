@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -23,11 +23,16 @@ const output = execFileSync("sh", ["scripts/verify-release.sh", "--print"], {
 
 assert.deepEqual(output.trim().split("\n"), [
   "pnpm install --frozen-lockfile",
+  "uv sync --frozen --group dev",
+  `${process.env.PYTHON_BIN ?? path.join(process.env.UV_PROJECT_ENVIRONMENT ?? path.join(root, ".venv"), "bin/python")} -c import pytest, psycopg, psycopg2, uvicorn, websockets`,
   "node scripts/test-python-runtime.mjs",
   "node scripts/test-python-freeze.mjs",
+  "sh scripts/test-python.sh",
+  "env MENTOR_RANKS_MODULE=mentor_ranks sh scripts/test-python.sh tests/test_mentor_ranks.py -q",
   "pnpm typecheck",
   "pnpm build:release",
   "pnpm test:gateway",
+  "pnpm --filter @workspace/mockup-sandbox test",
   "pnpm test:migrations",
   "pnpm --filter @workspace/db test",
   "pnpm --filter @workspace/peerbridge test:unit",
@@ -87,6 +92,94 @@ try {
   rmSync(fakeBin, { recursive: true, force: true });
 }
 
+const gateBin = mkdtempSync(path.join(tmpdir(), "verify-release-backend-"));
+try {
+  const gateRoot = path.join(gateBin, "checkout");
+  mkdirSync(path.join(gateRoot, "scripts"), { recursive: true });
+  mkdirSync(path.join(gateRoot, ".venv/bin"), { recursive: true });
+  const gateScript = path.join(gateRoot, "scripts/verify-release.sh");
+  writeFileSync(gateScript, readFileSync(path.join(root, "scripts/verify-release.sh")));
+  const pythonStub = '#!/bin/sh\nexit "${PREFLIGHT_EXIT:-0}"\n';
+  writeFileSync(path.join(gateRoot, ".venv/bin/python"), pythonStub, { mode: 0o755 });
+  for (const command of ["pnpm", "node", "sh", "uv", "git"]) {
+    writeFileSync(
+      path.join(gateBin, command),
+      `#!/bin/sh
+echo '${command}' "$@" "PYTHON_BIN=$PYTHON_BIN" "CLASSROOM_TEST_PYTHON=$CLASSROOM_TEST_PYTHON"
+if [ '${command}' = uv ]; then
+  test "$UV_PROJECT_ENVIRONMENT" = "$EXPECTED_UV_ENV" || exit 48
+  exit "\${UV_EXIT:-0}"
+fi
+if [ '${command}' = sh ] && [ "$1" = scripts/test-python.sh ]; then
+  if [ "\${MENTOR_RANKS_MODULE:-}" = mentor_ranks ]; then
+    echo student-rank-suite
+    exit "\${STUDENT_EXIT:-0}"
+  fi
+  test -z "\${MENTOR_RANKS_MODULE:-}" || exit 50
+  exit "\${BACKEND_EXIT:-0}"
+fi
+`,
+      { mode: 0o755 },
+    );
+  }
+  const customPython = path.join(gateBin, "custom-python");
+  writeFileSync(customPython, pythonStub, { mode: 0o755 });
+  for (const pythonBin of [undefined, customPython]) {
+    const expectedPython = pythonBin ?? path.join(gateRoot, ".venv/bin/python");
+    const env = {
+      ...process.env,
+      PATH: `${gateBin}:${process.env.PATH}`,
+      GITHUB_HEAD_REF: "release-backend-test",
+      CLASSROOM_TEST_PYTHON: "/incorrect/interpreter",
+      UV_PROJECT_ENVIRONMENT: path.join(gateRoot, ".venv"),
+      EXPECTED_UV_ENV: path.join(gateRoot, ".venv"),
+      MENTOR_RANKS_MODULE: "incorrect-ambient-module",
+    };
+    if (pythonBin) env.PYTHON_BIN = pythonBin;
+    else delete env.PYTHON_BIN;
+    const success = spawnSync("/bin/sh", [gateScript], {
+      cwd: root, encoding: "utf8", env,
+    });
+    assert.equal(success.status, 0, success.stderr);
+    const interpreters = `PYTHON_BIN=${expectedPython} CLASSROOM_TEST_PYTHON=${expectedPython}`;
+    assert.ok(success.stdout.includes(`sh scripts/test-python.sh ${interpreters}`));
+    assert.ok(success.stdout.includes(`pnpm --filter @workspace/db test ${interpreters}`));
+    assert.match(success.stdout, /student-rank-suite/);
+    const studentFailure = spawnSync("/bin/sh", [gateScript], {
+      cwd: root, encoding: "utf8", env: { ...env, STUDENT_EXIT: "46" },
+    });
+    assert.equal(studentFailure.status, 46, studentFailure.stderr);
+    assert.doesNotMatch(studentFailure.stdout, /pnpm --filter @workspace\/db test/);
+    {
+      const missingDependencies = spawnSync("/bin/sh", [gateScript], {
+        cwd: root, encoding: "utf8", env: { ...env, PREFLIGHT_EXIT: "47" },
+      });
+      assert.equal(missingDependencies.status, 47);
+      assert.doesNotMatch(missingDependencies.stdout, /sh scripts\/test-python.sh/);
+    }
+
+    const syncFailure = spawnSync("/bin/sh", [gateScript], {
+      cwd: root, encoding: "utf8", env: { ...env, UV_EXIT: "49" },
+    });
+    assert.equal(syncFailure.status, 49);
+    assert.doesNotMatch(syncFailure.stdout, /sh scripts\/test-python.sh/);
+
+    const failure = spawnSync("/bin/sh", [gateScript], {
+      cwd: root, encoding: "utf8", env: { ...env, BACKEND_EXIT: "43" },
+    });
+    assert.equal(failure.status, 43, failure.stderr);
+    assert.deepEqual(failure.stdout.trim().split("\n"), [
+      `pnpm install --frozen-lockfile ${interpreters}`,
+      `uv sync --frozen --group dev ${interpreters}`,
+      `node scripts/test-python-runtime.mjs ${interpreters}`,
+      `node scripts/test-python-freeze.mjs ${interpreters}`,
+      `sh scripts/test-python.sh ${interpreters}`,
+    ]);
+  }
+} finally {
+  rmSync(gateBin, { recursive: true, force: true });
+}
+
 const releaseWorkflow = readFileSync(
   path.join(root, ".github/workflows/release-surface.yml"),
   "utf8",
@@ -109,6 +202,62 @@ for (const required of [
 }
 assert.doesNotMatch(releaseWorkflow, /^\s+services:/m);
 assert.doesNotMatch(releaseWorkflow, /DATABASE_URL|SESSION_SECRET|secrets\./);
+
+// Run the real provisioning block with stand-ins for network-bound tooling.
+const provisioning = [...releaseWorkflow.matchAll(/        run: \|\n((?:          .*\n)+)/g)]
+  .map((match) => match[1].replace(/^          /gm, ""))
+  .find((script) => script.includes("uv sync"));
+assert.ok(provisioning, "release workflow must provision the locked Python dev environment");
+const runnerTemp = mkdtempSync(path.join(tmpdir(), "verify-release-python-ci-"));
+try {
+  const bin = path.join(runnerTemp, "bin");
+  mkdirSync(bin);
+  writeFileSync(path.join(bin, "python3"), `#!/bin/sh
+set -eu
+case "$*" in
+  "-m venv $RUNNER_TEMP/mentor-uv-tools")
+    mkdir -p "$RUNNER_TEMP/mentor-uv-tools/bin"
+    cp "$0" "$RUNNER_TEMP/mentor-uv-tools/bin/python"
+    ;;
+  "-m pip install uv==0.11.16")
+    cp "$FAKE_UV" "$RUNNER_TEMP/mentor-uv-tools/bin/uv"
+    ;;
+  *) echo "unexpected Python provisioning: $*" >&2; exit 44 ;;
+esac
+`, { mode: 0o755 });
+  writeFileSync(path.join(bin, "uv"), "#!/bin/sh\necho 'isolated uv tools environment was not activated' >&2\nexit 45\n", { mode: 0o755 });
+  const fakeUv = path.join(runnerTemp, "uv-stub");
+  writeFileSync(fakeUv, `#!/bin/sh
+set -eu
+test "$*" = 'sync --frozen --python 3.12 --group dev'
+test "$UV_PROJECT_ENVIRONMENT" = "$RUNNER_TEMP/mentor-python"
+mkdir -p "$UV_PROJECT_ENVIRONMENT/bin"
+touch "$UV_PROJECT_ENVIRONMENT/bin/python"
+`, { mode: 0o755 });
+  const githubPath = path.join(runnerTemp, "github-path");
+  const githubEnv = path.join(runnerTemp, "github-env");
+  const result = spawnSync("/bin/sh", ["-eu", "-c", provisioning], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      FAKE_UV: fakeUv,
+      RUNNER_TEMP: runnerTemp,
+      GITHUB_PATH: githubPath,
+      GITHUB_ENV: githubEnv,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(githubPath, "utf8").trim(), path.join(runnerTemp, "mentor-uv-tools/bin"));
+  assert.deepEqual(readFileSync(githubEnv, "utf8").trim().split("\n"), [
+    `UV_PROJECT_ENVIRONMENT=${runnerTemp}/mentor-python`,
+    `PYTHON_BIN=${runnerTemp}/mentor-python/bin/python`,
+    `CLASSROOM_TEST_PYTHON=${runnerTemp}/mentor-python/bin/python`,
+  ]);
+} finally {
+  rmSync(runnerTemp, { recursive: true, force: true });
+}
 
 const secretWorkflow = readFileSync(
   path.join(root, ".github/workflows/secret-scan.yml"),

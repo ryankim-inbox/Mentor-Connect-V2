@@ -196,7 +196,7 @@ def test_mission_2_returns_visible_room_history_in_frontend_shape(monkeypatch):
             "from chat_messages",
             "join users",
             "deleted_at is null",
-            "order by m.created_at",
+            "order by m.created_at desc, m.id desc",
             "limit 50",
             params=(1,),
             all_rows=[
@@ -617,13 +617,14 @@ def test_mission_7_reads_visible_messages(monkeypatch):
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
                   one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
-        QueryStep("update dm_messages", "sender_id <> %s", "read_at is null",
-                  "deleted_at is null", params=(7, 1)),
-        QueryStep("from dm_messages", "deleted_at is null", "order by created_at, id",
+        QueryStep("from dm_messages", "deleted_at is null", "order by created_at desc, id desc limit 50",
                   params=(7,), all_rows=[{
                       "id": 42, "conversation_id": 7, "sender_id": 2,
-                      "body": "hello", "created_at": STAMP, "read_at": STAMP,
+                      "body": "hello", "created_at": STAMP, "read_at": None,
                   }]),
+        QueryStep("update dm_messages", "coalesce(read_at, now())", "id = any(%s)",
+                  "deleted_at is null", "returning id, read_at", params=([42],),
+                  all_rows=[{"id": 42, "read_at": STAMP}]),
     )
     assert chat.list_dm_messages(7, request_for(1)) == [{
         "id": 42, "conversationId": 7, "senderId": 2, "body": "hello",
@@ -638,6 +639,7 @@ def test_mission_7_sends_validated_message(monkeypatch, text):
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
                   one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
         QueryStep("insert into dm_messages", params=(7, 1, text), one={"id": 42}),
         QueryStep("from dm_messages", params=(42,), one={
             "id": 42, "conversation_id": 7, "sender_id": 1,
@@ -682,6 +684,10 @@ def test_mission_8_persists_broadcasts_and_cleans_up(monkeypatch):
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
                   one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
+        QueryStep("from dm_conversations", params=(7,),
+                  one={"id": 7, "user_a_id": 1, "user_b_id": 2}),
+        QueryStep("from blocks", "blocked_user_id", params=(1, 2, 2, 1), one=None),
         QueryStep("insert into dm_messages", params=(7, 1, "hello"), one={"id": 42}),
         QueryStep("from dm_messages", params=(42,), one={
             "id": 42, "conversation_id": 7, "sender_id": 1,

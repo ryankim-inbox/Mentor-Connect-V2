@@ -4,6 +4,12 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+UV_PROJECT_ENVIRONMENT=${UV_PROJECT_ENVIRONMENT:-"$ROOT/.venv"}
+export UV_PROJECT_ENVIRONMENT
+PYTHON_BIN=${PYTHON_BIN:-"$UV_PROJECT_ENVIRONMENT/bin/python"}
+CLASSROOM_TEST_PYTHON=$PYTHON_BIN
+export PYTHON_BIN CLASSROOM_TEST_PYTHON
+
 PYTHON_FREEZE_BASE=${PYTHON_FREEZE_BASE:-98e1b04c292302bd25365ed7db4c5675671df337}
 PYTHON_PR_BASE=${PYTHON_PR_BASE:-$(git merge-base HEAD refs/remotes/origin/main 2>/dev/null || true)}
 PYTHON_FREEZE_SCOPE_REF=${PYTHON_FREEZE_SCOPE_REF:-codex/learning-tasks-21-24}
@@ -33,11 +39,17 @@ case "$MODE" in
 esac
 
 run pnpm install --frozen-lockfile
+run uv sync --frozen --group dev
+run "$PYTHON_BIN" -c "import pytest, psycopg, psycopg2, uvicorn, websockets"
 run node scripts/test-python-runtime.mjs
 run node scripts/test-python-freeze.mjs
+unset MENTOR_RANKS_MODULE
+run sh scripts/test-python.sh
+run env MENTOR_RANKS_MODULE=mentor_ranks sh scripts/test-python.sh tests/test_mentor_ranks.py -q
 run pnpm typecheck
 run pnpm build:release
 run pnpm test:gateway
+run pnpm --filter @workspace/mockup-sandbox test
 run pnpm test:migrations
 run pnpm --filter @workspace/db test
 run pnpm --filter @workspace/peerbridge test:unit

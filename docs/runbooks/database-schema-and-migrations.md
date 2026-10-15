@@ -10,8 +10,8 @@ independently editable baseline. `database/schema/version.json` pins the
 materialization checksum and identifies the current ledger tail by both
 `schemaVersion` and `currentMigrationId`.
 
-Version `0002` is the current ledger tail: 13 tables, 86 columns, 46
-constraints, and 39 indexes. Its normalized catalog was reproduced in a
+Version `0003` (`0003_request_events`) is the current ledger tail: 14 tables,
+92 columns, 51 constraints, and 42 indexes. Its normalized catalog was reproduced in a
 disposable loopback PostgreSQL cluster and is stored in
 `database/schema/local-catalog.json`. See
 `docs/runbooks/database-integrity-preflight.md` for preflight, quarantine,
@@ -58,7 +58,7 @@ DATABASE_URL='postgresql://user@localhost:5432/mentor_connect_mock' \
 ```
 
 Neither database command prints `DATABASE_URL`. A zero diff establishes only
-that the inspected target matches version `0002`; it does not establish data
+that the inspected target matches version `0003`; it does not establish data
 consistency.
 
 ## Ordered migration and runtime ledger contract
@@ -68,7 +68,7 @@ prefix of each migration ID. Migration IDs and paths must be unique, numeric
 prefixes must strictly increase, and each SHA-256 must match the referenced
 file. `0001_canonical_baseline.sql` is immutable history. The current canonical
 file is mechanically derived from that history and is the exact bytes of
-`0001` followed by the exact bytes of `0002`.
+`0001`, `0002`, and `0003` in order. Both `0001` and `0002` remain immutable.
 
 The library-only `runMigrationTransaction({ client, ledger, appSha })` in
 `lib/db/tools/migration-runner.mjs` defines the contract consumed by the next
@@ -151,3 +151,38 @@ materialization/catalog checksums, and counts. `schema:check` rejects an
 independently edited or incomplete materialization. A failed runner transaction
 rolls back schema and ledger writes. After a committed migration, use a reviewed
 forward migration for recovery; do not rewrite ledger history.
+
+## Observed match tracking and rollout
+
+Migration `0003_request_events` adds one `request_events` table and inserts one
+`tracking_started` marker using PostgreSQL `clock_timestamp()`. The partial unique
+index permits only one marker. There is no backfill: existing matched requests
+remain unchanged and contribute no invented events. The marker records coverage
+start independently of the first match. Never delete or reset it when seeding a
+synthetic database; bootstrap applies the migration before the data-only seed.
+The canonical schema likewise includes the marker insert. Native backup/restore
+captures the marker and events with all application tables and the full ledger.
+
+Each successful locked Connect transition inserts a `matched` event before the
+request transaction commits. It records only the request ID, mentor ID, database
+observation time, and original request creation time. Request deletion nulls its
+reference while retaining history; mentor deletion also nulls its reference.
+Reopening and matching again adds a new event. The measured duration is time from
+original request creation to each observed match, including time closed; it is
+not a mentor reply time. Consumers treat negative intervals as unknown.
+
+For an existing approved database, take a backup and rehearse its restore, run
+the guarded read-only dry-run targeting `0003_request_events`, then use the
+approved deployment migration procedure before deploying the event-writing
+backend and client. The repository dry-run CLI does not apply migrations. Pause
+Connect writes **before applying 0003**, and keep them paused until the new backend
+is healthy and its event-writing smoke check succeeds. Gateway release metadata
+is built from `version.json`; readiness must require `0003_request_events` as the
+applied ledger tail. A healthy older backend cannot establish tracking coverage.
+
+Code rollback leaves this additive schema, the marker, and all events intact.
+If rolling back to code without event recording, pause Connect writes before the
+rollback and keep them paused until tracking is restored. Never drop the table,
+delete events, reset the marker, or synthesize missing history as a rollback.
+Development tests use disposable databases only; deployment approvals and target
+checks remain required for a later real rollout.

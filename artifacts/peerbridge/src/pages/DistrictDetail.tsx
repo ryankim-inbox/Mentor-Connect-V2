@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useGetDistrict, useListRequests, useGetDistrictStats, getGetDistrictQueryKey, getListRequestsQueryKey, getGetDistrictStatsQueryKey } from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
@@ -11,13 +12,17 @@ interface Props {
 export default function DistrictDetail({ id }: Props) {
   const districtId = Number(id);
   const { user } = useAuth();
+  const [cursors, setCursors] = useState<string[]>([]);
+  useEffect(() => setCursors([]), [districtId]);
+  const before = cursors.at(-1);
+  const params = { districtId, status: "open" as const, limit: 50, ...(before ? { before } : {}) };
 
   const { data: district, isLoading: districtLoading } = useGetDistrict(districtId, {
     query: { queryKey: getGetDistrictQueryKey(districtId), enabled: !!districtId }
   });
 
-  const { data: requests, isLoading: reqLoading } = useListRequests({ districtId, status: "open" }, {
-    query: { queryKey: getListRequestsQueryKey({ districtId, status: "open" }), enabled: !!districtId }
+  const { data: requests, isLoading: reqLoading, isError: reqError } = useListRequests(params, {
+    query: { queryKey: getListRequestsQueryKey(params), enabled: !!districtId }
   });
 
   const { data: stats } = useGetDistrictStats(districtId, {
@@ -93,20 +98,21 @@ export default function DistrictDetail({ id }: Props) {
       )}
 
       <div>
-        <h2 className="font-semibold text-lg mb-4">Open requests ({requests?.length ?? 0})</h2>
+        <h2 className="font-semibold text-lg mb-4">Open requests ({requests?.length ?? 0} shown)</h2>
         {reqLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => <div key={i} className="h-28 bg-card border border-card-border rounded-xl animate-pulse" />)}
           </div>
         )}
+        {reqError && <p role="alert">Could not load requests. Please try again.</p>}
         <div className="space-y-3">
           {requests?.map((req) => (
             <RequestCard key={req.id} {...req} />
           ))}
-          {!reqLoading && (!requests || requests.length === 0) && (
+          {!reqLoading && !reqError && (!requests || requests.length === 0) && (
             <div className="text-center py-12 text-muted-foreground">
-              <p>No open requests in this district yet.</p>
-              {user && (
+              <p>{before ? "No older open requests in this district." : "No open requests in this district yet."}</p>
+              {user && !before && (
                 <Link href={`/requests/new?districtId=${districtId}`}>
                   <button className="mt-3 text-sm text-primary hover:underline">Be the first to post one</button>
                 </Link>
@@ -114,6 +120,12 @@ export default function DistrictDetail({ id }: Props) {
             </div>
           )}
         </div>
+        <nav aria-label="Request pages" className="flex gap-3 mt-6">
+          <button type="button" className="px-4 py-2 border rounded-lg disabled:opacity-50" disabled={reqLoading || cursors.length === 0}
+            onClick={() => setCursors((pages) => pages.slice(0, -1))}>Newer requests</button>
+          <button type="button" className="px-4 py-2 border rounded-lg disabled:opacity-50" disabled={reqLoading || reqError || requests?.length !== 50}
+            onClick={() => { const last = requests?.at(-1); if (last) setCursors((pages) => [...pages, `${last.createdAt}|${last.id}`]); }}>Older requests</button>
+        </nav>
       </div>
     </div>
   );
