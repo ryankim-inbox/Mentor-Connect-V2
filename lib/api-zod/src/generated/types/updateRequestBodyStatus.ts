@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
+ */
 export type UpdateRequestBodyStatus =
   (typeof UpdateRequestBodyStatus)[keyof typeof UpdateRequestBodyStatus];
 

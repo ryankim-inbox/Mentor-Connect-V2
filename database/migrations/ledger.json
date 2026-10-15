@@ -12,6 +12,11 @@
       "id": "0002_integrity_constraints_indexes",
       "path": "0002_integrity_constraints_indexes.sql",
       "sha256": "53adbe10adee136e6217515201288a7c992234a19cc8b82368ea662364443e24"
+    },
+    {
+      "id": "0003_request_events",
+      "path": "0003_request_events.sql",
+      "sha256": "641786cefa58674f026729cdc8f21b3dd8817859a066332e1e48d40309e301df"
     }
   ]
 }

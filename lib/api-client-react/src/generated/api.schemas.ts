@@ -142,6 +142,8 @@ export interface MentorshipRequest {
   districtName: string;
   title: string;
   description: string;
+  /** True when the list description is a bounded preview. Detail reads return false. */
+  descriptionTruncated: boolean;
   tags: Tag[];
   status: MentorshipRequestStatus;
   /** @nullable */
@@ -162,10 +164,17 @@ export const CreateRequestBodyRole = {
 } as const;
 
 export interface CreateRequestBody {
+  /** @minimum 1 */
   districtId: number;
+  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title: string;
+  /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;
-  tagIds: number[];
+  /**
+   * @maxItems 20
+   * @items.minimum 1
+   */
+  tagIds?: number[];
   role: CreateRequestBodyRole;
   /**
    * Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
@@ -175,6 +184,9 @@ export interface CreateRequestBody {
   preferredTimes?: string[];
 }
 
+/**
+ * Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
+ */
 export type UpdateRequestBodyStatus =
   (typeof UpdateRequestBodyStatus)[keyof typeof UpdateRequestBodyStatus];
 
@@ -185,9 +197,16 @@ export const UpdateRequestBodyStatus = {
 } as const;
 
 export interface UpdateRequestBody {
+  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
   title?: string;
+  /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;
+  /**
+   * @maxItems 20
+   * @items.minimum 1
+   */
   tagIds?: number[];
+  /** Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId. */
   status?: UpdateRequestBodyStatus;
 }
 
@@ -203,6 +222,7 @@ export const CreateReportBodyReason = {
 } as const;
 
 export interface CreateReportBody {
+  /** @minimum 1 */
   reportedUserId: number;
   reason: CreateReportBodyReason;
   /** @nullable */
@@ -210,6 +230,7 @@ export interface CreateReportBody {
 }
 
 export interface BlockUserBody {
+  /** @minimum 1 */
   blockedUserId: number;
 }
 
@@ -445,6 +466,69 @@ export interface PyEnvelope {
   data: unknown;
 }
 
+/**
+ * Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.
+ */
+export type WeeklyMatchCoverage =
+  (typeof WeeklyMatchCoverage)[keyof typeof WeeklyMatchCoverage];
+
+export const WeeklyMatchCoverage = {
+  untracked: "untracked",
+  partial: "partial",
+  complete: "complete",
+} as const;
+
+export interface WeeklyMatch {
+  /** Monday of the UTC calendar week; the final row is week-to-date. */
+  week: string;
+  /**
+   * Observed match count; null means the entire week was untracked.
+   * @minimum 0
+   * @nullable
+   */
+  matches: number | null;
+  /** Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight. */
+  coverage: WeeklyMatchCoverage;
+}
+
+export interface SubjectDemand {
+  subject: string;
+  /** @minimum 0 */
+  requests: number;
+  color: string;
+}
+
+export interface MentorActivityRow {
+  mentorId: number;
+  mentorName: string;
+  /** @minimum 0 */
+  totalMatches: number;
+  /**
+   * Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.
+   * @minimum 0
+   * @nullable
+   */
+  avgTimeToMatchHours: number | null;
+}
+
+export interface MentorActivity {
+  trackingStartedAt: string;
+  /** Current mentor/both users, including zero matches, ordered by totalMatches descending then ID. */
+  mentors: MentorActivityRow[];
+}
+
+export type WeeklyMatchesEnvelope = PyEnvelope & {
+  data?: WeeklyMatch[] | null;
+};
+
+export type PopularSubjectsEnvelope = PyEnvelope & {
+  data?: SubjectDemand[] | null;
+};
+
+export type MentorActivityEnvelope = PyEnvelope & {
+  data?: MentorActivity | null;
+};
+
 export interface PracticeStatus {
   success: boolean;
   /** @minLength 1 */
@@ -631,6 +715,9 @@ export type Error503Response = ErrorResponse;
 export type Error504Response = ErrorResponse;
 
 export type ListDistrictsParams = {
+  /**
+   * Filter by district type; omit to return all supported districts.
+   */
   type?: ListDistrictsType;
   search?: string;
 };
@@ -640,7 +727,7 @@ export type ListDistrictsType =
 
 export const ListDistrictsType = {
   high_school: "high_school",
-  all: "all",
+  unified: "unified",
 } as const;
 
 export type ListRequestsParams = {
@@ -648,6 +735,17 @@ export type ListRequestsParams = {
   tagId?: number;
   role?: ListRequestsRole;
   status?: ListRequestsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * Older than this timezone-aware createdAt and positive id tuple.
+   * @maxLength 96
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})\|[1-9][0-9]*$
+   */
+  before?: string;
 };
 
 export type ListRequestsRole =
