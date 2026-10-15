@@ -2,11 +2,13 @@ import asyncio
 import importlib
 import json
 import os
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
+from urllib.request import build_opener
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
+from backend_support import api, login
 
 
 RANKS_MODULE = os.environ.get("MENTOR_RANKS_MODULE", "mentor_ranks_answer")
@@ -68,42 +70,77 @@ def test_scaffold_imports_with_all_lesson_interfaces():
     )
 
 
-def test_scaffold_list_requires_authentication_before_todo():
+def test_require_user_success():
+    assert student._require_user(request_with_session(42)) == 42
+
+
+def test_require_user_missing_session():
+    with pytest.raises(HTTPException) as exc:
+        student._require_user(request_with_session())
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Not authenticated"
+
+
+def test_scaffold_list_requires_authentication_before_query(monkeypatch):
+    monkeypatch.setattr(student, "rank_data", lambda: pytest.fail("query must not run"))
+
     with pytest.raises(HTTPException) as exc:
         student.list_mentor_ranks(request_with_session())
 
     assert exc.value.status_code == 401
 
 
-def test_scaffold_get_requires_authentication_before_todo():
+def test_scaffold_get_requires_authentication_before_query(monkeypatch):
+    monkeypatch.setattr(student, "rank_data", lambda: pytest.fail("query must not run"))
+
     with pytest.raises(HTTPException) as exc:
-        student.get_mentor_rank(7, request_with_session())
+        student.get_mentor_rank(0, request_with_session())
 
     assert exc.value.status_code == 401
 
 
-def test_scaffold_todo_envelopes_survive_fastapi_http_response_validation():
+def test_student_list_route_formats_stubbed_rank_data(monkeypatch):
+    monkeypatch.setattr(
+        student,
+        "rank_data",
+        lambda: [
+            {"id": 7, "name": "Ada", "matched_count": 2},
+            {"id": 8, "name": "Bo", "matched_count": 0},
+        ],
+    )
     app = FastAPI()
     app.include_router(student.router, prefix="/api")
 
-    assert asgi_get_json(app, "/api/mentor-ranks", {"user_id": 99}) == (
-        200,
-        {
-            "status": "todo",
-            "mission": 5,
-            "message": "Complete Missions 1-5 to return mentor rankings.",
-            "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
-        },
-    )
-    assert asgi_get_json(app, "/api/mentor-ranks/7", {"user_id": 99}) == (
-        200,
-        {
-            "status": "todo",
-            "mission": 6,
-            "message": "Complete Mission 6 to return one mentor's global rank.",
-            "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
-        },
-    )
+    status, rows = asgi_get_json(app, "/api/mentor-ranks", {"user_id": 99})
+
+    assert status == 200
+    assert rows == [
+        {"mentorId": 7, "mentorName": "Ada", "matchedCount": 2, "rank": 1, "badge": "Master"},
+        {"mentorId": 8, "mentorName": "Bo", "matchedCount": 0, "rank": None, "badge": None},
+    ]
+
+
+def test_todo_helper_formats_an_unfinished_mission_independently_of_student_routes():
+    assert student._todo(6, "Complete Mission 6 to return one mentor's global rank.") == {
+        "status": "todo",
+        "mission": 6,
+        "message": "Complete Mission 6 to return one mentor's global rank.",
+        "guide": "docs/STUDENT_MENTOR_RANKS_GUIDE.md",
+    }
+
+
+@pytest.mark.parametrize(("rank", "badge"), [(2, "Platinum"), (None, None)])
+def test_student_public_row_uses_badge_thresholds_and_omits_private_fields(rank, badge):
+    assert student._public_row(
+        {"id": 7, "name": "Ada", "matched_count": 2, "rank": rank, "email": "private@test.edu"}
+    ) == {
+        "mentorId": 7,
+        "mentorName": "Ada",
+        "matchedCount": 2,
+        "rank": rank,
+        "badge": badge,
+    }
 
 
 def test_mission_2_sorts_counts_and_id_ties_without_mutation():
@@ -357,3 +394,38 @@ def test_lesson_app_answer_flag_explicitly_selects_reference(monkeypatch):
 
     assert routes["/api/mentor-ranks"].__module__ == "mentor_ranks_answer"
     assert routes["/api/mentor-ranks/{mentor_id}"].__module__ == "mentor_ranks_answer"
+
+
+def test_lesson_http_list_and_detail_share_global_ranks(backend_database, backend_server):
+    import psycopg2
+
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO requests (author_id, district_id, title, description, role, status, matched_user_id) "
+            "VALUES (%s, 1, 'Ranking fixture', 'Help', %s, 'matched', %s)",
+            [(501, "mentor", 1), (501, "mentor", 2), (1, "mentee", 501),
+             (951, "mentor", 1), (2, "mentee", 951)],
+        )
+        conn.commit()
+
+    expected = [
+        {"mentorId": 501, "mentorName": "Sophia Lee", "matchedCount": 3, "rank": 1, "badge": "Master"},
+        {"mentorId": 951, "mentorName": "Jordan Park", "matchedCount": 2, "rank": 2, "badge": "Platinum"},
+        {"mentorId": 502, "mentorName": "Marcus Chen", "matchedCount": 0, "rank": None, "badge": None},
+    ]
+    with backend_server("mentor_ranks_server:create_app", factory=True) as base:
+        anonymous = build_opener()
+        for path in ("/api/mentor-ranks", "/api/mentor-ranks/0"):
+            assert api(anonymous, base, "GET", path)[0] == 401
+
+        client, _ = login(base, "student001@test.edu")
+        status, rows = api(client, base, "GET", "/api/mentor-ranks")
+        assert status == 200
+        assert rows == expected
+        for row in expected:
+            status, detail = api(client, base, "GET", f"/api/mentor-ranks/{row['mentorId']}")
+            assert status == 200
+            assert detail == row
+
+        for mentor_id, expected_status in ((0, 422), (-1, 422), (1, 404), (999999, 404)):
+            assert api(client, base, "GET", f"/api/mentor-ranks/{mentor_id}")[0] == expected_status

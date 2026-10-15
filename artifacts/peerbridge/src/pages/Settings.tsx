@@ -1,3 +1,4 @@
+import { trimDisplayName } from "@/lib/display-name";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -71,7 +72,7 @@ export default function Settings() {
 
     const bytes = (value: string) => new TextEncoder().encode(value).length;
     if (
-      !form.name.trim() ||
+      !trimDisplayName(form.name) ||
       bytes(form.name) > 120 ||
       bytes(form.bio) > 2000 ||
       subjects.length > 20 ||
@@ -88,7 +89,7 @@ export default function Settings() {
     try {
       const profile = await updateUser.mutateAsync({
         id: user.id,
-        data: { name: form.name, bio: form.bio, subjects },
+        data: { name: trimDisplayName(form.name), bio: form.bio, subjects },
       });
       // A save from a former account must never repopulate its cache after logout.
       if (!mounted.current) return;

@@ -2,8 +2,18 @@ from fastapi import APIRouter, Request, Response, HTTPException
 from pydantic import BaseModel, field_validator
 from db import db
 import bcrypt
+import re
 
 router = APIRouter()
+
+def normalize_display_name(value: str) -> str:
+    if len(value.encode("utf-8")) > 120:
+        raise ValueError("Use a name of 1–120 UTF-8 bytes.")
+    # Names trim the union of Python whitespace and JavaScript trim whitespace.
+    normalized = re.sub(r"^[\s\ufeff]+|[\s\ufeff]+$", "", value)
+    if not normalized:
+        raise ValueError("Use a name of 1–120 UTF-8 bytes.")
+    return normalized
 
 class RegisterBody(BaseModel):
     email: str
@@ -11,6 +21,11 @@ class RegisterBody(BaseModel):
     password: str
     role: str
     districtId: int
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_valid(cls, value):
+        return normalize_display_name(value)
 
     @field_validator("email")
     @classmethod

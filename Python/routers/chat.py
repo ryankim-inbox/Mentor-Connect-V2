@@ -260,6 +260,19 @@ def _load_conversation_membership(cur, conversation_id: int, user_id: int) -> di
     return convo
 
 
+def _require_unblocked_pair(cur, user_a_id: int, user_b_id: int) -> None:
+    """Reject DM creation or sending when either participant blocks the other."""
+    cur.execute(
+        """SELECT 1 FROM blocks
+           WHERE (blocker_id = %s AND blocked_user_id = %s)
+              OR (blocker_id = %s AND blocked_user_id = %s)
+           LIMIT 1""",
+        (user_a_id, user_b_id, user_b_id, user_a_id),
+    )
+    if cur.fetchone():
+        raise HTTPException(status_code=403, detail="Messaging is blocked between these users")
+
+
 def _fetch_conversation(cur, conversation_id: int, user_id: int):
     """Load one conversation already shaped from ``user_id``'s point of view.
 
@@ -339,7 +352,7 @@ def list_chat_rooms(request: Request):
 
 @router.get("/chat/rooms/{room_id}/messages")
 def list_room_messages(room_id: int, request: Request):
-    """Mission 2 — message history for one room, oldest -> newest."""
+    """Mission 2 — latest 50 visible room messages, oldest -> newest."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
@@ -351,12 +364,12 @@ def list_room_messages(room_id: int, request: Request):
                JOIN users u ON u.id = m.sender_id
                WHERE m.room_id = %s
                  AND m.deleted_at IS NULL
-               ORDER BY m.created_at
+               ORDER BY m.created_at DESC, m.id DESC
                LIMIT 50""",
             (room_id,),
         )
         messages = cur.fetchall()
-    return [_format_chat_message(message) for message in messages]
+    return [_format_chat_message(message) for message in reversed(messages)]
 
 
 @router.post("/chat/rooms/{room_id}/messages", status_code=201)
@@ -414,18 +427,7 @@ def start_dm_conversation(body: StartDmBody, request: Request):
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="User not found")
 
-        cur.execute(
-            """SELECT 1 FROM blocks
-               WHERE (blocker_id = %s AND blocked_user_id = %s)
-                  OR (blocker_id = %s AND blocked_user_id = %s)
-               LIMIT 1""",
-            (user_id, body.toUserId, body.toUserId, user_id),
-        )
-        if cur.fetchone():
-            raise HTTPException(
-                status_code=403,
-                detail="Cannot start a conversation with this user",
-            )
+        _require_unblocked_pair(cur, user_id, body.toUserId)
 
         cur.execute(
             """SELECT id FROM dm_conversations
@@ -441,11 +443,19 @@ def start_dm_conversation(body: StartDmBody, request: Request):
         user_b_id = max(user_id, body.toUserId)
         cur.execute(
             """INSERT INTO dm_conversations (user_a_id, user_b_id)
-               VALUES (%s, %s) RETURNING id""",
+               VALUES (%s, %s)
+               ON CONFLICT (user_a_id, user_b_id) DO NOTHING RETURNING id""",
             (user_a_id, user_b_id),
         )
-        new_id = cur.fetchone()["id"]
-        return _fetch_conversation(cur, new_id, user_id)
+        conversation = cur.fetchone()
+        if not conversation:
+            cur.execute(
+                """SELECT id FROM dm_conversations
+                   WHERE user_a_id = %s AND user_b_id = %s""",
+                (user_a_id, user_b_id),
+            )
+            conversation = cur.fetchone()
+        return _fetch_conversation(cur, conversation["id"], user_id)
 
 
 @router.get("/dms/{conversation_id}/messages")
@@ -456,20 +466,26 @@ def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
         cur = conn.cursor()
         _load_conversation_membership(cur, conversation_id, user_id)
         cur.execute(
-            """UPDATE dm_messages SET read_at = now()
-               WHERE conversation_id = %s AND sender_id <> %s
-                 AND read_at IS NULL AND deleted_at IS NULL""",
-            (conversation_id, user_id),
-        )
-        cur.execute(
             """SELECT id, conversation_id, sender_id, body, created_at, read_at
                FROM dm_messages
                WHERE conversation_id = %s AND deleted_at IS NULL
-               ORDER BY created_at, id""",
+               ORDER BY created_at DESC, id DESC LIMIT 50""",
             (conversation_id,),
         )
         messages = cur.fetchall()
-    return [_format_dm_message(message) for message in messages]
+        incoming_ids = [message["id"] for message in messages if message["sender_id"] != user_id]
+        if incoming_ids:
+            cur.execute(
+                """UPDATE dm_messages SET read_at = COALESCE(read_at, now())
+                   WHERE id = ANY(%s) AND deleted_at IS NULL
+                   RETURNING id, read_at""",
+                (incoming_ids,),
+            )
+            read_times = {row["id"]: row["read_at"] for row in cur.fetchall()}
+            for message in messages:
+                if message["id"] in read_times:
+                    message["read_at"] = read_times[message["id"]]
+    return [_format_dm_message(message) for message in reversed(messages)]
 
 
 @router.post("/dms/{conversation_id}/messages", status_code=201)
@@ -479,7 +495,8 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
     text = _clean_body(body.body)
     with db() as conn:
         cur = conn.cursor()
-        _load_conversation_membership(cur, conversation_id, user_id)
+        convo = _load_conversation_membership(cur, conversation_id, user_id)
+        _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
         cur.execute(
             """INSERT INTO dm_messages (conversation_id, sender_id, body)
                VALUES (%s, %s, %s) RETURNING id""",
@@ -596,7 +613,9 @@ async def dm_socket(websocket: WebSocket, conversation_id: int) -> None:
 
     try:
         with db() as conn:
-            _load_conversation_membership(conn.cursor(), conversation_id, user_id)
+            cur = conn.cursor()
+            convo = _load_conversation_membership(cur, conversation_id, user_id)
+            _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
     except HTTPException:
         await websocket.close(code=4403)
         return
@@ -610,14 +629,20 @@ async def dm_socket(websocket: WebSocket, conversation_id: int) -> None:
             except HTTPException:
                 continue
 
-            with db() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    """INSERT INTO dm_messages (conversation_id, sender_id, body)
-                       VALUES (%s, %s, %s) RETURNING id""",
-                    (conversation_id, user_id, clean),
-                )
-                message = _fetch_dm_message(cur, cur.fetchone()["id"])
+            try:
+                with db() as conn:
+                    cur = conn.cursor()
+                    convo = _load_conversation_membership(cur, conversation_id, user_id)
+                    _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
+                    cur.execute(
+                        """INSERT INTO dm_messages (conversation_id, sender_id, body)
+                           VALUES (%s, %s, %s) RETURNING id""",
+                        (conversation_id, user_id, clean),
+                    )
+                    message = _fetch_dm_message(cur, cur.fetchone()["id"])
+            except HTTPException:
+                await websocket.close(code=4403)
+                break
 
             await _broadcast(dm_connections.get(conversation_id, []), message)
     except WebSocketDisconnect:

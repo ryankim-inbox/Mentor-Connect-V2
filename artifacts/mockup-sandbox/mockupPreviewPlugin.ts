@@ -1,6 +1,5 @@
-import { mkdirSync, writeFileSync } from "fs";
+import { globSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "path";
-import glob from "fast-glob";
 import chokidar from "chokidar";
 import type { FSWatcher } from "chokidar";
 import type { Plugin } from "vite";
@@ -40,10 +39,17 @@ export function mockupPreviewPlugin(): Plugin {
   }
 
   async function discoverComponents(): Promise<Array<DiscoveredComponent>> {
-    const files = await glob(`${MOCKUPS_DIR}/**/*.tsx`, {
+    // Node 24.16 added followSymlinks; the installed Node types predate it.
+    const options = {
       cwd: root,
-      ignore: ["**/_*/**", "**/_*.tsx"],
-    });
+      exclude: ["**/_*/**", "**/_*.tsx", "**/.*", "**/.*/**"],
+      followSymlinks: true,
+    };
+    const files = globSync(`${MOCKUPS_DIR}/**/*.tsx`, options)
+      .filter(
+        (file) => statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile(),
+      )
+      .map((file) => file.split(path.sep).join("/"));
 
     return files.map((f) => ({
       globKey: "./" + f.slice("src/".length),
