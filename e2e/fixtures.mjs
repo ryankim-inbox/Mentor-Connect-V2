@@ -36,7 +36,7 @@ const server = createServer(async (req, res) => {
       failures.set(`${body.method} ${body.path}`, body);
       return send(200, { configured: true });
     }
-    const failure = failures.get(`${req.method} ${path}`);
+    const failure = failures.get(`${req.method} ${path}${url.search}`) ?? failures.get(`${req.method} ${path}`);
     if (failure) return send(failure.status, failure.body);
     if (path === '/api/auth/login' && req.method === 'POST') {
       const account = Object.values(accounts).find(account => account.email === body.email && body.password === fixturePassword);
