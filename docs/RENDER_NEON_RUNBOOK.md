@@ -1,6 +1,6 @@
 # Render Free + fresh Neon test database
 
-Status: local implementation only. A production URL has not been deployed or verified.
+Status (2026-10-16): implementation is published in [draft PR #22](https://github.com/ryankim-inbox/Mentor-Connect-V2/pull/22). A new Free Neon test project and empty database have been created. The Render Free Docker form is prepared; credentials, bootstrap and service creation are still pending. No deployment URL has been verified.
 
 ## Architecture and boundaries
 
@@ -14,11 +14,11 @@ REST send is canonical. Only a committed row schedules broadcast. Each broadcast
 
 ## Required operator approvals and login
 
-Before any remote write, obtain explicit approval for:
+Approval for the following scoped actions was confirmed on 2026-10-16. No PR merge, existing database changes, paid resources or broader provider grants are authorized:
 
 1. Push `codex/render-neon-deployment` to `ryankim-inbox/Mentor-Connect-V2` and create a draft PR against `main`. This publishes the reviewed code/config/tests/runbook only. No force push and no automatic merge.
 2. Browser login to Render and Neon was confirmed on 2026-10-15. Reconfirm access if the session expires. Never put passwords, OTPs, tokens or DB URLs in chat, git, screenshots, or logs. A fresh OAuth grant, broader GitHub scope, persistent API token, or credential creation is a separate approval step.
-3. Create a **new Free Neon project and empty test database**. The pending UI proposes `Mentor_Connect` in AWS Ohio; nothing has been created. Confirm the exact project, host, database name and region, and choose a nearby/matching Render region. Do not branch/copy an existing DB or import legacy dumps. Creating credentials, application/readiness roles, or storing DB URLs is a security-sensitive approval step.
+3. Create a **new Free Neon project and empty test database**. `Mentor_Connect` was created in AWS Ohio with the new `neondb` owned by `neondb_owner`. A read-only SQL check confirmed zero public relations, no extra user schemas, and only `plpgsql`. Choose the matching Ohio Render region. Do not branch/copy an existing DB or import legacy dumps. Application/readiness role creation and storing their DB URLs are approved; the user enters secrets directly, outside chat.
 4. Create one **Free Render Docker web service**, connect only this repository/approved branch, save its exact HTTPS origin and required environment variables, and deploy the approved commit. Confirm no paid resources, previews, disks or additional workers appear in the final review screen.
 
 `render.yaml` explicitly selects `plan: free`, one instance, `/readyz`, and disables automatic deploys. The Blueprint's initial creation can still deploy immediately: approval must precede applying it. `SESSION_SECRET` is generated once in Render; keep the existing value across releases. Do not regenerate it on restart.
@@ -39,6 +39,8 @@ Use TLS with certificate validation and URL-encoded credentials. Python `DATABAS
 | `CLASSROOM_APP_SHA` | Full reviewed commit SHA used for bootstrap ledger |
 
 Do not reuse application-role credentials for readiness in the real environment. The local disposable integration test intentionally uses one test role. Keep bootstrap owner credentials local and ephemeral; do not save them on Render.
+
+Create least-privilege roles with SQL. Neon's Console/API/CLI role creation grants `neon_superuser` membership by default, so those role-creation flows are unsuitable for the application/readiness identities ([Neon role documentation](https://neon.com/docs/manage/roles)). Grant the app only its required table/sequence rights, without DDL or migration-ledger writes; grant readiness only the ledger read described above.
 
 With the approved direct URL and exact host/name loaded through secure local environment input (not a pasted command containing secrets):
 
