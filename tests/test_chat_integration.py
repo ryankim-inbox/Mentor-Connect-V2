@@ -53,7 +53,7 @@ def test_districts_are_available_before_login(chat_server):
         assert rows == []
 
 
-def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
+def test_concurrent_accept_has_exactly_one_winner(chat_server, chat_database):
     with chat_server() as base:
         author, _ = login(base, "student001@test.edu")
         mentor, _ = login(base, "mentor501@test.edu")
@@ -75,15 +75,17 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
         _, unchanged = api(author, base, "GET", f"/api/requests/{request_id}")
         assert unchanged["status"] == "open" and unchanged["matchedUserId"] is None
 
+        apps = [api(client, base, "POST", match_path)[1] for client in (mentor, other)]
+        author_retry, _ = login(base, "student001@test.edu")
         with closing(psycopg2.connect(chat_database)) as blocker, \
              closing(psycopg2.connect(chat_database)) as observer, \
              blocker.cursor() as lock_cursor, observer.cursor() as activity_cursor:
             observer.autocommit = True
             lock_cursor.execute("SELECT id FROM requests WHERE id = %s FOR UPDATE", (request_id,))
             with ThreadPoolExecutor(max_workers=2) as workers:
-                callers = [(501, mentor), (951, other)]
-                futures = [workers.submit(api, client, base, "POST", match_path)
-                           for _, client in callers]
+                callers = [(501, author), (951, author_retry)]
+                futures = [workers.submit(api, client, base, "PATCH", f"/api/requests/{request_id}/applications/{app['id']}", {"action": "accept"})
+                           for (_, client), app in zip(callers, apps)]
                 try:
                     # Release only after both real backend transactions reach the held lock.
                     deadline = time.monotonic() + 2
@@ -104,7 +106,7 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
                     blocker.rollback()
                 results = [future.result(timeout=3) for future in futures]
 
-        assert sorted(status for status, _ in results) == [200, 400]
+        assert sorted(status for status, _ in results) == [200, 409]
         successful_caller_id, successful_response = next(
             (user_id, response) for (user_id, _), (status, response) in zip(callers, results)
             if status == 200
@@ -112,10 +114,12 @@ def test_concurrent_connect_has_exactly_one_winner(chat_server, chat_database):
         status, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")
         assert status == 200 and stored_request["status"] == "matched"
         assert stored_request["matchedUserId"] == successful_caller_id
-        assert successful_response["matchedUserId"] == successful_caller_id
+        assert successful_response["applicantId"] == successful_caller_id
         for client, path, expected in [
             (author, match_path, 400), (anonymous, match_path, 401),
-            (mentor, missing_path, 404), (mentor, match_path, 400), (other, match_path, 400),
+            (mentor, missing_path, 404),
+            (mentor, match_path, 200 if successful_caller_id == 501 else 409),
+            (other, match_path, 200 if successful_caller_id == 951 else 409),
         ]:
             assert api(client, base, "POST", path)[0] == expected
             _, stored_request = api(author, base, "GET", f"/api/requests/{request_id}")

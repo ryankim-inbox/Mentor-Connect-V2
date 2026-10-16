@@ -8,6 +8,8 @@
     "dm_messages",
     "questions",
     "reports",
+    "request_applications",
+    "request_comments",
     "request_events",
     "request_tags",
     "requests",
@@ -403,6 +405,110 @@
     {
       "table": "reports",
       "position": 6,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "request_applications",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "request_applications",
+      "position": 2,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_applications",
+      "position": 3,
+      "name": "applicant_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_applications",
+      "position": 4,
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'pending'::text"
+    },
+    {
+      "table": "request_applications",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "request_applications",
+      "position": 6,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "request_comments",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "request_comments",
+      "position": 2,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 3,
+      "name": "author_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 4,
+      "name": "parent_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 5,
+      "name": "body",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 6,
+      "name": "client_comment_id",
+      "type": "uuid",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 7,
       "name": "created_at",
       "type": "timestamp with time zone",
       "nullable": false,
@@ -951,6 +1057,72 @@
       "definition": "FOREIGN KEY (reporter_id) REFERENCES users(id)"
     },
     {
+      "table": "request_applications",
+      "name": "request_applications_applicant_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (applicant_id) REFERENCES users(id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_request_applicant_key",
+      "type": "u",
+      "definition": "UNIQUE (request_id, applicant_id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_status_check",
+      "type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['pending'::text, 'accepted'::text, 'rejected'::text, 'cancelled'::text]))"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_author_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES users(id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_id_request_key",
+      "type": "u",
+      "definition": "UNIQUE (id, request_id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_operation_key",
+      "type": "u",
+      "definition": "UNIQUE (author_id, request_id, client_comment_id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_parent_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (parent_id, request_id) REFERENCES request_comments(id, request_id) ON DELETE CASCADE"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE"
+    },
+    {
       "table": "request_events",
       "name": "request_events_kind_check",
       "type": "c",
@@ -1199,6 +1371,46 @@
       "table": "reports",
       "name": "reports_pkey",
       "definition": "CREATE UNIQUE INDEX reports_pkey ON public.reports USING btree (id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "idx_request_applications_applicant",
+      "definition": "CREATE INDEX idx_request_applications_applicant ON public.request_applications USING btree (applicant_id, id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "idx_request_applications_request",
+      "definition": "CREATE INDEX idx_request_applications_request ON public.request_applications USING btree (request_id, id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_pkey",
+      "definition": "CREATE UNIQUE INDEX request_applications_pkey ON public.request_applications USING btree (id)"
+    },
+    {
+      "table": "request_applications",
+      "name": "request_applications_request_applicant_key",
+      "definition": "CREATE UNIQUE INDEX request_applications_request_applicant_key ON public.request_applications USING btree (request_id, applicant_id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "idx_request_comments_request",
+      "definition": "CREATE INDEX idx_request_comments_request ON public.request_comments USING btree (request_id, id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_id_request_key",
+      "definition": "CREATE UNIQUE INDEX request_comments_id_request_key ON public.request_comments USING btree (id, request_id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_operation_key",
+      "definition": "CREATE UNIQUE INDEX request_comments_operation_key ON public.request_comments USING btree (author_id, request_id, client_comment_id)"
+    },
+    {
+      "table": "request_comments",
+      "name": "request_comments_pkey",
+      "definition": "CREATE UNIQUE INDEX request_comments_pkey ON public.request_comments USING btree (id)"
     },
     {
       "table": "request_events",

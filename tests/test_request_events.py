@@ -33,14 +33,17 @@ def test_match_event_is_atomic_and_role_attributed(backend_database, backend_ser
         path = f'/api/requests/{created["id"]}'
         initial = events(backend_database)
         assert len(initial) == 1 and initial[0][:4] == ("tracking_started", None, None, None)
+        app = api(matcher, base, "POST", path + "/match")[1]
+        assert app["status"] == "pending" and events(backend_database) == initial
+        author_retry, _ = login(base, author_email)
         barrier = Barrier(2)
 
         def connect(client):
             barrier.wait(timeout=5)
-            return api(client, base, "POST", path + "/match")[0]
+            return api(client, base, "PATCH", path + f'/applications/{app["id"]}', {"action": "accept"})[0]
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            assert sorted(pool.map(connect, [matcher, rival])) == [200, 400]
+            assert sorted(pool.map(connect, [author, author_retry])) == [200, 200]
         first = events(backend_database)
         assert len(first) == 2
         assert first[1][:3] == ("matched", created["id"], 501)
@@ -51,7 +54,9 @@ def test_match_event_is_atomic_and_role_attributed(backend_database, backend_ser
             assert api(author, base, "PATCH", path, {"status": "matched"})[0] == 200
         assert events(backend_database) == first
         assert api(author, base, "PATCH", path, {"status": "open"})[1]["matchedUserId"] is None
-        assert api(matcher, base, "POST", path + "/match")[0] == 200
+        app = api(matcher, base, "POST", path + "/match")[1]
+        assert app["status"] == "pending"
+        assert api(author, base, "PATCH", path + f'/applications/{app["id"]}', {"action": "accept"})[0] == 200
         rematched = events(backend_database)
         assert len(rematched) == 3 and rematched[:2] == first
         assert rematched[2][:4] == first[1][:4]
@@ -64,7 +69,7 @@ def test_match_event_is_atomic_and_role_attributed(backend_database, backend_ser
 
 def test_connect_rollback_removes_event_and_state(backend_database, monkeypatch):
     import db
-    from routers import requests
+    from routers import request_interactions
 
     monkeypatch.setattr(db, "DATABASE_URL", backend_database)
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
@@ -72,6 +77,7 @@ def test_connect_rollback_removes_event_and_state(backend_database, monkeypatch)
                        VALUES (1, 1, 'Rollback', 'Detail', 'mentee') RETURNING id, updated_at""")
         request_id, updated_at = cur.fetchone()
         conn.commit()
+    app = request_interactions.apply_to_request(request_id, Request({"type": "http", "session": {"user_id": 501}}))
     before = events(backend_database)
 
     def fail_after_insert(cur, row):
@@ -79,9 +85,9 @@ def test_connect_rollback_removes_event_and_state(backend_database, monkeypatch)
         assert cur.fetchone()["count"] == 1
         raise RuntimeError("response failed after event insert")
 
-    monkeypatch.setattr(requests, "build_request_response", fail_after_insert)
+    monkeypatch.setattr(request_interactions, "_application", fail_after_insert)
     with pytest.raises(RuntimeError, match="response failed after event insert"):
-        requests.match_request(request_id, Request({"type": "http", "session": {"user_id": 501}}))
+        request_interactions.act_on_application(request_id, app["id"], request_interactions.ApplicationAction(action="accept"), Request({"type": "http", "session": {"user_id": 1}}))
     assert events(backend_database) == before
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
         cur.execute("SELECT status, matched_user_id, updated_at FROM requests WHERE id = %s", (request_id,))
@@ -123,7 +129,9 @@ def test_gateway_connect_rejects_either_block_direction_until_unblocked(
     assert events(backend_database) == before_events
     assert api(blocker, base, "DELETE", f"/api/blocks/{blocked_id}")[0] == 204
     status, matched = api(matcher, base, "POST", path)
-    assert status == 200 and matched["matchedUserId"] == matcher_id
+    assert status == 200 and matched["status"] == "pending"
+    assert events(backend_database) == before_events
+    assert api(author, base, "PATCH", f'/api/requests/{created["id"]}/applications/{matched["id"]}', {"action": "accept"})[0] == 200
     assert request_state(backend_database, created["id"])[:2] == ("matched", matcher_id)
     assert len(events(backend_database)) == len(before_events) + 1
     assert events(backend_database)[-1][:3] == ("matched", created["id"], 502)

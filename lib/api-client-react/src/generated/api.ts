@@ -18,11 +18,14 @@ import type {
 
 import type {
   AdminEnvelope,
+  ApplicationAction,
   AuthResponse,
   BlockUserBody,
   BlockedUser,
   ChatMessage,
   ChatRoom,
+  Connection,
+  CreateCommentBody,
   CreateReportBody,
   CreateRequestBody,
   District,
@@ -44,8 +47,12 @@ import type {
   GetSchedulingSuggestionsParams,
   HealthStatus,
   ListChatRoomMessagesParams,
+  ListConnectionsParams,
   ListDistrictsParams,
   ListDmMessagesParams,
+  ListRequestActivityParams,
+  ListRequestApplicationsParams,
+  ListRequestCommentsParams,
   ListRequestsParams,
   LoginBody,
   MatchRequest,
@@ -58,6 +65,8 @@ import type {
   ProfileSummary,
   PyEnvelope,
   RegisterBody,
+  RequestApplication,
+  RequestComment,
   ScaffoldTodo,
   SendChatMessageBody,
   StartDmBody,
@@ -1712,14 +1721,14 @@ export const getMatchRequestUrl = (id: number) => {
 };
 
 /**
- * Returns 403 when either participant blocks the other.
- * @summary Match/respond to a mentorship request
+ * Creates a pending application. Only the author can accept it; this endpoint never matches immediately.
+ * @summary Apply to a mentorship request (compatibility alias)
  */
 export const matchRequest = async (
   id: number,
   options?: Parameters<typeof customFetch>[1],
-): Promise<MentorshipRequest> => {
-  return customFetch<MentorshipRequest>(getMatchRequestUrl(id), {
+): Promise<RequestApplication> => {
+  return customFetch<RequestApplication>(getMatchRequestUrl(id), {
     ...options,
     method: "POST",
   });
@@ -1733,6 +1742,7 @@ export const getMatchRequestMutationOptions = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -1784,6 +1794,7 @@ export type MatchRequestMutationError = ErrorType<
   | Error401Response
   | Error403Response
   | Error404Response
+  | Error409Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -1793,7 +1804,7 @@ export type MatchRequestMutationError = ErrorType<
 export type MatchRequestMutationVariables = { id: number };
 
 /**
- * @summary Match/respond to a mentorship request
+ * @summary Apply to a mentorship request (compatibility alias)
  */
 export const useMatchRequest = <
   TError = ErrorType<
@@ -1801,6 +1812,7 @@ export const useMatchRequest = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -2888,6 +2900,7 @@ export const getSendChatRoomMessageMutationOptions = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -2938,6 +2951,7 @@ export type SendChatRoomMessageMutationError = ErrorType<
   | Error401Response
   | Error403Response
   | Error404Response
+  | Error409Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -2957,6 +2971,7 @@ export const useSendChatRoomMessage = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -3438,6 +3453,7 @@ export const getSendDmMessageMutationOptions = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -3488,6 +3504,7 @@ export type SendDmMessageMutationError = ErrorType<
   | Error401Response
   | Error403Response
   | Error404Response
+  | Error409Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -3507,6 +3524,7 @@ export const useSendDmMessage = <
     | Error401Response
     | Error403Response
     | Error404Response
+    | Error409Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -5517,6 +5535,992 @@ export function useGetFlaggedUsers<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetFlaggedUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getListRequestCommentsUrl = (
+  id: number,
+  params?: ListRequestCommentsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/requests/${id}/comments?${stringifiedParams}`
+    : `/api/requests/${id}/comments`;
+};
+
+/**
+ * @summary listRequestComments
+ */
+export const listRequestComments = async (
+  id: number,
+  params?: ListRequestCommentsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestComment[]> => {
+  return customFetch<RequestComment[]>(getListRequestCommentsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRequestCommentsQueryKey = (
+  id: number,
+  params?: ListRequestCommentsParams,
+) => {
+  return [`/api/requests/${id}/comments`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRequestCommentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRequestComments>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  params?: ListRequestCommentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRequestCommentsQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRequestComments>>
+  > = ({ signal }) =>
+    listRequestComments(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRequestComments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRequestCommentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRequestComments>>
+>;
+export type ListRequestCommentsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary listRequestComments
+ */
+
+export function useListRequestComments<
+  TData = Awaited<ReturnType<typeof listRequestComments>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  params?: ListRequestCommentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRequestCommentsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getCreateRequestCommentUrl = (id: number) => {
+  return `/api/requests/${id}/comments`;
+};
+
+/**
+ * @summary createRequestComment
+ */
+export const createRequestComment = async (
+  id: number,
+  createCommentBody: CreateCommentBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestComment> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<RequestComment>(getCreateRequestCommentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(createCommentBody),
+  });
+};
+
+export const getCreateRequestCommentMutationKey = () =>
+  ["createRequestComment"] as const;
+
+export const getCreateRequestCommentMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRequestComment>>,
+    TError,
+    CreateRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRequestComment>>,
+  TError,
+  CreateRequestCommentMutationVariables,
+  TContext
+> => {
+  const mutationKey = getCreateRequestCommentMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRequestComment>>,
+    CreateRequestCommentMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createRequestComment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRequestCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRequestComment>>
+>;
+export type CreateRequestCommentMutationBody = BodyType<CreateCommentBody>;
+export type CreateRequestCommentMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type CreateRequestCommentMutationVariables = {
+  id: number;
+  data: BodyType<CreateCommentBody>;
+};
+
+/**
+ * @summary createRequestComment
+ */
+export const useCreateRequestComment = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRequestComment>>,
+    TError,
+    CreateRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRequestComment>>,
+  TError,
+  CreateRequestCommentMutationVariables,
+  TContext
+> => {
+  return useMutation(getCreateRequestCommentMutationOptions(options));
+};
+
+export const getListRequestApplicationsUrl = (
+  id: number,
+  params?: ListRequestApplicationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/requests/${id}/applications?${stringifiedParams}`
+    : `/api/requests/${id}/applications`;
+};
+
+/**
+ * @summary listRequestApplications
+ */
+export const listRequestApplications = async (
+  id: number,
+  params?: ListRequestApplicationsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestApplication[]> => {
+  return customFetch<RequestApplication[]>(
+    getListRequestApplicationsUrl(id, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListRequestApplicationsQueryKey = (
+  id: number,
+  params?: ListRequestApplicationsParams,
+) => {
+  return [
+    `/api/requests/${id}/applications`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListRequestApplicationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRequestApplications>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  params?: ListRequestApplicationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestApplications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRequestApplicationsQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRequestApplications>>
+  > = ({ signal }) =>
+    listRequestApplications(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRequestApplications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRequestApplicationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRequestApplications>>
+>;
+export type ListRequestApplicationsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary listRequestApplications
+ */
+
+export function useListRequestApplications<
+  TData = Awaited<ReturnType<typeof listRequestApplications>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  params?: ListRequestApplicationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestApplications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRequestApplicationsQueryOptions(
+    id,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getApplyToRequestUrl = (id: number) => {
+  return `/api/requests/${id}/applications`;
+};
+
+/**
+ * @summary applyToRequest
+ */
+export const applyToRequest = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestApplication> => {
+  return customFetch<RequestApplication>(getApplyToRequestUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getApplyToRequestMutationKey = () => ["applyToRequest"] as const;
+
+export const getApplyToRequestMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyToRequest>>,
+    TError,
+    ApplyToRequestMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof applyToRequest>>,
+  TError,
+  ApplyToRequestMutationVariables,
+  TContext
+> => {
+  const mutationKey = getApplyToRequestMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof applyToRequest>>,
+    ApplyToRequestMutationVariables
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return applyToRequest(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApplyToRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof applyToRequest>>
+>;
+
+export type ApplyToRequestMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type ApplyToRequestMutationVariables = { id: number };
+
+/**
+ * @summary applyToRequest
+ */
+export const useApplyToRequest = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof applyToRequest>>,
+    TError,
+    ApplyToRequestMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof applyToRequest>>,
+  TError,
+  ApplyToRequestMutationVariables,
+  TContext
+> => {
+  return useMutation(getApplyToRequestMutationOptions(options));
+};
+
+export const getActOnRequestApplicationUrl = (
+  id: number,
+  applicationId: number,
+) => {
+  return `/api/requests/${id}/applications/${applicationId}`;
+};
+
+/**
+ * @summary actOnRequestApplication
+ */
+export const actOnRequestApplication = async (
+  id: number,
+  applicationId: number,
+  applicationAction: ApplicationAction,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestApplication> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<RequestApplication>(
+    getActOnRequestApplicationUrl(id, applicationId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...getHeaders(options?.headers),
+      },
+      body: JSON.stringify(applicationAction),
+    },
+  );
+};
+
+export const getActOnRequestApplicationMutationKey = () =>
+  ["actOnRequestApplication"] as const;
+
+export const getActOnRequestApplicationMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actOnRequestApplication>>,
+    TError,
+    ActOnRequestApplicationMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof actOnRequestApplication>>,
+  TError,
+  ActOnRequestApplicationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getActOnRequestApplicationMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof actOnRequestApplication>>,
+    ActOnRequestApplicationMutationVariables
+  > = (props) => {
+    const { id, applicationId, data } = props ?? {};
+
+    return actOnRequestApplication(id, applicationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActOnRequestApplicationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof actOnRequestApplication>>
+>;
+export type ActOnRequestApplicationMutationBody = BodyType<ApplicationAction>;
+export type ActOnRequestApplicationMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type ActOnRequestApplicationMutationVariables = {
+  id: number;
+  applicationId: number;
+  data: BodyType<ApplicationAction>;
+};
+
+/**
+ * @summary actOnRequestApplication
+ */
+export const useActOnRequestApplication = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof actOnRequestApplication>>,
+    TError,
+    ActOnRequestApplicationMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof actOnRequestApplication>>,
+  TError,
+  ActOnRequestApplicationMutationVariables,
+  TContext
+> => {
+  return useMutation(getActOnRequestApplicationMutationOptions(options));
+};
+
+export const getListConnectionsUrl = (params?: ListConnectionsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/connections?${stringifiedParams}`
+    : `/api/connections`;
+};
+
+/**
+ * @summary listConnections
+ */
+export const listConnections = async (
+  params?: ListConnectionsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<Connection[]> => {
+  return customFetch<Connection[]>(getListConnectionsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListConnectionsQueryKey = (params?: ListConnectionsParams) => {
+  return [`/api/connections`, ...(params ? [params] : [])] as const;
+};
+
+export const getListConnectionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listConnections>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListConnectionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listConnections>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListConnectionsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listConnections>>> = ({
+    signal,
+  }) => listConnections(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listConnections>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListConnectionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listConnections>>
+>;
+export type ListConnectionsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary listConnections
+ */
+
+export function useListConnections<
+  TData = Awaited<ReturnType<typeof listConnections>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListConnectionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listConnections>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListConnectionsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getListRequestActivityUrl = (
+  params?: ListRequestActivityParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/request-activity?${stringifiedParams}`
+    : `/api/request-activity`;
+};
+
+/**
+ * @summary listRequestActivity
+ */
+export const listRequestActivity = async (
+  params?: ListRequestActivityParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<MentorshipRequest[]> => {
+  return customFetch<MentorshipRequest[]>(getListRequestActivityUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRequestActivityQueryKey = (
+  params?: ListRequestActivityParams,
+) => {
+  return [`/api/request-activity`, ...(params ? [params] : [])] as const;
+};
+
+export const getListRequestActivityQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRequestActivity>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListRequestActivityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListRequestActivityQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listRequestActivity>>
+  > = ({ signal }) =>
+    listRequestActivity(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRequestActivity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRequestActivityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listRequestActivity>>
+>;
+export type ListRequestActivityQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary listRequestActivity
+ */
+
+export function useListRequestActivity<
+  TData = Awaited<ReturnType<typeof listRequestActivity>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListRequestActivityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listRequestActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRequestActivityQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
