@@ -17,8 +17,12 @@
 # The frontend chat popup (artifacts/peerbridge/src/components/ChatWidget.tsx)
 # already calls these endpoints, including the private message thread.
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
+import asyncio
+from typing import Annotated
+
+from fastapi import BackgroundTasks, APIRouter, Query, Request, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from db import db  # imported for you — every mission's queries will use it
 
@@ -351,29 +355,33 @@ def list_chat_rooms(request: Request):
 
 
 @router.get("/chat/rooms/{room_id}/messages")
-def list_room_messages(room_id: int, request: Request):
-    """Mission 2 — latest 50 visible room messages, oldest -> newest."""
+def list_room_messages(room_id: int, request: Request,
+                       before_id: Annotated[int | None, Query(alias="beforeId", gt=0, le=2147483647)] = None):
+    """Up to 50 visible messages before a channel-scoped cursor, oldest first."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
         _load_room_for_user(cur, room_id, user_id)
+        cursor_filter = "" if before_id is None else """
+                 AND (m.created_at, m.id) <
+                     (SELECT created_at, id FROM chat_messages WHERE room_id = %s AND id = %s)"""
         cur.execute(
             """SELECT m.id, m.room_id, m.sender_id, u.name AS sender_name,
                       m.body, m.created_at
                FROM chat_messages m
                JOIN users u ON u.id = m.sender_id
                WHERE m.room_id = %s
-                 AND m.deleted_at IS NULL
+                 AND m.deleted_at IS NULL""" + cursor_filter + """
                ORDER BY m.created_at DESC, m.id DESC
                LIMIT 50""",
-            (room_id,),
+            (room_id,) if before_id is None else (room_id, room_id, before_id),
         )
         messages = cur.fetchall()
     return [_format_chat_message(message) for message in reversed(messages)]
 
 
 @router.post("/chat/rooms/{room_id}/messages", status_code=201)
-def send_room_message(room_id: int, body: SendMessageBody, request: Request):
+def send_room_message(room_id: int, body: SendMessageBody, request: Request, background_tasks: BackgroundTasks = None):
     """Mission 3 — post a message into a room, return the saved row (201)."""
     user_id = _require_user(request)
     text = _clean_body(body.body)
@@ -387,6 +395,9 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request):
         )
         new_id = cur.fetchone()["id"]
         message = _fetch_chat_message(cur, new_id)
+    # db() has committed here. Never publish a row from a failed transaction.
+    if background_tasks is not None:
+        background_tasks.add_task(_broadcast, room_connections.get(room_id, []), message)
     return message
 
 
@@ -459,18 +470,22 @@ def start_dm_conversation(body: StartDmBody, request: Request):
 
 
 @router.get("/dms/{conversation_id}/messages")
-def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
+def list_dm_messages(conversation_id: int, request: Request,
+                     before_id: Annotated[int | None, Query(alias="beforeId", gt=0, le=2147483647)] = None) -> list[dict]:
     """Mission 7a — visible message history for a conversation's participants."""
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
         _load_conversation_membership(cur, conversation_id, user_id)
+        cursor_filter = "" if before_id is None else """
+                 AND (created_at, id) <
+                     (SELECT created_at, id FROM dm_messages WHERE conversation_id = %s AND id = %s)"""
         cur.execute(
             """SELECT id, conversation_id, sender_id, body, created_at, read_at
                FROM dm_messages
-               WHERE conversation_id = %s AND deleted_at IS NULL
+               WHERE conversation_id = %s AND deleted_at IS NULL""" + cursor_filter + """
                ORDER BY created_at DESC, id DESC LIMIT 50""",
-            (conversation_id,),
+            (conversation_id,) if before_id is None else (conversation_id, conversation_id, before_id),
         )
         messages = cur.fetchall()
         incoming_ids = [message["id"] for message in messages if message["sender_id"] != user_id]
@@ -489,7 +504,7 @@ def list_dm_messages(conversation_id: int, request: Request) -> list[dict]:
 
 
 @router.post("/dms/{conversation_id}/messages", status_code=201)
-def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request) -> dict:
+def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request, background_tasks: BackgroundTasks = None) -> dict:
     """Mission 7b — validate and persist a participant's private message."""
     user_id = _require_user(request)
     text = _clean_body(body.body)
@@ -503,6 +518,8 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
             (conversation_id, user_id, text),
         )
         message = _fetch_dm_message(cur, cur.fetchone()["id"])
+    if background_tasks is not None:
+        background_tasks.add_task(_broadcast, dm_connections.get(conversation_id, []), message)
     return message
 
 
@@ -530,17 +547,56 @@ room_connections: dict[int, list[WebSocket]] = {}
 dm_connections: dict[int, list[WebSocket]] = {}
 
 
+def _authorized_recipients(sockets: list[WebSocket], message: dict) -> list[WebSocket]:
+    """Recheck permissions: an already-open socket is not a permanent grant."""
+    allowed = []
+    if not sockets:
+        return allowed
+    with db() as conn:
+        cur = conn.cursor()
+        for socket in sockets:
+            user_id = socket.session.get("user_id")
+            if not user_id:
+                continue
+            try:
+                if "roomId" in message:
+                    _load_room_for_user(cur, message["roomId"], user_id)
+                else:
+                    convo = _load_conversation_membership(cur, message["conversationId"], user_id)
+                    _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
+            except HTTPException:
+                continue
+            allowed.append(socket)
+    return allowed
+
+
 async def _broadcast(sockets: list[WebSocket], message: dict) -> None:
     """Broadcast JSON to all live sockets and discard stale connections."""
-    dead: list[WebSocket] = []
-    for socket in list(sockets):
+    snapshot = list(sockets)
+    close_code = 4403
+    try:
+        allowed = await run_in_threadpool(_authorized_recipients, snapshot, message)
+    except Exception:
+        allowed = []
+        close_code = 1011
+
+    async def deliver(socket):
         try:
-            await socket.send_json(message)
+            if socket not in allowed:
+                if socket in sockets:
+                    sockets.remove(socket)
+                await asyncio.wait_for(socket.close(code=close_code), timeout=1)
+                return
+            await asyncio.wait_for(socket.send_json(message), timeout=2)
         except Exception:
-            dead.append(socket)
-    for socket in dead:
-        if socket in sockets:
-            sockets.remove(socket)
+            if socket in sockets:
+                sockets.remove(socket)
+            try:
+                await asyncio.wait_for(socket.close(code=1011), timeout=1)
+            except Exception:
+                pass
+    # One slow peer must not delay delivery to everyone else.
+    await asyncio.gather(*(deliver(socket) for socket in snapshot))
 
 
 def _register(
@@ -587,14 +643,14 @@ async def chat_room_socket(websocket: WebSocket, room_id: int):
             except HTTPException:
                 continue
 
-            with db() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    """INSERT INTO chat_messages (room_id, sender_id, body)
-                       VALUES (%s, %s, %s) RETURNING id""",
-                    (room_id, user_id, clean),
+            try:
+                # Use the same authorization/persistence path as canonical REST.
+                message = await run_in_threadpool(
+                    send_room_message, room_id, SendMessageBody(body=clean), websocket
                 )
-                message = _fetch_chat_message(cur, cur.fetchone()["id"])
+            except HTTPException:
+                await websocket.close(code=4403)
+                break
 
             await _broadcast(room_connections.get(room_id, []), message)
     except WebSocketDisconnect:

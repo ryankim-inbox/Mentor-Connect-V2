@@ -194,7 +194,7 @@ export async function runSmoke({ origin, credentials }, browser, emit = record =
     const dm = await check(mentor, 'chat.dm-start', '/api/dms/start', { method: 'POST', body: { toUserId: menteeId }, verify: value => positiveId(value.id) && value.otherUserId === menteeId });
     if (dm) {
       await check(mentor, 'chat.mission-7-dm-history', `/api/dms/${dm.id}/messages`);
-      await socketCheck(mentor, 'chat.mission-8-dm-ws', `/ws/dms/${dm.id}`, undefined, 8);
+      await socketCheck(mentor, 'chat.mission-8-dm-ws', `/ws/dms/${dm.id}`, `${canary}-dm`);
     }
     for (const [task, route] of [
       ['matching.find_matches', `/api/matches/${credentials.fixtures.questionId}?limit=5`],

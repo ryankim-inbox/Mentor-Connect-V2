@@ -239,7 +239,7 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     authentication: "session",
     allowsBody: false,
     requiresJson: false,
-    queryKeys: noQuery,
+    queryKeys: ["beforeId"],
   },
   {
     method: "POST",
@@ -275,7 +275,7 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     authentication: "session",
     allowsBody: false,
     requiresJson: false,
-    queryKeys: noQuery,
+    queryKeys: ["beforeId"],
   },
   {
     method: "POST",
@@ -525,6 +525,8 @@ function validateQuery(
   for (const [key, value] of searchParams) {
     if (["districtId", "tagId", "user_a", "user_b"].includes(key)) {
       if (!isPositiveSafeInteger(value)) invalidQuery();
+    } else if (key === "beforeId") {
+      if (!isPositiveSafeInteger(value) || Number(value) > 2147483647) invalidQuery();
     } else if (key === "limit") {
       const maximum = route.template === "/api/requests" ? 50 : 20;
       if (!isPositiveSafeInteger(value) || Number(value) > maximum) invalidQuery();

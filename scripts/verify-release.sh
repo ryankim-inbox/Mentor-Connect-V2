@@ -43,11 +43,14 @@ run uv sync --frozen --group dev
 run "$PYTHON_BIN" -c "import pytest, psycopg, psycopg2, uvicorn, websockets"
 run node scripts/test-python-runtime.mjs
 run node scripts/test-python-freeze.mjs
+# The Python suite includes the built SPA/gateway HTTPS browser integration.
+# Fresh CI checkouts need both build output and Chromium before collecting it.
+run pnpm typecheck
+run pnpm build:release
+run pnpm exec playwright install --with-deps chromium
 unset MENTOR_RANKS_MODULE
 run sh scripts/test-python.sh
 run env MENTOR_RANKS_MODULE=mentor_ranks sh scripts/test-python.sh tests/test_mentor_ranks.py -q
-run pnpm typecheck
-run pnpm build:release
 run pnpm test:gateway
 run pnpm --filter @workspace/mockup-sandbox test
 run pnpm test:migrations
@@ -60,7 +63,6 @@ run node scripts/verify-api-boundary.mjs
 run sh scripts/check-secrets.sh
 run pnpm test:secrets
 run node --test scripts/smoke-classroom.test.mjs
-run pnpm exec playwright install --with-deps chromium
 run pnpm e2e
 if [ "$CURRENT_REF" = "$PYTHON_FREEZE_SCOPE_REF" ]; then
   run node scripts/check-python-unchanged.mjs "$PYTHON_FREEZE_BASE"

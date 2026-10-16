@@ -128,7 +128,7 @@ test("a saved room message is visible to the other signed-in account", async ({ 
 });
 
 for (const count of [0, 49, 50]) {
-  test(`DM history with ${count} messages labels a full window and preserves the empty state`, async ({ page, request }) => {
+  test(`DM history with ${count} messages offers older history for a full page and preserves the empty state`, async ({ page, request }) => {
     const messages = Array.from({ length: count }, (_, index) => ({
       id: index + 1,
       conversationId: 1,
@@ -149,14 +149,14 @@ for (const count of [0, 49, 50]) {
     expect(response.status()).toBe(200);
     expect(response.headers()["x-request-id"]).toBeTruthy();
     await expect(page.getByText(/^DM window message \d+$/)).toHaveCount(count);
-    await expect(page.getByText("Latest 50 messages", { exact: true })).toHaveCount(count === 50 ? 1 : 0);
+    await expect(page.getByRole("button", { name: "Load older messages", exact: true })).toHaveCount(count === 50 ? 1 : 0);
     await expect(page.getByText("No messages yet — send the first one.", { exact: true })).toHaveCount(count === 0 ? 1 : 0);
     await expect(page.getByPlaceholder("Type a message…")).toBeEnabled();
   });
 }
 
 for (const update of ["send", "poll"] as const) {
-  test(`a new DM stays in view when ${update} replaces a full 50-message window`, async ({ page, request }) => {
+  test(`a new DM stays in view when ${update} extends history beyond 50 messages`, async ({ page, request }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     if (update === "poll") await page.clock.install();
     const messages = Array.from({ length: 50 }, (_, index) => ({
@@ -164,9 +164,9 @@ for (const update of ["send", "poll"] as const) {
       body: `Full window message ${index + 1}`,
       createdAt: "2026-09-09T00:00:00Z", readAt: null,
     }));
-    const configure = async (method: string, body: unknown, status = 200) => {
+    const configure = async (method: string, body: unknown, status = 200, query = "") => {
       expect((await request.post("http://127.0.0.1:18181/__fixture/failure", {
-        data: { method, path: "/api/dms/1/messages", status, body },
+        data: { method, path: "/api/dms/1/messages" + query, status, body },
       })).ok()).toBe(true);
     };
     await configure("GET", messages);
@@ -178,6 +178,7 @@ for (const update of ["send", "poll"] as const) {
     await expect(page.getByText("Full window message 50", { exact: true })).toBeInViewport({ ratio: 1 });
     const newest = { ...messages[49], id: 51, senderId: update === "send" ? 1 : 2, body: "Newest full window message" };
     await configure("GET", [...messages.slice(1), newest]);
+    await configure("GET", [messages[0]], 200, "?beforeId=2");
     if (update === "send") {
       await configure("POST", newest, 201);
       await page.getByPlaceholder("Type a message…").fill(newest.body);
@@ -186,9 +187,9 @@ for (const update of ["send", "poll"] as const) {
       await page.clock.fastForward(10_100);
       await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
     }
-    await expect(page.getByText("Full window message 1", { exact: true })).toHaveCount(0);
-    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(49);
-    await expect(page.getByText("Latest 50 messages", { exact: true })).toBeVisible();
+    await expect(page.getByText("Full window message 1", { exact: true })).toHaveCount(1);
+    await expect(page.getByText(/^Full window message \d+$/)).toHaveCount(50);
+    await expect(page.getByRole("button", { name: "Load older messages", exact: true })).toBeVisible();
     await expect(page.getByText(newest.body, { exact: true })).toBeInViewport({ ratio: 1 });
   });
 }
