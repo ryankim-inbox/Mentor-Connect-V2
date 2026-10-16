@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: mentor-connect-test
+    runtime: docker
+    plan: free
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /readyz
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GATEWAY_PUBLIC_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: READINESS_DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

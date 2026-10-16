@@ -188,3 +188,13 @@ for (const [type, accepted] of [[undefined, true], ["high_school", true], ["unif
     else assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/);
   });
 }
+
+test("chat history accepts a bounded cursor only on GET and rejects ambiguous values", () => {
+  for (const route of ["/api/chat/rooms/1/messages", "/api/dms/1/messages"]) {
+    assert.equal(resolvePublicRoute("GET", route + "?beforeId=51")?.upstreamPath, route + "?beforeId=51");
+    for (const value of ["0", "-1", "1.5", "2147483648", "x", "1&beforeId=2"]) {
+      assert.throws(() => resolvePublicRoute("GET", route + "?beforeId=" + value), /invalid_query/);
+    }
+    assert.throws(() => resolvePublicRoute("POST", route + "?beforeId=51"), /invalid_query/);
+  }
+});

@@ -218,8 +218,15 @@ export function createWebSocketUpgradeHandler(options: WebSocketOptions) {
         upstreamRequest.on("upgrade", (response, peer, upstreamHead) => {
           upstreamSocket = peer;
           peer.on("error", close);
-          peer.on("end", close);
-          peer.on("close", close);
+          peer.on("end", () => {
+            // FIN means all upstream bytes were read, not that the client's
+            // write queue drained. Flush that queue before destroying it.
+            if (upgraded && !ended) socket.end(close);
+            else close();
+          });
+          peer.on("close", () => {
+            if (!peer.readableEnded) close();
+          });
           if (ended) {
             peer.destroy();
             return;

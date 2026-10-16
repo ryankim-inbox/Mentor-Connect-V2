@@ -1,3 +1,4 @@
+import { serveStatic, setSecurityHeaders } from "./static.js";
 import { randomUUID } from "node:crypto";
 import {
   createServer,
@@ -74,6 +75,7 @@ export interface GatewayLogger {
 }
 
 export interface GatewayOptions {
+  readonly staticDirectory?: string;
   readonly upstreamOrigin?: string;
   readonly publicOrigin?: string;
   readonly allowLoopbackPublicOrigin?: boolean;
@@ -88,6 +90,7 @@ export interface GatewayOptions {
 }
 
 interface GatewayConfig {
+  readonly staticDirectory?: string;
   readonly upstreamOrigin: URL;
   readonly publicOrigin: string;
   readonly limiter: ReturnType<typeof createLimiter>;
@@ -214,6 +217,7 @@ export function resolveGatewayConfig(
   return {
     upstreamOrigin,
     publicOrigin,
+    staticDirectory: options.staticDirectory ?? process.env.GATEWAY_STATIC_DIR,
     limiter: createLimiter(options.rateLimitNow ?? Date.now),
     requestBodyLimitBytes: resolvePositiveInteger(
       options.requestBodyLimitBytes,
@@ -252,6 +256,7 @@ async function handleRequest(
   response: ServerResponse,
   config: GatewayConfig,
 ): Promise<void> {
+  setSecurityHeaders(response, config.publicOrigin);
   const requestId = randomUUID();
   const trace: RequestTrace = {
     family: "unknown",
@@ -277,7 +282,7 @@ async function handleRequest(
   response.once("close", abortForClosedResponse);
 
   try {
-    const target = parseRequestTarget(request.url);
+    const target = parseRequestTarget(request.url, !!config.staticDirectory);
     validateGenericRequestHeaders(request, config);
 
     const method = request.method?.toUpperCase() ?? "GET";
@@ -305,6 +310,21 @@ async function handleRequest(
       const outcome = ready ? "ready" : "not_ready";
       sendJson(response, status, { status: outcome }, requestId);
       logRequest(config, trace, requestId, outcome, status);
+      return;
+    }
+
+    if (
+      config.staticDirectory &&
+      !/^\/(?:api|ws)(?:\/|$)/.test(target.pathname) &&
+      (await serveStatic(
+        request,
+        response,
+        config.staticDirectory,
+        target.pathname,
+      ))
+    ) {
+      drainRequest(request);
+      logRequest(config, trace, requestId, "static", 200);
       return;
     }
 
@@ -556,7 +576,10 @@ function resolvePositiveInteger(
   return candidate;
 }
 
-function parseRequestTarget(rawTarget: string | undefined): RequestTarget {
+function parseRequestTarget(
+  rawTarget: string | undefined,
+  allowStatic = false,
+): RequestTarget {
   if (!rawTarget || rawTarget.length > MAX_REQUEST_TARGET_LENGTH) {
     throw new GatewayHttpError(400, "malformed_url");
   }
@@ -582,7 +605,11 @@ function parseRequestTarget(rawTarget: string | undefined): RequestTarget {
     rawPath.includes("%") ||
     rawPath.includes("//") ||
     rawPath.split("/").some((segment) => segment === "." || segment === "..") ||
-    !/^\/[a-z0-9_/-]*$/.test(rawPath)
+    !(
+      allowStatic && !/^\/(?:api|ws)(?:\/|$)/.test(rawPath)
+        ? /^\/[A-Za-z0-9_./-]*$/
+        : /^\/[a-z0-9_/-]*$/
+    ).test(rawPath)
   ) {
     throw new GatewayHttpError(400, "malformed_url");
   }

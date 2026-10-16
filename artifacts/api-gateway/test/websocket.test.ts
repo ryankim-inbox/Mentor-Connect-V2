@@ -660,3 +660,13 @@ test("real gateway maintenance and per-session tunnel limits remain active", asy
   assert.match(await third.handshake(), /^HTTP\/1.1 429 /);
   assert.equal(f.calls.length, 2);
 });
+
+test("upstream FIN flushes a queued client write before closing", async (t) => {
+  const payload = "final queued message";
+  const f = await fixture(t, (_request, socket) => socket.end(OK + "\r\n" + payload));
+  // Keep bytes in a real stream write queue, independent of OS socket buffer sizes.
+  f.gateway.prependListener("upgrade", (_request, socket) => socket.cork());
+  const c = await client(f.port);
+  await c.until(() => c.socket.destroyed);
+  assert.equal(c.data().split("\r\n\r\n")[1], payload);
+});

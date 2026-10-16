@@ -765,6 +765,24 @@ export const ListRequestsStatus = {
   closed: "closed",
 } as const;
 
+export type ListChatRoomMessagesParams = {
+  /**
+   * Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListDmMessagesParams = {
+  /**
+   * Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
 export type GetMatchesParams = {
   /**
    * @minimum 1

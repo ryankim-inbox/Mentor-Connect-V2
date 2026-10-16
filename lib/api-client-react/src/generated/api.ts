@@ -43,7 +43,9 @@ import type {
   GetPracticeMatchingParams,
   GetSchedulingSuggestionsParams,
   HealthStatus,
+  ListChatRoomMessagesParams,
   ListDistrictsParams,
+  ListDmMessagesParams,
   ListRequestsParams,
   LoginBody,
   MatchRequest,
@@ -2681,8 +2683,23 @@ export function useListChatRooms<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export const getListChatRoomMessagesUrl = (roomId: number) => {
-  return `/api/chat/rooms/${roomId}/messages`;
+export const getListChatRoomMessagesUrl = (
+  roomId: number,
+  params?: ListChatRoomMessagesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/chat/rooms/${roomId}/messages?${stringifiedParams}`
+    : `/api/chat/rooms/${roomId}/messages`;
 };
 
 /**
@@ -2693,10 +2710,11 @@ export const getListChatRoomMessagesUrl = (roomId: number) => {
  */
 export const listChatRoomMessages = async (
   roomId: number,
+  params?: ListChatRoomMessagesParams,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<ChatMessage[] | ScaffoldTodo> => {
   return customFetch<ChatMessage[] | ScaffoldTodo>(
-    getListChatRoomMessagesUrl(roomId),
+    getListChatRoomMessagesUrl(roomId, params),
     {
       ...options,
       method: "GET",
@@ -2704,8 +2722,14 @@ export const listChatRoomMessages = async (
   );
 };
 
-export const getListChatRoomMessagesQueryKey = (roomId: number) => {
-  return [`/api/chat/rooms/${roomId}/messages`] as const;
+export const getListChatRoomMessagesQueryKey = (
+  roomId: number,
+  params?: ListChatRoomMessagesParams,
+) => {
+  return [
+    `/api/chat/rooms/${roomId}/messages`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getListChatRoomMessagesQueryOptions = <
@@ -2721,6 +2745,7 @@ export const getListChatRoomMessagesQueryOptions = <
   >,
 >(
   roomId: number,
+  params?: ListChatRoomMessagesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listChatRoomMessages>>,
@@ -2733,12 +2758,12 @@ export const getListChatRoomMessagesQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getListChatRoomMessagesQueryKey(roomId);
+    queryOptions?.queryKey ?? getListChatRoomMessagesQueryKey(roomId, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listChatRoomMessages>>
   > = ({ signal }) =>
-    listChatRoomMessages(roomId, { signal, ...requestOptions });
+    listChatRoomMessages(roomId, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2782,6 +2807,7 @@ export function useListChatRoomMessages<
   >,
 >(
   roomId: number,
+  params?: ListChatRoomMessagesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listChatRoomMessages>>,
@@ -2791,7 +2817,11 @@ export function useListChatRoomMessages<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListChatRoomMessagesQueryOptions(roomId, options);
+  const queryOptions = getListChatRoomMessagesQueryOptions(
+    roomId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3205,8 +3235,23 @@ export const useStartDmConversation = <
   return useMutation(getStartDmConversationMutationOptions(options));
 };
 
-export const getListDmMessagesUrl = (conversationId: number) => {
-  return `/api/dms/${conversationId}/messages`;
+export const getListDmMessagesUrl = (
+  conversationId: number,
+  params?: ListDmMessagesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/dms/${conversationId}/messages?${stringifiedParams}`
+    : `/api/dms/${conversationId}/messages`;
 };
 
 /**
@@ -3217,10 +3262,11 @@ export const getListDmMessagesUrl = (conversationId: number) => {
  */
 export const listDmMessages = async (
   conversationId: number,
+  params?: ListDmMessagesParams,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<DmMessage[] | ScaffoldTodo> => {
   return customFetch<DmMessage[] | ScaffoldTodo>(
-    getListDmMessagesUrl(conversationId),
+    getListDmMessagesUrl(conversationId, params),
     {
       ...options,
       method: "GET",
@@ -3228,8 +3274,14 @@ export const listDmMessages = async (
   );
 };
 
-export const getListDmMessagesQueryKey = (conversationId: number) => {
-  return [`/api/dms/${conversationId}/messages`] as const;
+export const getListDmMessagesQueryKey = (
+  conversationId: number,
+  params?: ListDmMessagesParams,
+) => {
+  return [
+    `/api/dms/${conversationId}/messages`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getListDmMessagesQueryOptions = <
@@ -3245,6 +3297,7 @@ export const getListDmMessagesQueryOptions = <
   >,
 >(
   conversationId: number,
+  params?: ListDmMessagesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listDmMessages>>,
@@ -3257,11 +3310,11 @@ export const getListDmMessagesQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getListDmMessagesQueryKey(conversationId);
+    queryOptions?.queryKey ?? getListDmMessagesQueryKey(conversationId, params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listDmMessages>>> = ({
     signal,
-  }) => listDmMessages(conversationId, { signal, ...requestOptions });
+  }) => listDmMessages(conversationId, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -3305,6 +3358,7 @@ export function useListDmMessages<
   >,
 >(
   conversationId: number,
+  params?: ListDmMessagesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listDmMessages>>,
@@ -3314,7 +3368,11 @@ export function useListDmMessages<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListDmMessagesQueryOptions(conversationId, options);
+  const queryOptions = getListDmMessagesQueryOptions(
+    conversationId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
