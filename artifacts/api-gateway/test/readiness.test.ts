@@ -9,7 +9,7 @@ import { createGatewayServer } from "../src/gateway.ts";
 import { createReadinessChecker } from "../src/readiness.ts";
 import { writeReleaseMetadata } from "../../../scripts/write-release-metadata.mjs";
 
-const migrationId = "0003_request_events";
+const migrationId = "0005_request_interactions";
 const publicOrigin = "http://127.0.0.1:14200";
 
 async function listen(server: Server): Promise<string> {
@@ -380,7 +380,7 @@ test("writes stable release metadata from the schema asset and supplied SHA", as
       path.join(rootDir, "artifacts/api-gateway/dist/release.json"),
       "utf8",
     ),
-    '{\n  "currentMigrationId": "0003_request_events",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
+    '{\n  "currentMigrationId": "0005_request_interactions",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
   );
 });
 

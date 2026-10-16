@@ -32,6 +32,7 @@ test("serves the built SPA with safe fallback and security headers", async () =>
       "/login",
       "/dashboard",
       "/requests/42",
+      "/connections",
       "/profile/1",
       "/dashboard/practice-lab",
     ]) {

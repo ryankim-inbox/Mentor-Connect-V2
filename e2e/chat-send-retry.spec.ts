@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { fixtureAccounts, fixturePassword } from "./fixtures";
+import { fixtureAccounts, fixtureLoginEmail, fixturePassword } from "./fixtures";
 
 test.beforeEach(async ({ page, request }) => {
   await request.post("http://127.0.0.1:18181/__fixture/reset");
   await page.goto("/login");
-  await page.getByLabel("School email").fill(fixtureAccounts.mentor.email);
+  await page.getByLabel("School email").fill(fixtureLoginEmail("mentor", test.info().testId));
   await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

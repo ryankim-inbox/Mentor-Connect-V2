@@ -3,6 +3,7 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ChatNavigationProvider } from "@/lib/chat-navigation";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
 import Landing from "@/pages/Landing";
@@ -13,6 +14,7 @@ import NotFound from "@/pages/not-found";
 import { RequireAuth } from "@/components/RequireAuth";
 import { releaseSurface } from "@/lib/release-flags";
 
+const Connections = lazy(() => import("@/pages/Connections"));
 const Register = lazy(() => import("@/pages/Register"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Districts = lazy(() => import("@/pages/Districts"));
@@ -108,6 +110,9 @@ function Router() {
               <Requests />
             </RequireAuth>
           </Route>
+          <Route path="/connections">
+            <RequireAuth><Connections /></RequireAuth>
+          </Route>
           <Route path="/profile/:id">
             {(params) => (
               <RequireAuth>
@@ -160,10 +165,12 @@ function Router() {
 function ReleaseAwareApp() {
   return (
     <AuthProvider>
-      <Suspense fallback={<FeatureLoading />}>
-        <Router />
-        <ChatWidget />
-      </Suspense>
+      <ChatNavigationProvider>
+        <Suspense fallback={<FeatureLoading />}>
+          <Router />
+          <ChatWidget />
+        </Suspense>
+      </ChatNavigationProvider>
     </AuthProvider>
   );
 }
