@@ -61,11 +61,11 @@ const dialect = new PgDialect();
 
 const expectedColumnCounts = new Map([
   ["blocks", 4],
-  ["chat_messages", 6],
+  ["chat_messages", 7],
   ["chat_rooms", 5],
   ["districts", 5],
   ["dm_conversations", 4],
-  ["dm_messages", 7],
+  ["dm_messages", 8],
   ["questions", 10],
   ["reports", 6],
   ["request_tags", 3],

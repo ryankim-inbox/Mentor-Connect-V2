@@ -97,6 +97,14 @@
       "default": null
     },
     {
+      "table": "chat_messages",
+      "position": 7,
+      "name": "client_message_id",
+      "type": "uuid",
+      "nullable": true,
+      "default": null
+    },
+    {
       "table": "chat_rooms",
       "position": 1,
       "name": "id",
@@ -261,6 +269,14 @@
       "position": 7,
       "name": "deleted_at",
       "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "dm_messages",
+      "position": 8,
+      "name": "client_message_id",
+      "type": "uuid",
       "nullable": true,
       "default": null
     },
@@ -786,6 +802,12 @@
     },
     {
       "table": "chat_messages",
+      "name": "chat_messages_operation_key",
+      "type": "u",
+      "definition": "UNIQUE (sender_id, room_id, client_message_id)"
+    },
+    {
+      "table": "chat_messages",
       "name": "chat_messages_pkey",
       "type": "p",
       "definition": "PRIMARY KEY (id)"
@@ -873,6 +895,12 @@
       "name": "dm_messages_conversation_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (conversation_id) REFERENCES dm_conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_operation_key",
+      "type": "u",
+      "definition": "UNIQUE (sender_id, conversation_id, client_message_id)"
     },
     {
       "table": "dm_messages",
@@ -1079,6 +1107,11 @@
     },
     {
       "table": "chat_messages",
+      "name": "chat_messages_operation_key",
+      "definition": "CREATE UNIQUE INDEX chat_messages_operation_key ON public.chat_messages USING btree (sender_id, room_id, client_message_id)"
+    },
+    {
+      "table": "chat_messages",
       "name": "chat_messages_pkey",
       "definition": "CREATE UNIQUE INDEX chat_messages_pkey ON public.chat_messages USING btree (id)"
     },
@@ -1126,6 +1159,11 @@
       "table": "dm_conversations",
       "name": "idx_dm_conversations_user_b",
       "definition": "CREATE INDEX idx_dm_conversations_user_b ON public.dm_conversations USING btree (user_b_id)"
+    },
+    {
+      "table": "dm_messages",
+      "name": "dm_messages_operation_key",
+      "definition": "CREATE UNIQUE INDEX dm_messages_operation_key ON public.dm_messages USING btree (sender_id, conversation_id, client_message_id)"
     },
     {
       "table": "dm_messages",

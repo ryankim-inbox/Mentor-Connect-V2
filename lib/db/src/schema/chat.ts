@@ -9,6 +9,7 @@ import {
   timestamp,
   unique,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -53,8 +54,10 @@ export const chatMessagesTable = pgTable(
       .notNull()
       .defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    clientMessageId: uuid("client_message_id"),
   },
   (table) => [
+    unique("chat_messages_operation_key").on(table.senderId, table.roomId, table.clientMessageId),
     index("idx_chat_messages_room_created").on(table.roomId, table.createdAt),
   ],
 );
@@ -104,8 +107,10 @@ export const dmMessagesTable = pgTable(
       .defaultNow(),
     readAt: timestamp("read_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    clientMessageId: uuid("client_message_id"),
   },
   (table) => [
+    unique("dm_messages_operation_key").on(table.senderId, table.conversationId, table.clientMessageId),
     index("idx_dm_messages_conversation_created").on(
       table.conversationId,
       table.createdAt,

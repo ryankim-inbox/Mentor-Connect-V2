@@ -756,6 +756,13 @@ export const SendChatRoomMessageParams = zod.object({
 
 export const SendChatRoomMessageBody = zod.object({
   body: zod.string(),
+  clientMessageId: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
+    ),
 });
 
 export const sendChatRoomMessageResponseOneIdMax = 9007199254740991;
@@ -1009,6 +1016,13 @@ export const SendDmMessageParams = zod.object({
 
 export const SendDmMessageBody = zod.object({
   body: zod.string(),
+  clientMessageId: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
+    ),
 });
 
 export const sendDmMessageResponseOneIdMax = 9007199254740991;

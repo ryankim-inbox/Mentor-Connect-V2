@@ -206,3 +206,11 @@ CREATE UNIQUE INDEX idx_request_events_tracking_started ON request_events (kind)
     WHERE kind = 'tracking_started';
 CREATE INDEX idx_request_events_kind_occurred_at_id ON request_events (kind, occurred_at, id);
 INSERT INTO request_events (kind) VALUES ('tracking_started');
+
+-- Optional operation keys preserve legacy messages and make REST retries safe.
+ALTER TABLE chat_messages ADD COLUMN client_message_id uuid;
+ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_operation_key
+    UNIQUE (sender_id, room_id, client_message_id);
+ALTER TABLE dm_messages ADD COLUMN client_message_id uuid;
+ALTER TABLE dm_messages ADD CONSTRAINT dm_messages_operation_key
+    UNIQUE (sender_id, conversation_id, client_message_id);
