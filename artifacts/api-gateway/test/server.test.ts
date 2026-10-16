@@ -11,6 +11,7 @@ import { createGatewayServer } from "../src/gateway.ts";
 import {
   userFixture,
   requestFixture,
+  applicationFixture,
   overviewFixture,
 } from "./contract-fixtures.ts";
 
@@ -117,7 +118,7 @@ test("forwards one valid request from every REST family with exact method, targe
       path === "/api/auth/logout" || path === "/api/reports"
         ? { message: "Completed" }
         : path === "/api/requests/2/match"
-          ? requestFixture
+          ? applicationFixture
           : path === "/api/stats/overview"
             ? overviewFixture
             : path === "/api/districts" || path === "/api/tags"

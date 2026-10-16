@@ -11,3 +11,7 @@ dist-test/
 !.env.sample
 !.env.template
 .claude/
+
+# Local browser verification output
+test-results/
+playwright-report/

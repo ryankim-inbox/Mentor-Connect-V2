@@ -1,3 +1,4 @@
+import { applicationFixture } from "./contract-fixtures.ts";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import {
@@ -106,7 +107,7 @@ async function startControlFixture(now: () => number = Date.now): Promise<{
     }
 
     if (request.url === "/api/requests/1/match") {
-      sendJson(response, 200, requestFixture);
+      sendJson(response, 200, applicationFixture);
       return;
     }
 

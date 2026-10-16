@@ -161,3 +161,10 @@ export const fixtureAccounts = {
   mentee: { ...signedInUser, id: 2, name: 'Classroom Mentee', email: 'mentee@classroom.example.edu', role: 'mentee', bio: 'Mentee fixture profile' },
 };
 export const fixtureRooms = [{ id: 1, type: 'global', districtId: null, name: 'Classroom Global' }];
+
+// Each browser test gets its own synthetic login bucket. The fixture accepts
+// tagged aliases; production gateway rate limits stay enabled and unchanged.
+export function fixtureLoginEmail(role: keyof typeof fixtureAccounts, testId: string) {
+  const suffix = testId.replace(/[^a-zA-Z0-9]/g, "").slice(-40);
+  return fixtureAccounts[role].email.replace("@", `+${suffix}@`);
+}

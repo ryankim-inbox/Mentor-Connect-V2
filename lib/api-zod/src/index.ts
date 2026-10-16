@@ -34,3 +34,7 @@ export const GetPracticeMatchingParams = api.GetPracticeMatchingParams;
 export type GetPracticeMatchingParams = types.GetPracticeMatchingParams;
 export const TestPracticeLocationsBody = api.TestPracticeLocationsBody;
 export type TestPracticeLocationsBody = types.TestPracticeLocationsBody;
+export const ListRequestApplicationsParams = api.ListRequestApplicationsParams;
+export type ListRequestApplicationsParams = types.ListRequestApplicationsParams;
+export const ListRequestCommentsParams = api.ListRequestCommentsParams;
+export type ListRequestCommentsParams = types.ListRequestCommentsParams;

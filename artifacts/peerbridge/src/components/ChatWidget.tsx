@@ -1,3 +1,5 @@
+import { useChatNavigation, MessageButton } from "@/lib/chat-navigation";
+import { useConnections } from "@/lib/journey-queries";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { syncChatHistory, type ChatConnectionState } from "@/lib/chat-socket";
 // Floating messenger popup (bottom-right) with Global / My School / DMs tabs.
@@ -47,7 +49,6 @@ import {
   isScaffoldTodo,
   sendDmMessage,
   sendRoomMessage,
-  startDmConversation,
   type ChatMessage,
   type ChatRoom,
   type DmConversation,
@@ -78,6 +79,8 @@ function pollDelay(
 export function ChatWidget() {
   const { user, isLoading } = useAuth();
   const [open, setOpen] = useState(false);
+  const { selection } = useChatNavigation();
+  useEffect(() => { if (selection) setOpen(true); }, [selection]);
 
   if (isLoading || !user) return null;
 
@@ -113,6 +116,9 @@ function ChatPanel({
   currentUserId: number;
   districtId: number;
 }) {
+  const { selection } = useChatNavigation();
+  const [tab, setTab] = useState(selection ? "dms" : "global");
+  useEffect(() => { if (selection) setTab("dms"); }, [selection]);
   const roomsQuery = useQuery({
     queryKey: ["chat", currentUserId, "rooms"],
     queryFn: ({ signal }) => fetchChatRooms(signal),
@@ -127,7 +133,7 @@ function ChatPanel({
         </h2>
       </div>
 
-      <Tabs defaultValue="global" className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList className="mx-3 mt-2 grid grid-cols-3">
           <TabsTrigger value="global">Global</TabsTrigger>
           <TabsTrigger value="school">My School</TabsTrigger>
@@ -405,6 +411,8 @@ function RoomThread({
 function DmsPane({ currentUserId }: { currentUserId: number }) {
   const [openConversation, setOpenConversation] =
     useState<DmConversation | null>(null);
+  const { selection } = useChatNavigation();
+  useEffect(() => { if (selection) setOpenConversation(selection.conversation); }, [selection]);
 
   if (openConversation) {
     return (
@@ -425,9 +433,7 @@ function DmList({
   currentUserId: number;
   onOpen: (conversation: DmConversation) => void;
 }) {
-  const queryClient = useQueryClient();
-  const [newDmUserId, setNewDmUserId] = useState("");
-  const [startNotice, setStartNotice] = useState<string | null>(null);
+  const connections = useConnections(currentUserId);
 
   const dmsQuery = useQuery({
     queryKey: ["chat", currentUserId, "dms"],
@@ -438,23 +444,6 @@ function DmList({
         query.state.error,
         query.state.fetchFailureCount,
       ),
-  });
-
-  const startMutation = useMutation({
-    mutationFn: (toUserId: number) => startDmConversation(toUserId),
-    onSuccess: (created) => {
-      if (isScaffoldTodo(created)) {
-        setStartNotice(created.message);
-      } else {
-        setStartNotice(null);
-        setNewDmUserId("");
-        void queryClient.invalidateQueries({
-          queryKey: ["chat", currentUserId, "dms"],
-        });
-        onOpen(created);
-      }
-    },
-    onError: (error) => setStartNotice(apiErrorMessage(error)),
   });
 
   if (dmsQuery.isLoading) return <LoadingState />;
@@ -477,16 +466,6 @@ function DmList({
       />
     );
   }
-
-  const handleStart = (event: FormEvent) => {
-    event.preventDefault();
-    const toUserId = Number(newDmUserId);
-    if (!Number.isInteger(toUserId) || toUserId <= 0) {
-      setStartNotice("Enter a numeric user id (e.g. 501).");
-      return;
-    }
-    startMutation.mutate(toUserId);
-  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -516,35 +495,15 @@ function DmList({
           </ul>
         )}
       </ScrollArea>
-      <form onSubmit={handleStart} className="border-t border-card-border p-3">
-        <div className="flex gap-2">
-          <Input
-            value={newDmUserId}
-            onChange={(event) => setNewDmUserId(event.target.value)}
-            placeholder="Start a DM by user id…"
-            inputMode="numeric"
-            className="h-9"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            className="h-9"
-            disabled={startMutation.isPending}
-          >
-            Start
-          </Button>
-        </div>
-        {dmsQuery.error && (
-          <p className="mt-2 text-xs text-destructive" role="alert">
-            {apiErrorMessage(dmsQuery.error)}
-          </p>
-        )}
-        {startNotice && (
-          <p className="mt-2 text-xs text-muted-foreground" role="status">
-            {startNotice}
-          </p>
-        )}
-      </form>
+      <div className="max-h-36 overflow-y-auto border-t border-card-border p-3 space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Your connections</p>
+        {connections.isPending && <p role="status" className="text-xs">Loading connections…</p>}
+        {connections.data?.pages.flat().length === 0 && <p className="text-xs text-muted-foreground">Accepted connections appear here.</p>}
+        {connections.data?.pages.flat().map(person => <MessageButton key={person.userId} userId={person.userId} name={person.name} />)}
+        {connections.hasNextPage && <button disabled={connections.isFetchingNextPage} onClick={() => void connections.fetchNextPage()}>Load more connections</button>}
+        {connections.error && <p role="alert" className="text-xs text-destructive">{apiErrorMessage(connections.error)} <button onClick={() => void connections.refetch()}>Retry</button></p>}
+        {dmsQuery.error && <p role="alert" className="text-xs text-destructive">{apiErrorMessage(dmsQuery.error)}</p>}
+      </div>
     </div>
   );
 }

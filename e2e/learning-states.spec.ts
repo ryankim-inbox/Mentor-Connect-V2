@@ -283,7 +283,7 @@ test("cached chat rooms expose background failures and retry without losing the 
   await expect(draft).toHaveValue("Keep me through rooms failures");
 });
 
-test("failed Connect rechecks server state and never shows matched success", async ({ page }) => {
+test("failed application rechecks server state and never shows matched success", async ({ page }) => {
   let detailReads = 0;
   let matchCalls = 0;
   await routeApi(page, async (route, path) => {
@@ -292,7 +292,7 @@ test("failed Connect rechecks server state and never shows matched success", asy
       await route.fulfill({ json: request });
       return true;
     }
-    if (path === "/api/requests/11/match") {
+    if (path === "/api/requests/11/applications" && route.request().method() === "POST") {
       matchCalls++;
       await route.fulfill({
         status: 429,
@@ -305,7 +305,7 @@ test("failed Connect rechecks server state and never shows matched success", asy
   });
 
   await page.goto("/requests/11");
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await page.getByRole("button", { name: "Apply to connect", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("17 seconds");
   await expect.poll(() => detailReads).toBeGreaterThan(1);
   await page.waitForTimeout(1_000);
