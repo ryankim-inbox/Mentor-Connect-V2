@@ -22,6 +22,11 @@
       "id": "0004_chat_operation_keys",
       "path": "0004_chat_operation_keys.sql",
       "sha256": "d9ce61feddf31f3f89968bdd6965bd68b19010567476762823cb64724c48be3d"
+    },
+    {
+      "id": "0005_request_interactions",
+      "path": "0005_request_interactions.sql",
+      "sha256": "d1fc64f655e4bcef0bc0dbea2adf461a8055d3aa1311d7834ec7d289d2150812"
     }
   ]
 }
