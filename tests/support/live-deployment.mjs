@@ -107,7 +107,9 @@ const port = await listen(tls),
   origin = `https://127.0.0.1:${port}`;
 async function startPython() {
   python = spawn(
-    path.join(root, ".venv/bin/python"),
+    process.env.CLASSROOM_TEST_PYTHON ||
+      process.env.PYTHON_BIN ||
+      path.join(root, ".venv/bin/python"),
     [
       "-m",
       "uvicorn",
