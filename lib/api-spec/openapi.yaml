@@ -2306,6 +2306,10 @@ components:
       properties:
         body:
           type: string
+        clientMessageId:
+          type: string
+          format: uuid
+          description: Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.
       required:
         - body
     DmConversation:

@@ -217,14 +217,16 @@ function LoadingState() {
 
 // Minimal structural view of a "send message" mutation, so the shared Thread
 // component works for both room messages and DMs.
+interface SendOperation { body: string; clientMessageId: string }
+
 interface SendMutationLike {
   data: unknown;
   isPending: boolean;
   isError: boolean;
   error: unknown;
   mutate: (
-    body: string,
-    options?: { onSuccess?: (created: unknown) => void },
+    operation: SendOperation,
+    options?: { onSuccess?: (created: unknown) => void; onSettled?: () => void },
   ) => void;
 }
 
@@ -340,7 +342,7 @@ function RoomThread({
 
   const sendMutation = useMutation({
     retry: false,
-    mutationFn: (body: string) => sendRoomMessage(room.id, body),
+    mutationFn: ({ body, clientMessageId }: SendOperation) => sendRoomMessage(room.id, body, clientMessageId),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
         void queryClient.invalidateQueries({
@@ -594,7 +596,7 @@ function DmThread({
 
   const sendMutation = useMutation({
     retry: false,
-    mutationFn: (body: string) => sendDmMessage(conversation.id, body),
+    mutationFn: ({ body, clientMessageId }: SendOperation) => sendDmMessage(conversation.id, body, clientMessageId),
     onSuccess: (created) => {
       if (!isScaffoldTodo(created)) {
         void queryClient.invalidateQueries({
@@ -724,6 +726,8 @@ function Thread({
   const [draft, setDraft] = useState("");
   const older = useMutation({ mutationFn: onLoadOlder, retry: false });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const sending = useRef(false);
+  const attempt = useRef<SendOperation | null>(null);
   const newestMessageId = messages.at(-1)?.id;
 
   useEffect(() => {
@@ -737,11 +741,19 @@ function Thread({
   const handleSend = (event: FormEvent) => {
     event.preventDefault();
     const body = draft.trim();
-    if (!body || sendMutation.isPending) return;
-    sendMutation.mutate(body, {
+    if (!body || sending.current || sendMutation.isPending) return;
+    sending.current = true;
+    if (attempt.current?.body !== body) {
+      attempt.current = { body, clientMessageId: crypto.randomUUID() };
+    }
+    sendMutation.mutate(attempt.current, {
       onSuccess: (created) => {
-        if (!isScaffoldTodo(created)) setDraft("");
+        if (!isScaffoldTodo(created)) {
+          setDraft(current => current.trim() === body ? "" : current);
+          attempt.current = null;
+        }
       },
+      onSettled: () => { sending.current = false; },
     });
   };
 
@@ -839,8 +851,7 @@ function Thread({
         )}
         {sendMutation.isError && (
           <p className="mt-2 text-xs text-destructive" role="alert">
-            {apiErrorMessage(sendMutation.error)} Check the conversation before
-            sending again; your message may already be saved.
+            {apiErrorMessage(sendMutation.error)} You can retry this unchanged message safely.
           </p>
         )}
       </form>

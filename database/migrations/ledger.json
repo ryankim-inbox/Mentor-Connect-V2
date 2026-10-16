@@ -17,6 +17,11 @@
       "id": "0003_request_events",
       "path": "0003_request_events.sql",
       "sha256": "641786cefa58674f026729cdc8f21b3dd8817859a066332e1e48d40309e301df"
+    },
+    {
+      "id": "0004_chat_operation_keys",
+      "path": "0004_chat_operation_keys.sql",
+      "sha256": "d9ce61feddf31f3f89968bdd6965bd68b19010567476762823cb64724c48be3d"
     }
   ]
 }
