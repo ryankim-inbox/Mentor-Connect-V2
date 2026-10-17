@@ -53,6 +53,7 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       security: []
+      x-required-authority: public
   /auth/register:
     post:
       operationId: register
@@ -88,6 +89,7 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       security: []
+      x-required-authority: public
   /auth/login:
     post:
       operationId: login
@@ -123,6 +125,7 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       security: []
+      x-required-authority: public
   /auth/logout:
     post:
       operationId: logout
@@ -151,6 +154,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: session
   /auth/me:
     get:
       operationId: getMe
@@ -179,14 +183,16 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: session
   /users/{id}:
     get:
       operationId: getUser
       tags:
         - users
-      summary: Get a minimum profile summary
-      description: A signed-in user may request any canonical user id. The gateway exposes only id, name,
-        subjects, and createdAt; the self-only rule applies to PATCH.
+      summary: Get own account or a verified member profile summary
+      description: Own profile is available to the authenticated account before verification and returns
+        full User. Other profiles require verified membership and expose only id, name, subjects,
+        and createdAt.
       parameters:
         - name: id
           in: path
@@ -199,7 +205,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileSummary"
+                oneOf:
+                  - $ref: "#/components/schemas/User"
+                  - $ref: "#/components/schemas/ProfileSummary"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -215,8 +223,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: session
     patch:
       operationId: updateUser
       tags:
@@ -244,7 +255,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileSummary"
+                $ref: "#/components/schemas/User"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -266,6 +277,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: session
   /districts:
     get:
       operationId: listDistricts
@@ -306,6 +318,7 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       security: []
+      x-required-authority: public
   /districts/{id}:
     get:
       operationId: getDistrict
@@ -340,8 +353,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /requests:
     get:
       operationId: listRequests
@@ -408,8 +424,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: createRequest
       tags:
@@ -445,8 +464,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /requests/{id}:
     get:
       operationId: getRequest
@@ -484,8 +506,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     patch:
       operationId: updateRequest
       tags:
@@ -534,6 +559,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     delete:
       operationId: deleteRequest
       tags:
@@ -570,6 +596,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /requests/{id}/match:
     post:
       operationId: matchRequest
@@ -617,6 +644,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /tags:
     get:
       operationId: listTags
@@ -645,8 +673,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /reports:
     post:
       operationId: createReport
@@ -685,8 +716,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /blocks:
     get:
       operationId: listBlocks
@@ -715,8 +749,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: blockUser
       tags:
@@ -754,8 +791,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /blocks/{blockedUserId}:
     delete:
       operationId: unblockUser
@@ -789,8 +829,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /stats/overview:
     get:
       operationId: getStatsOverview
@@ -816,6 +859,7 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       security: []
+      x-required-authority: public
   /stats/district/{id}:
     get:
       operationId: getDistrictStats
@@ -850,8 +894,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /chat/rooms:
     get:
       operationId: listChatRooms
@@ -889,6 +936,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /chat/rooms/{roomId}/messages:
     get:
       operationId: listChatRoomMessages
@@ -943,6 +991,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: sendChatRoomMessage
       tags:
@@ -1007,6 +1056,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /dms:
     get:
       operationId: listDmConversations
@@ -1047,6 +1097,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /dms/start:
     post:
       operationId: startDmConversation
@@ -1093,6 +1144,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /dms/{conversationId}/messages:
     get:
       operationId: listDmMessages
@@ -1147,6 +1199,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: sendDmMessage
       tags:
@@ -1211,6 +1264,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /matches/{questionId}:
     get:
       operationId: getMatches
@@ -1241,6 +1295,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       parameters:
         - name: questionId
           in: path
@@ -1258,6 +1314,7 @@ paths:
             default: 5
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /matches:
     post:
       operationId: postMatches
@@ -1286,6 +1343,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       requestBody:
         required: true
         content:
@@ -1294,6 +1353,7 @@ paths:
               $ref: "#/components/schemas/MatchRequest"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/status:
     get:
       operationId: getPracticeStatus
@@ -1320,8 +1380,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/matching/{questionId}:
     get:
       operationId: getPracticeMatching
@@ -1350,6 +1413,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       parameters:
         - name: questionId
           in: path
@@ -1367,6 +1432,7 @@ paths:
             default: 5
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/locations/status:
     get:
       operationId: getPracticeLocationsStatus
@@ -1393,8 +1459,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/locations/test:
     post:
       operationId: testPracticeLocations
@@ -1423,6 +1492,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       requestBody:
         required: true
         content:
@@ -1433,6 +1504,7 @@ paths:
               description: JSON object; gateway limits body to 16 KiB.
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/blocks/status:
     get:
       operationId: getPracticeBlocksStatus
@@ -1459,8 +1531,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /practice/raw/{moduleName}:
     get:
       operationId: getPracticeRawModule
@@ -1489,6 +1564,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       parameters:
         - name: moduleName
           in: path
@@ -1501,6 +1578,7 @@ paths:
               - get_blocks
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /analysis/status:
     get:
       operationId: getAnalysisStatus
@@ -1527,8 +1605,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /analytics/weekly-matches:
     get:
       operationId: getWeeklyMatches
@@ -1555,8 +1636,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /analytics/popular-subjects:
     get:
       operationId: getPopularSubjects
@@ -1583,8 +1667,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /analytics/popular-time-slots:
     get:
       operationId: getPopularTimeSlots
@@ -1611,8 +1698,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /analytics/mentor-response-rates:
     get:
       operationId: getMentorResponseRates
@@ -1642,8 +1732,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /python-reports/status:
     get:
       operationId: getPythonReportsStatus
@@ -1670,8 +1763,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /python-reports/summary:
     get:
       operationId: getPythonReportsSummary
@@ -1698,8 +1794,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /scheduling/status:
     get:
       operationId: getSchedulingStatus
@@ -1726,8 +1825,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /scheduling/overview:
     get:
       operationId: getSchedulingOverview
@@ -1754,8 +1856,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /scheduling/suggest:
     get:
       operationId: getSchedulingSuggestions
@@ -1782,6 +1887,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       parameters:
         - name: user_a
           in: query
@@ -1797,6 +1904,7 @@ paths:
             minimum: 1
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /admin/flagged-users:
     get:
       operationId: getFlaggedUsers
@@ -1823,8 +1931,11 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "403":
+          $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
+      x-required-authority: admin
   /requests/{id}/comments:
     get:
       operationId: listRequestComments
@@ -1886,6 +1997,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: createRequestComment
       tags:
@@ -1937,6 +2049,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateCommentBody"
+      x-required-authority: verified
   /requests/{id}/applications:
     get:
       operationId: listRequestApplications
@@ -1998,6 +2111,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
     post:
       operationId: applyToRequest
       tags:
@@ -2043,6 +2157,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /requests/{id}/applications/{applicationId}:
     patch:
       operationId: actOnRequestApplication
@@ -2102,6 +2217,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApplicationAction"
+      x-required-authority: verified
   /connections:
     get:
       operationId: listConnections
@@ -2156,6 +2272,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
   /request-activity:
     get:
       operationId: listRequestActivity
@@ -2210,6 +2327,382 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+      x-required-authority: verified
+  /auth/verification/request:
+    post:
+      operationId: requestEmailVerification
+      tags:
+        - auth
+      summary: Request an email ownership verification link
+      security:
+        - cookieAuth: []
+      parameters: []
+      responses:
+        "202":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: session
+  /auth/verification/confirm:
+    post:
+      operationId: confirmEmailVerification
+      tags:
+        - auth
+      summary: Confirm email ownership with a one-use token
+      security:
+        - cookieAuth: []
+      parameters: []
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmVerificationBody"
+  /mentors:
+    get:
+      operationId: listMentors
+      tags:
+        - mentors
+      summary: List verified mentors in the current district
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items:
+                  $ref: "#/components/schemas/MentorDirectoryEntry"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: verified
+  /admin/reports:
+    get:
+      operationId: listAdminReports
+      tags:
+        - admin
+      summary: List moderation reports
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - open
+              - reviewing
+              - resolved
+              - dismissed
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items:
+                  $ref: "#/components/schemas/ModerationReport"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: admin
+  /admin/reports/{id}:
+    patch:
+      operationId: moderateReport
+      tags:
+        - admin
+      summary: Review a moderation report
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationReport"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerateReportBody"
+  /requests/{id}/comments/{commentId}:
+    patch:
+      operationId: editRequestComment
+      tags:
+        - requests
+      summary: Edit an own comment
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestComment"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: verified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditCommentBody"
+    delete:
+      operationId: deleteRequestComment
+      tags:
+        - requests
+      summary: Delete an own comment and preserve its replies
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: &a13
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: commentId
+          in: path
+          required: true
+          schema: *a13
+      responses:
+        "200":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestComment"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      x-required-authority: verified
 components:
   schemas:
     HealthStatus:
@@ -2259,6 +2752,7 @@ components:
         - password
         - role
         - districtId
+      additionalProperties: false
     LoginBody:
       type: object
       properties:
@@ -2269,6 +2763,7 @@ components:
       required:
         - email
         - password
+      additionalProperties: false
     AuthResponse:
       type: object
       properties:
@@ -2312,6 +2807,8 @@ components:
           type: boolean
         createdAt:
           type: string
+        isAdmin:
+          type: boolean
       required:
         - id
         - email
@@ -2321,6 +2818,7 @@ components:
         - isVerified
         - createdAt
         - subjects
+        - isAdmin
     UpdateUserBody:
       type: object
       description: Allowlisted self-profile fields. Other fields are rejected by the gateway.
@@ -2485,6 +2983,7 @@ components:
         - title
         - description
         - role
+      additionalProperties: false
     UpdateRequestBody:
       type: object
       properties:
@@ -2509,6 +3008,7 @@ components:
             - open
             - matched
             - closed
+      additionalProperties: false
     CreateReportBody:
       type: object
       properties:
@@ -2527,9 +3027,11 @@ components:
           type:
             - string
             - "null"
+          maxLength: 2000
       required:
         - reportedUserId
         - reason
+      additionalProperties: false
     BlockUserBody:
       type: object
       properties:
@@ -2538,6 +3040,7 @@ components:
           minimum: 1
       required:
         - blockedUserId
+      additionalProperties: false
     BlockedUser:
       type: object
       properties:
@@ -2695,13 +3198,18 @@ components:
       properties:
         body:
           type: string
+          minLength: 1
+          maxLength: 2000
         clientMessageId:
-          type: string
+          type:
+            - string
+            - "null"
           format: uuid
           description: Reuse for an explicit retry of the same message. Scoped to sender and room or
             conversation; different content returns 409.
       required:
         - body
+      additionalProperties: false
     DmConversation:
       type: object
       properties:
@@ -2730,8 +3238,10 @@ components:
       properties:
         toUserId:
           type: integer
+          minimum: 1
       required:
         - toUserId
+      additionalProperties: false
     DmMessage:
       type: object
       properties:
@@ -2996,6 +3506,7 @@ components:
           default: 5
       required:
         - question_id
+      additionalProperties: false
     FlaggedUser:
       type: object
       properties:
@@ -3072,16 +3583,17 @@ components:
             - cancel
       required:
         - action
+      additionalProperties: false
     RequestComment:
       type: object
       properties:
-        id: &a11
+        id: &a13
           type: integer
           minimum: 1
           maximum: 2147483647
-        requestId: *a11
-        authorId: *a11
-        authorName: &a12
+        requestId: *a13
+        authorId: *a13
+        authorName:
           type: string
         parentId:
           type:
@@ -3091,10 +3603,20 @@ components:
           type:
             - string
             - "null"
-        body: *a12
+        body:
+          type: string
+          maxLength: 2000
         createdAt:
           type: string
           format: date-time
+        updatedAt:
+          type:
+            - string
+            - "null"
+        deletedAt:
+          type:
+            - string
+            - "null"
       required:
         - id
         - requestId
@@ -3104,6 +3626,8 @@ components:
         - parentAuthorName
         - body
         - createdAt
+        - updatedAt
+        - deletedAt
     CreateCommentBody:
       type: object
       properties:
@@ -3122,6 +3646,7 @@ components:
       required:
         - body
         - clientCommentId
+      additionalProperties: false
     Connection:
       type: object
       properties:
@@ -3138,6 +3663,141 @@ components:
         - name
         - requestId
         - requestTitle
+    ConfirmVerificationBody:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]+$
+      required:
+        - token
+    MentorDirectoryEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        id: &a14
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        name: &a13
+          type: string
+        role:
+          type: string
+          enum:
+            - mentor
+            - both
+        subjects:
+          type: array
+          items: *a13
+        districtId: *a14
+        districtName:
+          type:
+            - string
+            - "null"
+        bio:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
+        - role
+        - subjects
+        - districtId
+        - districtName
+        - bio
+    ModerateReportBody:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+            - open
+            - reviewing
+            - resolved
+            - dismissed
+        note:
+          type:
+            - string
+            - "null"
+          maxLength: 2000
+      required:
+        - status
+    ModerationReport:
+      type: object
+      additionalProperties: false
+      properties:
+        id: &a13
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        reporterId: *a13
+        reporterName: &a14
+          type: string
+        reportedUserId: *a13
+        reportedUserName: *a14
+        reason:
+          type: string
+          enum:
+            - spam
+            - harassment
+            - inappropriate
+            - fake_account
+            - other
+        description:
+          type:
+            - string
+            - "null"
+          maxLength: 2000
+        status:
+          type: string
+          enum:
+            - open
+            - reviewing
+            - resolved
+            - dismissed
+        note:
+          type:
+            - string
+            - "null"
+          maxLength: 2000
+        reviewedBy:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        reviewedAt:
+          type:
+            - string
+            - "null"
+        createdAt: *a14
+      required:
+        - id
+        - reporterId
+        - reporterName
+        - reportedUserId
+        - reportedUserName
+        - reason
+        - description
+        - status
+        - note
+        - reviewedBy
+        - reviewedAt
+        - createdAt
+    EditCommentBody:
+      type: object
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+        - body
   securitySchemes:
     cookieAuth:
       type: apiKey

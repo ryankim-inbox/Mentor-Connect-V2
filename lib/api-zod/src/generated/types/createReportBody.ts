@@ -11,6 +11,9 @@ export interface CreateReportBody {
   /** @minimum 1 */
   reportedUserId: number;
   reason: CreateReportBodyReason;
-  /** @nullable */
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
   description?: string | null;
 }

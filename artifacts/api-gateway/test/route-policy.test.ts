@@ -5,8 +5,8 @@ import { ListDistrictsQueryParams } from "../../../lib/api-zod/src/generated/api
 
 import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
 
-test("registers the complete 55-operation REST contract", () => {
-  assert.equal(publicRoutes.length, 55);
+test("registers the complete 62-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 62);
   assert.equal(
     publicRoutes.filter((route) => route.authentication === "cookie").length,
     1,
@@ -171,22 +171,64 @@ test("accepts only canonical positive safe identifiers and raw module names", ()
 test("request paging accepts 50 while matching retains its separate 20 limit", () => {
   const before = "2026-10-10T12:30:45.123456+05:30|123";
   const query = new URLSearchParams({ limit: "50", before });
-  assert.equal(resolvePublicRoute("GET", `/api/requests?${query}`)?.upstreamPath, `/api/requests?${query}`);
-  for (const path of ["/api/matches/1?limit=20", "/api/practice/matching/1?limit=20"])
+  assert.equal(
+    resolvePublicRoute("GET", `/api/requests?${query}`)?.upstreamPath,
+    `/api/requests?${query}`,
+  );
+  for (const path of [
+    "/api/matches/1?limit=20",
+    "/api/practice/matching/1?limit=20",
+  ])
     assert.ok(resolvePublicRoute("GET", path));
   for (const value of ["0", "51", "01", "1.5"])
-    assert.throws(() => resolvePublicRoute("GET", `/api/requests?limit=${value}`), /invalid_query/);
-  for (const value of ["", "bad", "2026-10-10T00:00:00|1", "2026-02-30T00:00:00Z|1",
-    "2026-10-10T24:00:00Z|1", "2026-10-10T00:00:00+25:00|1", "2026-10-10T00:00:00Z|0",
-    "2026-10-10T00:00:00Z|01", "2026-10-10T00:00:00Z|9007199254740992", "x".repeat(97)]) {
-    assert.throws(() => resolvePublicRoute("GET", `/api/requests?${new URLSearchParams({ before: value })}`), /invalid_query/, value);
+    assert.throws(
+      () => resolvePublicRoute("GET", `/api/requests?limit=${value}`),
+      /invalid_query/,
+    );
+  for (const value of [
+    "",
+    "bad",
+    "2026-10-10T00:00:00|1",
+    "2026-02-30T00:00:00Z|1",
+    "2026-10-10T24:00:00Z|1",
+    "2026-10-10T00:00:00+25:00|1",
+    "2026-10-10T00:00:00Z|0",
+    "2026-10-10T00:00:00Z|01",
+    "2026-10-10T00:00:00Z|9007199254740992",
+    "x".repeat(97),
+  ]) {
+    assert.throws(
+      () =>
+        resolvePublicRoute(
+          "GET",
+          `/api/requests?${new URLSearchParams({ before: value })}`,
+        ),
+      /invalid_query/,
+      value,
+    );
   }
-  assert.throws(() => resolvePublicRoute("GET", `/api/requests?before=${encodeURIComponent(before)}&before=${encodeURIComponent(before)}`), /invalid_query/);
-  for (const path of ["/api/matches/1?limit=21", "/api/practice/matching/1?limit=21"])
+  assert.throws(
+    () =>
+      resolvePublicRoute(
+        "GET",
+        `/api/requests?before=${encodeURIComponent(before)}&before=${encodeURIComponent(before)}`,
+      ),
+    /invalid_query/,
+  );
+  for (const path of [
+    "/api/matches/1?limit=21",
+    "/api/practice/matching/1?limit=21",
+  ])
     assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/);
 });
 
-for (const [type, accepted] of [[undefined, true], ["high_school", true], ["unified", true], ["all", false], ["elementary", false]] as const) {
+for (const [type, accepted] of [
+  [undefined, true],
+  ["high_school", true],
+  ["unified", true],
+  ["all", false],
+  ["elementary", false],
+] as const) {
   test(`generated and gateway district filters agree for ${type ?? "omitted"}`, () => {
     const query = type === undefined ? {} : { type };
     assert.equal(ListDistrictsQueryParams.safeParse(query).success, accepted);
@@ -198,10 +240,41 @@ for (const [type, accepted] of [[undefined, true], ["high_school", true], ["unif
 
 test("chat history accepts a bounded cursor only on GET and rejects ambiguous values", () => {
   for (const route of ["/api/chat/rooms/1/messages", "/api/dms/1/messages"]) {
-    assert.equal(resolvePublicRoute("GET", route + "?beforeId=51")?.upstreamPath, route + "?beforeId=51");
+    assert.equal(
+      resolvePublicRoute("GET", route + "?beforeId=51")?.upstreamPath,
+      route + "?beforeId=51",
+    );
     for (const value of ["0", "-1", "1.5", "2147483648", "x", "1&beforeId=2"]) {
-      assert.throws(() => resolvePublicRoute("GET", route + "?beforeId=" + value), /invalid_query/);
+      assert.throws(
+        () => resolvePublicRoute("GET", route + "?beforeId=" + value),
+        /invalid_query/,
+      );
     }
-    assert.throws(() => resolvePublicRoute("POST", route + "?beforeId=51"), /invalid_query/);
+    assert.throws(
+      () => resolvePublicRoute("POST", route + "?beforeId=51"),
+      /invalid_query/,
+    );
   }
+});
+
+test("account trust routes have bounded query values", () => {
+  for (const [method, path] of [
+    ["POST", "/api/auth/verification/request"],
+    ["POST", "/api/auth/verification/confirm"],
+    ["GET", "/api/mentors?limit=50&beforeId=2147483647"],
+    ["GET", "/api/admin/reports?status=reviewing&limit=50&beforeId=2"],
+    ["PATCH", "/api/admin/reports/2"],
+    ["PATCH", "/api/requests/1/comments/2"],
+    ["DELETE", "/api/requests/1/comments/2"],
+  ])
+    assert.ok(resolvePublicRoute(method!, path!), path);
+  for (const path of [
+    "/api/mentors?limit=51",
+    "/api/mentors?beforeId=2147483648",
+    "/api/mentors?isAdmin=true",
+    "/api/admin/reports?status=closed",
+    "/api/admin/reports?limit=51",
+    "/api/admin/reports?status=open&status=resolved",
+  ])
+    assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/, path);
 });

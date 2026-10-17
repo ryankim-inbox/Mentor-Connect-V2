@@ -7,5 +7,6 @@
  */
 
 export interface StartDmBody {
+  /** @minimum 1 */
   toUserId: number;
 }

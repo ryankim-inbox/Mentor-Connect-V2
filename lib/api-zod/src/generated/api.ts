@@ -37,6 +37,7 @@ export const RegisterResponse = zod.object({
     subjects: zod.array(zod.string()),
     isVerified: zod.boolean(),
     createdAt: zod.string(),
+    isAdmin: zod.boolean(),
   }),
   message: zod.string(),
 });
@@ -61,6 +62,7 @@ export const LoginResponse = zod.object({
     subjects: zod.array(zod.string()),
     isVerified: zod.boolean(),
     createdAt: zod.string(),
+    isAdmin: zod.boolean(),
   }),
   message: zod.string(),
 });
@@ -86,38 +88,54 @@ export const GetMeResponse = zod.object({
   subjects: zod.array(zod.string()),
   isVerified: zod.boolean(),
   createdAt: zod.string(),
+  isAdmin: zod.boolean(),
 });
 
 /**
- * A signed-in user may request any canonical user id. The gateway exposes only id, name, subjects, and createdAt; the self-only rule applies to PATCH.
- * @summary Get a minimum profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a verified member profile summary
  */
 export const GetUserParams = zod.object({
   id: zod.coerce.number().int(),
 });
 
-export const getUserResponseIdMax = 9007199254740991;
+export const getUserResponseTwoIdMax = 9007199254740991;
 
-export const getUserResponseNameMax = 120;
+export const getUserResponseTwoNameMax = 120;
 
-export const getUserResponseSubjectsItemMax = 80;
+export const getUserResponseTwoSubjectsItemMax = 80;
 
-export const getUserResponseSubjectsMax = 20;
+export const getUserResponseTwoSubjectsMax = 20;
 
-export const getUserResponseCreatedAtMax = 128;
+export const getUserResponseTwoCreatedAtMax = 128;
 
-export const GetUserResponse = zod
-  .object({
-    id: zod.number().int().min(1).max(getUserResponseIdMax),
-    name: zod.string().min(1).max(getUserResponseNameMax),
-    subjects: zod
-      .array(zod.string().min(1).max(getUserResponseSubjectsItemMax))
-      .max(getUserResponseSubjectsMax),
-    createdAt: zod.string().min(1).max(getUserResponseCreatedAtMax),
-  })
-  .describe(
-    "Minimum profile summary for any signed-in user; PATCH is self only.",
-  );
+export const GetUserResponse = zod.union([
+  zod.object({
+    id: zod.number().int(),
+    email: zod.string(),
+    name: zod.string(),
+    role: zod.enum(["mentor", "mentee", "both"]),
+    districtId: zod.number().int(),
+    districtName: zod.string().nullish(),
+    bio: zod.string().nullish(),
+    subjects: zod.array(zod.string()),
+    isVerified: zod.boolean(),
+    createdAt: zod.string(),
+    isAdmin: zod.boolean(),
+  }),
+  zod
+    .object({
+      id: zod.number().int().min(1).max(getUserResponseTwoIdMax),
+      name: zod.string().min(1).max(getUserResponseTwoNameMax),
+      subjects: zod
+        .array(zod.string().min(1).max(getUserResponseTwoSubjectsItemMax))
+        .max(getUserResponseTwoSubjectsMax),
+      createdAt: zod.string().min(1).max(getUserResponseTwoCreatedAtMax),
+    })
+    .describe(
+      "Minimum profile summary for any signed-in user; PATCH is self only.",
+    ),
+]);
 
 /**
  * The gateway accepts only name, bio, and subjects for the authenticated
@@ -150,28 +168,19 @@ export const UpdateUserBody = zod
     "Allowlisted self-profile fields. Other fields are rejected by the gateway.",
   );
 
-export const updateUserResponseIdMax = 9007199254740991;
-
-export const updateUserResponseNameMax = 120;
-
-export const updateUserResponseSubjectsItemMax = 80;
-
-export const updateUserResponseSubjectsMax = 20;
-
-export const updateUserResponseCreatedAtMax = 128;
-
-export const UpdateUserResponse = zod
-  .object({
-    id: zod.number().int().min(1).max(updateUserResponseIdMax),
-    name: zod.string().min(1).max(updateUserResponseNameMax),
-    subjects: zod
-      .array(zod.string().min(1).max(updateUserResponseSubjectsItemMax))
-      .max(updateUserResponseSubjectsMax),
-    createdAt: zod.string().min(1).max(updateUserResponseCreatedAtMax),
-  })
-  .describe(
-    "Minimum profile summary for any signed-in user; PATCH is self only.",
-  );
+export const UpdateUserResponse = zod.object({
+  id: zod.number().int(),
+  email: zod.string(),
+  name: zod.string(),
+  role: zod.enum(["mentor", "mentee", "both"]),
+  districtId: zod.number().int(),
+  districtName: zod.string().nullish(),
+  bio: zod.string().nullish(),
+  subjects: zod.array(zod.string()),
+  isVerified: zod.boolean(),
+  createdAt: zod.string(),
+  isAdmin: zod.boolean(),
+});
 
 /**
  * @summary List all school districts
@@ -512,6 +521,8 @@ export const ListTagsResponse = zod.array(ListTagsResponseItem);
  * @summary Report a user
  */
 
+export const createReportBodyDescriptionMax = 2000;
+
 export const CreateReportBody = zod.object({
   reportedUserId: zod.number().int().min(1),
   reason: zod.enum([
@@ -521,7 +532,7 @@ export const CreateReportBody = zod.object({
     "fake_account",
     "other",
   ]),
-  description: zod.string().nullish(),
+  description: zod.string().max(createReportBodyDescriptionMax).nullish(),
 });
 
 export const CreateReportResponse = zod.object({
@@ -740,12 +751,14 @@ export const SendChatRoomMessageParams = zod.object({
   roomId: zod.coerce.number().int(),
 });
 
+export const sendChatRoomMessageBodyBodyMax = 2000;
+
 export const SendChatRoomMessageBody = zod.object({
-  body: zod.string(),
+  body: zod.string().min(1).max(sendChatRoomMessageBodyBodyMax),
   clientMessageId: zod
     .string()
     .uuid()
-    .optional()
+    .nullish()
     .describe(
       "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
     ),
@@ -863,8 +876,9 @@ export const ListDmConversationsResponse = zod.union([
  * create it. Returns ScaffoldTodo until implemented.
  * @summary (scaffold) Start (or reuse) a DM conversation
  */
+
 export const StartDmConversationBody = zod.object({
-  toUserId: zod.number().int(),
+  toUserId: zod.number().int().min(1),
 });
 
 export const startDmConversationResponseOneIdMax = 9007199254740991;
@@ -1000,12 +1014,14 @@ export const SendDmMessageParams = zod.object({
   conversationId: zod.coerce.number().int(),
 });
 
+export const sendDmMessageBodyBodyMax = 2000;
+
 export const SendDmMessageBody = zod.object({
-  body: zod.string(),
+  body: zod.string().min(1).max(sendDmMessageBodyBodyMax),
   clientMessageId: zod
     .string()
     .uuid()
-    .optional()
+    .nullish()
     .describe(
       "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
     ),
@@ -2042,6 +2058,8 @@ export const listRequestCommentsResponseRequestIdMax = 2147483647;
 
 export const listRequestCommentsResponseAuthorIdMax = 2147483647;
 
+export const listRequestCommentsResponseBodyMax = 2000;
+
 export const ListRequestCommentsResponseItem = zod.object({
   id: zod.number().int().min(1).max(listRequestCommentsResponseIdMax),
   requestId: zod
@@ -2057,8 +2075,10 @@ export const ListRequestCommentsResponseItem = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string(),
+  body: zod.string().max(listRequestCommentsResponseBodyMax),
   createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
 });
 export const ListRequestCommentsResponse = zod.array(
   ListRequestCommentsResponseItem,
@@ -2087,6 +2107,8 @@ export const createRequestCommentResponseRequestIdMax = 2147483647;
 
 export const createRequestCommentResponseAuthorIdMax = 2147483647;
 
+export const createRequestCommentResponseBodyMax = 2000;
+
 export const CreateRequestCommentResponse = zod.object({
   id: zod.number().int().min(1).max(createRequestCommentResponseIdMax),
   requestId: zod
@@ -2102,8 +2124,10 @@ export const CreateRequestCommentResponse = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string(),
+  body: zod.string().max(createRequestCommentResponseBodyMax),
   createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
 });
 
 /**
@@ -2329,3 +2353,303 @@ export const ListRequestActivityResponseItem = zod.object({
 export const ListRequestActivityResponse = zod.array(
   ListRequestActivityResponseItem,
 );
+
+/**
+ * @summary Request an email ownership verification link
+ */
+export const RequestEmailVerificationResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Confirm email ownership with a one-use token
+ */
+export const confirmEmailVerificationBodyTokenMin = 43;
+export const confirmEmailVerificationBodyTokenMax = 128;
+
+export const confirmEmailVerificationBodyTokenRegExp = new RegExp(
+  "^[A-Za-z0-9_-]+$",
+);
+
+export const ConfirmEmailVerificationBody = zod.object({
+  token: zod
+    .string()
+    .min(confirmEmailVerificationBodyTokenMin)
+    .max(confirmEmailVerificationBodyTokenMax)
+    .regex(confirmEmailVerificationBodyTokenRegExp),
+});
+
+export const ConfirmEmailVerificationResponse = zod.object({
+  id: zod.number().int(),
+  email: zod.string(),
+  name: zod.string(),
+  role: zod.enum(["mentor", "mentee", "both"]),
+  districtId: zod.number().int(),
+  districtName: zod.string().nullish(),
+  bio: zod.string().nullish(),
+  subjects: zod.array(zod.string()),
+  isVerified: zod.boolean(),
+  createdAt: zod.string(),
+  isAdmin: zod.boolean(),
+});
+
+/**
+ * @summary List verified mentors in the current district
+ */
+export const listMentorsQueryLimitDefault = 50;
+export const listMentorsQueryLimitMax = 50;
+
+export const listMentorsQueryBeforeIdMax = 2147483647;
+
+export const ListMentorsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listMentorsQueryLimitMax)
+    .default(listMentorsQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listMentorsQueryBeforeIdMax)
+    .optional(),
+});
+
+export const listMentorsResponseIdMax = 2147483647;
+
+export const listMentorsResponseDistrictIdMax = 2147483647;
+
+export const ListMentorsResponseItem = zod.object({
+  id: zod.number().int().min(1).max(listMentorsResponseIdMax),
+  name: zod.string(),
+  role: zod.enum(["mentor", "both"]),
+  subjects: zod.array(zod.string()),
+  districtId: zod.number().int().min(1).max(listMentorsResponseDistrictIdMax),
+  districtName: zod.string().nullable(),
+  bio: zod.string().nullable(),
+});
+export const ListMentorsResponse = zod.array(ListMentorsResponseItem).max(50);
+
+/**
+ * @summary List moderation reports
+ */
+export const listAdminReportsQueryLimitDefault = 50;
+export const listAdminReportsQueryLimitMax = 50;
+
+export const listAdminReportsQueryBeforeIdMax = 2147483647;
+
+export const ListAdminReportsQueryParams = zod.object({
+  status: zod.enum(["open", "reviewing", "resolved", "dismissed"]).optional(),
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminReportsQueryLimitMax)
+    .default(listAdminReportsQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminReportsQueryBeforeIdMax)
+    .optional(),
+});
+
+export const listAdminReportsResponseIdMax = 2147483647;
+
+export const listAdminReportsResponseReporterIdMax = 2147483647;
+
+export const listAdminReportsResponseReportedUserIdMax = 2147483647;
+
+export const listAdminReportsResponseDescriptionMax = 2000;
+
+export const listAdminReportsResponseNoteMax = 2000;
+
+export const ListAdminReportsResponseItem = zod.object({
+  id: zod.number().int().min(1).max(listAdminReportsResponseIdMax),
+  reporterId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminReportsResponseReporterIdMax),
+  reporterName: zod.string(),
+  reportedUserId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminReportsResponseReportedUserIdMax),
+  reportedUserName: zod.string(),
+  reason: zod.enum([
+    "spam",
+    "harassment",
+    "inappropriate",
+    "fake_account",
+    "other",
+  ]),
+  description: zod
+    .string()
+    .max(listAdminReportsResponseDescriptionMax)
+    .nullable(),
+  status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
+  note: zod.string().max(listAdminReportsResponseNoteMax).nullable(),
+  reviewedBy: zod.number().int().min(1).nullable(),
+  reviewedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+});
+export const ListAdminReportsResponse = zod
+  .array(ListAdminReportsResponseItem)
+  .max(50);
+
+/**
+ * @summary Review a moderation report
+ */
+export const moderateReportPathIdMax = 2147483647;
+
+export const ModerateReportParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(moderateReportPathIdMax),
+});
+
+export const moderateReportBodyNoteMax = 2000;
+
+export const ModerateReportBody = zod.object({
+  status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
+  note: zod.string().max(moderateReportBodyNoteMax).nullish(),
+});
+
+export const moderateReportResponseIdMax = 2147483647;
+
+export const moderateReportResponseReporterIdMax = 2147483647;
+
+export const moderateReportResponseReportedUserIdMax = 2147483647;
+
+export const moderateReportResponseDescriptionMax = 2000;
+
+export const moderateReportResponseNoteMax = 2000;
+
+export const ModerateReportResponse = zod.object({
+  id: zod.number().int().min(1).max(moderateReportResponseIdMax),
+  reporterId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(moderateReportResponseReporterIdMax),
+  reporterName: zod.string(),
+  reportedUserId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(moderateReportResponseReportedUserIdMax),
+  reportedUserName: zod.string(),
+  reason: zod.enum([
+    "spam",
+    "harassment",
+    "inappropriate",
+    "fake_account",
+    "other",
+  ]),
+  description: zod
+    .string()
+    .max(moderateReportResponseDescriptionMax)
+    .nullable(),
+  status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
+  note: zod.string().max(moderateReportResponseNoteMax).nullable(),
+  reviewedBy: zod.number().int().min(1).nullable(),
+  reviewedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Edit an own comment
+ */
+export const editRequestCommentPathIdMax = 2147483647;
+
+export const editRequestCommentPathCommentIdMax = 2147483647;
+
+export const EditRequestCommentParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(editRequestCommentPathIdMax),
+  commentId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(editRequestCommentPathCommentIdMax),
+});
+
+export const editRequestCommentBodyBodyMax = 2000;
+
+export const EditRequestCommentBody = zod.object({
+  body: zod.string().min(1).max(editRequestCommentBodyBodyMax),
+});
+
+export const editRequestCommentResponseIdMax = 2147483647;
+
+export const editRequestCommentResponseRequestIdMax = 2147483647;
+
+export const editRequestCommentResponseAuthorIdMax = 2147483647;
+
+export const editRequestCommentResponseBodyMax = 2000;
+
+export const EditRequestCommentResponse = zod.object({
+  id: zod.number().int().min(1).max(editRequestCommentResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(editRequestCommentResponseRequestIdMax),
+  authorId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(editRequestCommentResponseAuthorIdMax),
+  authorName: zod.string(),
+  parentId: zod.number().int().nullable(),
+  parentAuthorName: zod.string().nullable(),
+  body: zod.string().max(editRequestCommentResponseBodyMax),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+});
+
+/**
+ * @summary Delete an own comment and preserve its replies
+ */
+export const deleteRequestCommentPathIdMax = 2147483647;
+
+export const deleteRequestCommentPathCommentIdMax = 2147483647;
+
+export const DeleteRequestCommentParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(deleteRequestCommentPathIdMax),
+  commentId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(deleteRequestCommentPathCommentIdMax),
+});
+
+export const deleteRequestCommentResponseIdMax = 2147483647;
+
+export const deleteRequestCommentResponseRequestIdMax = 2147483647;
+
+export const deleteRequestCommentResponseAuthorIdMax = 2147483647;
+
+export const deleteRequestCommentResponseBodyMax = 2000;
+
+export const DeleteRequestCommentResponse = zod.object({
+  id: zod.number().int().min(1).max(deleteRequestCommentResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(deleteRequestCommentResponseRequestIdMax),
+  authorId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(deleteRequestCommentResponseAuthorIdMax),
+  authorName: zod.string(),
+  parentId: zod.number().int().nullable(),
+  parentAuthorName: zod.string().nullable(),
+  body: zod.string().max(deleteRequestCommentResponseBodyMax),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+});

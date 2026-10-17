@@ -62,6 +62,7 @@ export interface User {
   subjects: string[];
   isVerified: boolean;
   createdAt: string;
+  isAdmin: boolean;
 }
 
 export interface AuthResponse {
@@ -225,7 +226,10 @@ export interface CreateReportBody {
   /** @minimum 1 */
   reportedUserId: number;
   reason: CreateReportBodyReason;
-  /** @nullable */
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
   description?: string | null;
 }
 
@@ -334,9 +338,16 @@ export interface ChatMessage {
 }
 
 export interface SendChatMessageBody {
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
   body: string;
-  /** Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409. */
-  clientMessageId?: string;
+  /**
+   * Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.
+   * @nullable
+   */
+  clientMessageId?: string | null;
 }
 
 export interface DmConversation {
@@ -360,6 +371,7 @@ export interface DmConversation {
 }
 
 export interface StartDmBody {
+  /** @minimum 1 */
   toUserId: number;
 }
 
@@ -732,8 +744,13 @@ export interface RequestComment {
   parentId: number | null;
   /** @nullable */
   parentAuthorName: string | null;
+  /** @maxLength 2000 */
   body: string;
   createdAt: string;
+  /** @nullable */
+  updatedAt: string | null;
+  /** @nullable */
+  deletedAt: string | null;
 }
 
 export interface CreateCommentBody {
@@ -763,6 +780,131 @@ export interface Connection {
    */
   requestId: number;
   requestTitle: string;
+}
+
+export interface ConfirmVerificationBody {
+  /**
+   * @minLength 43
+   * @maxLength 128
+   * @pattern ^[A-Za-z0-9_-]+$
+   */
+  token: string;
+}
+
+export type MentorDirectoryEntryRole =
+  (typeof MentorDirectoryEntryRole)[keyof typeof MentorDirectoryEntryRole];
+
+export const MentorDirectoryEntryRole = {
+  mentor: "mentor",
+  both: "both",
+} as const;
+
+export interface MentorDirectoryEntry {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  id: number;
+  name: string;
+  role: MentorDirectoryEntryRole;
+  subjects: string[];
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  districtId: number;
+  /** @nullable */
+  districtName: string | null;
+  /** @nullable */
+  bio: string | null;
+}
+
+export type ModerateReportBodyStatus =
+  (typeof ModerateReportBodyStatus)[keyof typeof ModerateReportBodyStatus];
+
+export const ModerateReportBodyStatus = {
+  open: "open",
+  reviewing: "reviewing",
+  resolved: "resolved",
+  dismissed: "dismissed",
+} as const;
+
+export interface ModerateReportBody {
+  status: ModerateReportBodyStatus;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  note?: string | null;
+}
+
+export type ModerationReportReason =
+  (typeof ModerationReportReason)[keyof typeof ModerationReportReason];
+
+export const ModerationReportReason = {
+  spam: "spam",
+  harassment: "harassment",
+  inappropriate: "inappropriate",
+  fake_account: "fake_account",
+  other: "other",
+} as const;
+
+export type ModerationReportStatus =
+  (typeof ModerationReportStatus)[keyof typeof ModerationReportStatus];
+
+export const ModerationReportStatus = {
+  open: "open",
+  reviewing: "reviewing",
+  resolved: "resolved",
+  dismissed: "dismissed",
+} as const;
+
+export interface ModerationReport {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  id: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  reporterId: number;
+  reporterName: string;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  reportedUserId: number;
+  reportedUserName: string;
+  reason: ModerationReportReason;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  description: string | null;
+  status: ModerationReportStatus;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  note: string | null;
+  /**
+   * @minimum 1
+   * @nullable
+   */
+  reviewedBy: number | null;
+  /** @nullable */
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
+export interface EditCommentBody {
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  body: string;
 }
 
 /**
@@ -967,3 +1109,40 @@ export type ListRequestActivityParams = {
    */
   beforeId?: number;
 };
+
+export type ListMentorsParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListAdminReportsParams = {
+  status?: ListAdminReportsStatus;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListAdminReportsStatus =
+  (typeof ListAdminReportsStatus)[keyof typeof ListAdminReportsStatus];
+
+export const ListAdminReportsStatus = {
+  open: "open",
+  reviewing: "reviewing",
+  resolved: "resolved",
+  dismissed: "dismissed",
+} as const;
