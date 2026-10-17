@@ -94,7 +94,8 @@ def test_request_state_transition_contract(backend_server, backend_database):
         assert request_state(backend_database, created["id"]) == initial
 
         status, matched = api(mentor, base, "POST", path + "/match")
-        assert status == 200 and matched["matchedUserId"] == 501
+        assert status == 200 and matched["status"] == "pending"
+        assert api(author, base, "PATCH", path + f'/applications/{matched["id"]}', {"action": "accept"})[0] == 200
         connected = request_state(backend_database, created["id"])
         assert connected[:2] == ("matched", 501) and connected[2] > initial[2]
         status, retained = api(author, base, "PATCH", path, {"status": "matched"})

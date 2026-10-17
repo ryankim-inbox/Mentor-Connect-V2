@@ -335,6 +335,8 @@ export interface ChatMessage {
 
 export interface SendChatMessageBody {
   body: string;
+  /** Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409. */
+  clientMessageId?: string;
 }
 
 export interface DmConversation {
@@ -664,6 +666,105 @@ export interface AdminEnvelope {
   data: FlaggedUser[];
 }
 
+export type RequestApplicationStatus =
+  (typeof RequestApplicationStatus)[keyof typeof RequestApplicationStatus];
+
+export const RequestApplicationStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  rejected: "rejected",
+  cancelled: "cancelled",
+} as const;
+
+export interface RequestApplication {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  id: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  requestId: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  applicantId: number;
+  applicantName: string;
+  status: RequestApplicationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ApplicationActionAction =
+  (typeof ApplicationActionAction)[keyof typeof ApplicationActionAction];
+
+export const ApplicationActionAction = {
+  accept: "accept",
+  reject: "reject",
+  cancel: "cancel",
+} as const;
+
+export interface ApplicationAction {
+  action: ApplicationActionAction;
+}
+
+export interface RequestComment {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  id: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  requestId: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  authorId: number;
+  authorName: string;
+  /** @nullable */
+  parentId: number | null;
+  /** @nullable */
+  parentAuthorName: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface CreateCommentBody {
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  body: string;
+  /**
+   * @minimum 1
+   * @nullable
+   */
+  parentId?: number | null;
+  clientCommentId: string;
+}
+
+export interface Connection {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  userId: number;
+  name: string;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  requestId: number;
+  requestTitle: string;
+}
+
 /**
  * Invalid input
  */
@@ -813,4 +914,56 @@ export type GetSchedulingSuggestionsParams = {
    * @minimum 1
    */
   user_b: number;
+};
+
+export type ListRequestCommentsParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListRequestApplicationsParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListConnectionsParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
+};
+
+export type ListRequestActivityParams = {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  beforeId?: number;
 };

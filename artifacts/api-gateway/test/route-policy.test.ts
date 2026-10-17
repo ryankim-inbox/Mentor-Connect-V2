@@ -5,8 +5,8 @@ import { ListDistrictsQueryParams } from "../../../lib/api-zod/src/generated/api
 
 import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
 
-test("registers the complete 48-operation REST contract", () => {
-  assert.equal(publicRoutes.length, 48);
+test("registers the complete 55-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 55);
   assert.equal(
     publicRoutes.filter((route) => route.authentication === "cookie").length,
     1,
@@ -35,6 +35,13 @@ test("resolves every operation in the approved REST contract", () => {
     ["PATCH", "/api/requests/1"],
     ["DELETE", "/api/requests/1"],
     ["POST", "/api/requests/1/match"],
+    ["GET", "/api/requests/1/comments?limit=50&beforeId=20"],
+    ["POST", "/api/requests/1/comments"],
+    ["GET", "/api/requests/1/applications?limit=50"],
+    ["POST", "/api/requests/1/applications"],
+    ["PATCH", "/api/requests/1/applications/2"],
+    ["GET", "/api/connections?limit=50"],
+    ["GET", "/api/request-activity?beforeId=20"],
     ["POST", "/api/reports"],
     ["GET", "/api/blocks"],
     ["POST", "/api/blocks"],

@@ -95,3 +95,5 @@ export const dmMessageFixture = {
   createdAt: "2026-01-01T00:00:00",
   readAt: null,
 } satisfies DmMessage;
+
+export const applicationFixture = { id: 1, requestId: 2, applicantId: 1, applicantName: "Student One", status: "pending", createdAt: "2026-10-16T00:00:00Z", updatedAt: "2026-10-16T00:00:00Z" };

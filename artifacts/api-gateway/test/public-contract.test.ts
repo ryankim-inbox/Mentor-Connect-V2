@@ -546,3 +546,16 @@ test("moderation failures preserve null data and redacted diagnostics; malformed
   }
   assert.throws(() => projectPublicPayload({ ...failed, data: { email: "private audit-canary" } }, "/api/admin/flagged-users", "GET"));
 });
+
+test("consent and discussion projections expose only their public fields", () => {
+  const app = { id: 1, requestId: 11, applicantId: 2, applicantName: "Mentee", status: "pending", createdAt: "2026-10-16T00:00:00Z", updatedAt: "2026-10-16T00:00:00Z" };
+  const comment = { id: 1, requestId: 11, authorId: 2, authorName: "Mentee", parentId: null, parentAuthorName: null, body: "Plain text", createdAt: app.createdAt };
+  const contact = { userId: 2, name: "Mentee", requestId: 11, requestTitle: "Study" };
+  for (const [path, value] of [["/api/requests/11/applications", app], ["/api/requests/11/comments", comment], ["/api/connections", contact]] as const) {
+    assert.deepEqual(projectPublicPayload([{ ...value, email: "private", clientCommentId: "private" }], path, "GET"), [value]);
+    assert.throws(() => projectPublicPayload(Array(51).fill(value), path, "GET"));
+    assert.throws(() => projectPublicPayload([{ ...value, requestId: null }], path, "GET"));
+  }
+  assert.deepEqual(projectPublicPayload(app, "/api/requests/11/match", "POST"), app);
+  assert.throws(() => projectPublicPayload({ ...app, status: "matched" }, "/api/requests/11/match", "POST"));
+});

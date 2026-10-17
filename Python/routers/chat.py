@@ -18,6 +18,7 @@
 # already calls these endpoints, including the private message thread.
 
 import asyncio
+from uuid import UUID
 from typing import Annotated
 
 from fastapi import BackgroundTasks, APIRouter, Query, Request, WebSocket, WebSocketDisconnect, HTTPException
@@ -35,6 +36,7 @@ ws_router = APIRouter()
 
 class SendMessageBody(BaseModel):
     body: str
+    clientMessageId: UUID | None = None
 
 
 class StartDmBody(BaseModel):
@@ -380,6 +382,30 @@ def list_room_messages(room_id: int, request: Request,
     return [_format_chat_message(message) for message in reversed(messages)]
 
 
+def _save_message(cur, kind: str, thread_id: int, user_id: int, text: str, key: UUID | None):
+    # Identifiers are fixed by callers; only values come from a request.
+    table, column = {"room": ("chat_messages", "room_id"),
+                     "dm": ("dm_messages", "conversation_id")}[kind]
+    if key is None:
+        cur.execute(f"INSERT INTO {table} ({column}, sender_id, body) "
+                    "VALUES (%s, %s, %s) RETURNING id", (thread_id, user_id, text))
+        return cur.fetchone()["id"], True
+    cur.execute(f"INSERT INTO {table} ({column}, sender_id, body, client_message_id) "
+                "VALUES (%s, %s, %s, %s) "
+                f"ON CONFLICT (sender_id, {column}, client_message_id) DO NOTHING RETURNING id",
+                (thread_id, user_id, text, str(key)))
+    inserted = cur.fetchone()
+    if inserted:
+        return inserted["id"], True
+    # A conflicting insert waits for its transaction. READ COMMITTED now sees it.
+    cur.execute(f"SELECT id, body, deleted_at FROM {table} WHERE sender_id=%s "
+                f"AND {column}=%s AND client_message_id=%s", (user_id, thread_id, str(key)))
+    previous = cur.fetchone()
+    if not previous or previous["body"] != text or previous["deleted_at"] is not None:
+        raise HTTPException(status_code=409, detail="Message operation already used for different content")
+    return previous["id"], False
+
+
 @router.post("/chat/rooms/{room_id}/messages", status_code=201)
 def send_room_message(room_id: int, body: SendMessageBody, request: Request, background_tasks: BackgroundTasks = None):
     """Mission 3 — post a message into a room, return the saved row (201)."""
@@ -388,15 +414,10 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request, bac
     with db() as conn:
         cur = conn.cursor()
         _load_room_for_user(cur, room_id, user_id)
-        cur.execute(
-            """INSERT INTO chat_messages (room_id, sender_id, body)
-               VALUES (%s, %s, %s) RETURNING id""",
-            (room_id, user_id, text),
-        )
-        new_id = cur.fetchone()["id"]
+        new_id, inserted = _save_message(cur, "room", room_id, user_id, text, body.clientMessageId)
         message = _fetch_chat_message(cur, new_id)
     # db() has committed here. Never publish a row from a failed transaction.
-    if background_tasks is not None:
+    if inserted and background_tasks is not None:
         background_tasks.add_task(_broadcast, room_connections.get(room_id, []), message)
     return message
 
@@ -512,13 +533,9 @@ def send_dm_message(conversation_id: int, body: SendMessageBody, request: Reques
         cur = conn.cursor()
         convo = _load_conversation_membership(cur, conversation_id, user_id)
         _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
-        cur.execute(
-            """INSERT INTO dm_messages (conversation_id, sender_id, body)
-               VALUES (%s, %s, %s) RETURNING id""",
-            (conversation_id, user_id, text),
-        )
-        message = _fetch_dm_message(cur, cur.fetchone()["id"])
-    if background_tasks is not None:
+        new_id, inserted = _save_message(cur, "dm", conversation_id, user_id, text, body.clientMessageId)
+        message = _fetch_dm_message(cur, new_id)
+    if inserted and background_tasks is not None:
         background_tasks.add_task(_broadcast, dm_connections.get(conversation_id, []), message)
     return message
 

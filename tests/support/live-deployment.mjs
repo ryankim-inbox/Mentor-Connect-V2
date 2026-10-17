@@ -11,6 +11,7 @@ import { createGatewayServer } from "../../artifacts/api-gateway/dist/gateway.js
 import { createReadinessChecker } from "../../artifacts/api-gateway/dist/readiness.js";
 import { bootstrapClassroom } from "../../ops/bootstrap-classroom.mjs";
 import { verifySchemaAssets } from "../../lib/db/tools/schema-assets.mjs";
+import { runMentorshipJourney } from "./mentorship-journey.mjs";
 import { runLiveChat } from "../../scripts/smoke-live-chat.mjs";
 const { Client } = createRequire(
   new URL("../../lib/db/package.json", import.meta.url),
@@ -264,6 +265,7 @@ try {
       fixtures: { globalRoomId: 1, districtIds: [1, 2], outsiderUserId: 951 },
     },
   };
+  await runMentorshipJourney(config, localBrowser, async () => { await stopStack(); await startStack(); });
   await runLiveChat(config, localBrowser, {
     restart: async () => {
       await stopStack();

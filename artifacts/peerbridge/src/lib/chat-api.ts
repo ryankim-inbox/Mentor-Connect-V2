@@ -142,10 +142,10 @@ export const fetchRoomMessages = (
     arrayOf(chatMessage),
   );
 
-export const sendRoomMessage = (roomId: number, body: string) =>
+export const sendRoomMessage = (roomId: number, body: string, clientMessageId?: string) =>
   chatFetch<ChatMessage>(
     `/api/chat/rooms/${roomId}/messages`,
-    postJson({ body }),
+    postJson({ body, clientMessageId }),
     chatMessage,
   );
 
@@ -170,9 +170,9 @@ export const fetchDmMessages = (
     arrayOf(dmMessage),
   );
 
-export const sendDmMessage = (conversationId: number, body: string) =>
+export const sendDmMessage = (conversationId: number, body: string, clientMessageId?: string) =>
   chatFetch<DmMessage>(
     `/api/dms/${conversationId}/messages`,
-    postJson({ body }),
+    postJson({ body, clientMessageId }),
     dmMessage,
   );

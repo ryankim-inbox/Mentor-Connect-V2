@@ -11,6 +11,8 @@ import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
 import { sortTimeSlots } from "@/lib/timeSlots";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { MessageButton } from "@/lib/chat-navigation";
+import RequestComments from "@/components/RequestComments";
 import ReportModal from "@/components/ReportModal";
 
 interface Props {
@@ -27,7 +29,7 @@ export default function RequestDetail({ id }: Props) {
   const [showReport, setShowReport] = useState(false);
 
   const { data: request, error: requestError, isLoading, refetch } = useGetRequest(requestId, {
-    query: { queryKey: getGetRequestQueryKey(requestId), enabled: !!requestId }
+    query: { queryKey: getGetRequestQueryKey(requestId), enabled: !!requestId, refetchInterval: 10_000, staleTime: 0 }
   });
 
   const isAuthor = user?.id === request?.authorId;
@@ -35,14 +37,6 @@ export default function RequestDetail({ id }: Props) {
   const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched);
 
   const deleteMutation = useDeleteRequest();
-
-  const handleMatched = () => {
-    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
-  };
-
-  const handleMatchFailed = () => {
-    void queryClient.invalidateQueries({ queryKey: getGetRequestQueryKey(requestId) });
-  };
 
   const handleDelete = () => {
     if (!confirm("Delete this request?")) return;
@@ -82,12 +76,6 @@ export default function RequestDetail({ id }: Props) {
     );
   }
 
-  const canMatch =
-    user !== null &&
-    user !== undefined &&
-    !isAuthor &&
-    request.status === "open";
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
@@ -108,16 +96,11 @@ export default function RequestDetail({ id }: Props) {
               <h3 className="font-semibold text-green-800 text-base">
                 This request has been matched
               </h3>
-              <p className="text-green-700 text-sm mt-1">
-                Minimum member profiles include names, subjects, and join dates.
-              </p>
-              <div className="mt-4 sm:w-52 bg-white border border-green-100 rounded-xl p-4">
-                <p className="text-xs text-green-600 font-medium uppercase tracking-wide mb-2">Tips</p>
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li>Use the approved contact flow when it becomes available.</li>
-                  <li>Set clear expectations before scheduling a meeting.</li>
-                </ul>
-              </div>
+              <p className="text-green-700 text-sm mt-1 mb-3">Agree on your goals and a time to meet.</p>
+              <MessageButton
+                userId={isAuthor ? request.matchedUserId! : request.authorId}
+                name={isAuthor ? request.matchedUserName ?? "your connection" : request.authorName}
+              />
             </div>
           </div>
         </div>
@@ -183,13 +166,6 @@ export default function RequestDetail({ id }: Props) {
           </div>
 
           <div className="flex gap-2">
-            {canMatch && (
-              <ConnectAction
-                requestId={requestId}
-                onMatched={handleMatched}
-                onFailed={handleMatchFailed}
-              />
-            )}
             {!isAuthor && user && (
               <button
                 onClick={() => setShowReport(true)}
@@ -211,6 +187,13 @@ export default function RequestDetail({ id }: Props) {
           </div>
         </div>
       </div>
+
+      {user && (
+        <>
+          <ConnectAction key={`applications-${user.id}-${requestId}`} requestId={requestId} userId={user.id} isAuthor={isAuthor} status={request.status} />
+          <RequestComments key={`comments-${user.id}-${requestId}`} requestId={requestId} userId={user.id} />
+        </>
+      )}
 
       {deleteMutation.isError && (
         <p

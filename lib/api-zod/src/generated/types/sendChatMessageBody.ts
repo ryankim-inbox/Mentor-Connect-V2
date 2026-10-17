@@ -8,4 +8,6 @@
 
 export interface SendChatMessageBody {
   body: string;
+  /** Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409. */
+  clientMessageId?: string;
 }

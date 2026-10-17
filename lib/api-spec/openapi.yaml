@@ -24,9 +24,9 @@ tags:
   - name: stats
     description: Statistics and dashboard operations
   - name: chat
-    description: Python chat learning routes preserve both implemented
-      room/conversation results and unfinished ScaffoldTodo responses. WebSocket
-      contracts are documented separately in docs/runbooks/api-gateway.md.
+    description: Python chat learning routes preserve both implemented room/conversation results and
+      unfinished ScaffoldTodo responses. WebSocket contracts are documented separately in
+      docs/runbooks/api-gateway.md.
 paths:
   /healthz:
     get:
@@ -185,10 +185,8 @@ paths:
       tags:
         - users
       summary: Get a minimum profile summary
-      description:
-        A signed-in user may request any canonical user id. The gateway
-        exposes only id, name, subjects, and createdAt; the self-only rule
-        applies to PATCH.
+      description: A signed-in user may request any canonical user id. The gateway exposes only id, name,
+        subjects, and createdAt; the self-only rule applies to PATCH.
       parameters:
         - name: id
           in: path
@@ -577,8 +575,9 @@ paths:
       operationId: matchRequest
       tags:
         - requests
-      summary: Match/respond to a mentorship request
-      description: Returns 403 when either participant blocks the other.
+      summary: Apply to a mentorship request (compatibility alias)
+      description: Creates a pending application. Only the author can accept it; this endpoint never
+        matches immediately.
       parameters:
         - name: id
           in: path
@@ -588,11 +587,11 @@ paths:
             minimum: 1
       responses:
         "200":
-          description: Matched successfully
+          description: Application saved
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MentorshipRequest"
+                $ref: "#/components/schemas/RequestApplication"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -614,6 +613,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "409":
+          $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
   /tags:
@@ -906,7 +907,8 @@ paths:
             type: integer
         - name: beforeId
           in: query
-          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.
+          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must
+            belong to this channel; omitted returns the latest page.
           schema:
             type: integer
             minimum: 1
@@ -1001,6 +1003,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "409":
+          $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
   /dms:
@@ -1107,7 +1111,8 @@ paths:
             type: integer
         - name: beforeId
           in: query
-          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this channel; omitted returns the latest page.
+          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must
+            belong to this channel; omitted returns the latest page.
           schema:
             type: integer
             minimum: 1
@@ -1202,6 +1207,8 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
+        "409":
+          $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
   /matches/{questionId}:
@@ -1612,7 +1619,9 @@ paths:
       tags:
         - analytics
       summary: Mentor matching activity observed after tracking started
-      description: Compatibility URL for observed matching activity. Durations measure request creation to match, including closed time; no personal response rate is inferred. Python response_time_analysis() returns this same activity payload.
+      description: Compatibility URL for observed matching activity. Durations measure request creation to
+        match, including closed time; no personal response rate is inferred. Python
+        response_time_analysis() returns this same activity payload.
       responses:
         "200":
           description: Python learning result
@@ -1816,6 +1825,391 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
+  /requests/{id}/comments:
+    get:
+      operationId: listRequestComments
+      tags:
+        - requests
+      summary: listRequestComments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RequestComment"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: createRequestComment
+      tags:
+        - requests
+      summary: createRequestComment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestComment"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentBody"
+  /requests/{id}/applications:
+    get:
+      operationId: listRequestApplications
+      tags:
+        - requests
+      summary: listRequestApplications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RequestApplication"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+    post:
+      operationId: applyToRequest
+      tags:
+        - requests
+      summary: applyToRequest
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestApplication"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /requests/{id}/applications/{applicationId}:
+    patch:
+      operationId: actOnRequestApplication
+      tags:
+        - requests
+      summary: actOnRequestApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestApplication"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationAction"
+  /connections:
+    get:
+      operationId: listConnections
+      tags:
+        - requests
+      summary: listConnections
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+  /request-activity:
+    get:
+      operationId: listRequestActivity
+      tags:
+        - requests
+      summary: listRequestActivity
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: beforeId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MentorshipRequest"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
 components:
   schemas:
     HealthStatus:
@@ -1929,9 +2323,7 @@ components:
         - subjects
     UpdateUserBody:
       type: object
-      description:
-        Allowlisted self-profile fields. Other fields are rejected by the
-        gateway.
+      description: Allowlisted self-profile fields. Other fields are rejected by the gateway.
       additionalProperties: false
       minProperties: 1
       properties:
@@ -2040,9 +2432,7 @@ components:
         createdAt:
           type: string
         preferredTimes:
-          description:
-            Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings
-            (e.g. 'Mon 17:00').
+          description: Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').
           type: array
           items:
             type: string
@@ -2084,9 +2474,7 @@ components:
             - mentor
             - mentee
         preferredTimes:
-          description:
-            Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun
-            23:00), no duplicates.
+          description: Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.
           type: array
           maxItems: 30
           items:
@@ -2114,7 +2502,8 @@ components:
             type: integer
             minimum: 1
         status:
-          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
+          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears
+            matchedUserId.
           type: string
           enum:
             - open
@@ -2306,6 +2695,11 @@ components:
       properties:
         body:
           type: string
+        clientMessageId:
+          type: string
+          format: uuid
+          description: Reuse for an explicit retry of the same message. Scoped to sender and room or
+            conversation; different content returns 409.
       required:
         - body
     DmConversation:
@@ -2447,23 +2841,24 @@ components:
         - data
     WeeklyMatch:
       type: object
-      required: [week, matches, coverage]
+      required: [ week, matches, coverage ]
       properties:
         week:
           type: string
           format: date
           description: Monday of the UTC calendar week; the final row is week-to-date.
         matches:
-          type: [integer, "null"]
+          type: [ integer, "null" ]
           minimum: 0
           description: Observed match count; null means the entire week was untracked.
         coverage:
           type: string
-          enum: [untracked, partial, complete]
-          description: Complete means the whole elapsed portion was tracked; partial means tracking started after Monday midnight.
+          enum: [ untracked, partial, complete ]
+          description: Complete means the whole elapsed portion was tracked; partial means tracking started
+            after Monday midnight.
     SubjectDemand:
       type: object
-      required: [subject, requests, color]
+      required: [ subject, requests, color ]
       properties:
         subject:
           type: string
@@ -2474,19 +2869,20 @@ components:
           type: string
     MentorActivity:
       type: object
-      required: [trackingStartedAt, mentors]
+      required: [ trackingStartedAt, mentors ]
       properties:
         trackingStartedAt:
           type: string
           format: date-time
         mentors:
           type: array
-          description: Current mentor/both users, including zero matches, ordered by totalMatches descending then ID.
+          description: Current mentor/both users, including zero matches, ordered by totalMatches descending
+            then ID.
           items:
             $ref: "#/components/schemas/MentorActivityRow"
     MentorActivityRow:
       type: object
-      required: [mentorId, mentorName, totalMatches, avgTimeToMatchHours]
+      required: [ mentorId, mentorName, totalMatches, avgTimeToMatchHours ]
       properties:
         mentorId:
           type: integer
@@ -2496,9 +2892,10 @@ components:
           type: integer
           minimum: 0
         avgTimeToMatchHours:
-          type: [number, "null"]
+          type: [ number, "null" ]
           minimum: 0
-          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.
+          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid
+            durations; recorded matches are still counted.
     WeeklyMatchesEnvelope:
       allOf:
         - $ref: "#/components/schemas/PyEnvelope"
@@ -2634,6 +3031,113 @@ components:
           items:
             $ref: "#/components/schemas/FlaggedUser"
       required: *a10
+    RequestApplication:
+      type: object
+      properties:
+        id: &a11
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        requestId: *a11
+        applicantId: *a11
+        applicantName:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - accepted
+            - rejected
+            - cancelled
+        createdAt: &a12
+          type: string
+          format: date-time
+        updatedAt: *a12
+      required:
+        - id
+        - requestId
+        - applicantId
+        - applicantName
+        - status
+        - createdAt
+        - updatedAt
+    ApplicationAction:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - accept
+            - reject
+            - cancel
+      required:
+        - action
+    RequestComment:
+      type: object
+      properties:
+        id: &a11
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        requestId: *a11
+        authorId: *a11
+        authorName: &a12
+          type: string
+        parentId:
+          type:
+            - integer
+            - "null"
+        parentAuthorName:
+          type:
+            - string
+            - "null"
+        body: *a12
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - requestId
+        - authorId
+        - authorName
+        - parentId
+        - parentAuthorName
+        - body
+        - createdAt
+    CreateCommentBody:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        parentId:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        clientCommentId:
+          type: string
+          format: uuid
+      required:
+        - body
+        - clientCommentId
+    Connection:
+      type: object
+      properties:
+        userId: &a11
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        name: &a12
+          type: string
+        requestId: *a11
+        requestTitle: *a12
+      required:
+        - userId
+        - name
+        - requestId
+        - requestTitle
   securitySchemes:
     cookieAuth:
       type: apiKey
