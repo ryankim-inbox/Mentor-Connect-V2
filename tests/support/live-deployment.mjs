@@ -215,9 +215,14 @@ async function startStack() {
   gatewayPort = Number(
     inspected[0].NetworkSettings.Ports["10000/tcp"][0].HostPort,
   );
-  for (let attempt = 0; attempt < 150; attempt++) {
+  // A 0.1-CPU AMD64 image under ARM emulation can need ~50s to start.
+  // Bound the test launch wait without changing the service's request limits.
+  const readinessDeadline = Date.now() + 90_000;
+  while (Date.now() < readinessDeadline) {
     try {
-      if ((await fetch(`http://127.0.0.1:${gatewayPort}/readyz`)).ok) return;
+      if ((await fetch(`http://127.0.0.1:${gatewayPort}/readyz`, {
+        signal: AbortSignal.timeout(2_500),
+      })).ok) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
