@@ -9,6 +9,7 @@ import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import {
   emailVerificationTokensTable,
   emailVerificationRequestsTable,
+  notificationsTable,
   blocksTable,
   chatMessagesTable,
   chatRoomsTable,
@@ -28,6 +29,7 @@ import {
 } from "../src/schema/index";
 
 const tables = [
+  notificationsTable,
   emailVerificationTokensTable,
   emailVerificationRequestsTable,
   blocksTable,
@@ -68,6 +70,7 @@ const frozenCatalog = JSON.parse(
 const dialect = new PgDialect();
 
 const expectedColumnCounts = new Map([
+  ["notifications", 7],
   ["blocks", 4],
   ["chat_messages", 7],
   ["chat_rooms", 5],

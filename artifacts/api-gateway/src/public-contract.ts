@@ -95,6 +95,21 @@ const user = z.object({
   isAdmin: z.boolean(),
   createdAt: string,
 });
+const notifications = z.object({
+  unreadCount: z.number().int().nonnegative().safe(),
+  items: z
+    .array(
+      z.object({
+        id,
+        kind: z.enum(["request_match", "request_match_summary"]),
+        requestId: id.nullable(),
+        message: text.refine((value) => hasAtMostCodePoints(value, 1000)),
+        createdAt: z.string().datetime({ offset: true }),
+        read: z.boolean(),
+      }),
+    )
+    .max(50),
+});
 const auth = z.object({ user, message: string });
 const messageResponse = z.object({ message: string });
 const health = z.object({ status: string });
@@ -299,6 +314,8 @@ export function projectPublicPayload(
   path: string,
   method: string,
 ): unknown {
+  if (path === "/api/notifications" && method === "GET")
+    return notifications.parse(payload);
   if (path === "/api/mentors") return mentor.array().max(50).parse(payload);
   if (path === "/api/admin/reports")
     return report.array().max(50).parse(payload);

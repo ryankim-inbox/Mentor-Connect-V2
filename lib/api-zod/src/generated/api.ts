@@ -8,6 +8,62 @@
 import * as zod from "zod";
 
 /**
+ * @summary List the latest 50 notifications and total unread count for the signed-in member
+ */
+export const listNotificationsResponseUnreadCountMin = 0;
+export const listNotificationsResponseUnreadCountMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemIdMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemRequestIdMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemMessageRegExp = new RegExp(
+  "^(?:\\p{Any}){0,1000}(?!\\p{Any})",
+  "u",
+);
+export const listNotificationsResponseItemsMax = 50;
+
+export const ListNotificationsResponse = zod.object({
+  unreadCount: zod
+    .number()
+    .int()
+    .min(listNotificationsResponseUnreadCountMin)
+    .max(listNotificationsResponseUnreadCountMax)
+    .describe(
+      "Total unread notifications, including rows beyond the latest 50.",
+    ),
+  items: zod
+    .array(
+      zod.object({
+        id: zod
+          .number()
+          .int()
+          .min(1)
+          .max(listNotificationsResponseItemsItemIdMax),
+        kind: zod.enum(["request_match", "request_match_summary"]),
+        requestId: zod
+          .number()
+          .int()
+          .min(1)
+          .max(listNotificationsResponseItemsItemRequestIdMax)
+          .nullable(),
+        message: zod
+          .string()
+          .min(1)
+          .regex(listNotificationsResponseItemsItemMessageRegExp),
+        createdAt: zod.string().datetime({ offset: true }),
+        read: zod.boolean(),
+      }),
+    )
+    .max(listNotificationsResponseItemsMax),
+});
+
+/**
+ * @summary Mark all notifications belonging to the signed-in member as read
+ */
+export const MarkNotificationsReadResponse = zod.void();
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({

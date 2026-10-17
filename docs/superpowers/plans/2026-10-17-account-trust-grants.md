@@ -16,7 +16,7 @@
 - [x] Implement exact INSERT/UPDATE column grants with fail-closed effective privilege checks inside the transaction. Preserve SELECT/schema/sequence rights and existing new-table grants. Test allowed registration/profile/confirmation and denied admin writes.
 - [x] Exercise real HTTP ownership and student flows with the same narrowed policy, using local-only synthetic accounts/outbox. No real mail.
 - [x] Rehearse schema-0005 native snapshot restore, failed-0006 transaction rollback, successful 0006 upgrade, and restoration to an empty isolated 0005 target with rows/ledger/catalog and old grants checked. Document the remote remaining gates without weakening existing guards.
-- [ ] Run affected DB suite and Python integration cases, obtain one fresh review, and report exact passed/failed/unrun checks.
+- [x] Run affected DB suite and Python integration cases, obtain one fresh review, and report exact passed/failed/unrun checks. The expanded branch's complete release/CI gates remain separately pending.
 
 ## Review focus
 

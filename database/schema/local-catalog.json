@@ -8,6 +8,7 @@
     "dm_messages",
     "email_verification_requests",
     "email_verification_tokens",
+    "notifications",
     "questions",
     "reports",
     "request_applications",
@@ -354,6 +355,62 @@
       "name": "expires_at",
       "type": "timestamp with time zone",
       "nullable": false,
+      "default": null
+    },
+    {
+      "table": "notifications",
+      "position": 1,
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "notifications",
+      "position": 2,
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "notifications",
+      "position": 3,
+      "name": "kind",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "notifications",
+      "position": 4,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "notifications",
+      "position": 5,
+      "name": "message",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "notifications",
+      "position": 6,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "notifications",
+      "position": 7,
+      "name": "read_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
       "default": null
     },
     {
@@ -1201,6 +1258,36 @@
       "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
     },
     {
+      "table": "notifications",
+      "name": "notifications_kind_check",
+      "type": "c",
+      "definition": "CHECK (kind = ANY (ARRAY['request_match'::text, 'request_match_summary'::text]))"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_user_id_request_id_kind_key",
+      "type": "u",
+      "definition": "UNIQUE (user_id, request_id, kind)"
+    },
+    {
       "table": "questions",
       "name": "questions_pkey",
       "type": "p",
@@ -1570,6 +1657,21 @@
       "table": "email_verification_tokens",
       "name": "email_verification_tokens_token_hash_key",
       "definition": "CREATE UNIQUE INDEX email_verification_tokens_token_hash_key ON public.email_verification_tokens USING btree (token_hash)"
+    },
+    {
+      "table": "notifications",
+      "name": "idx_notifications_user_created",
+      "definition": "CREATE INDEX idx_notifications_user_created ON public.notifications USING btree (user_id, created_at DESC)"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_pkey",
+      "definition": "CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)"
+    },
+    {
+      "table": "notifications",
+      "name": "notifications_user_id_request_id_kind_key",
+      "definition": "CREATE UNIQUE INDEX notifications_user_id_request_id_kind_key ON public.notifications USING btree (user_id, request_id, kind)"
     },
     {
       "table": "questions",

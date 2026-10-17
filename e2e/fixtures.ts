@@ -64,6 +64,7 @@ export const pythonEnvelope = (feature: string, data: unknown) => ({
 
 export const fixtures: Record<string, unknown> = {
   "/api/auth/me": signedInUser,
+  "/api/notifications": { unreadCount: 0, items: [] },
   "/api/districts": [district],
   "/api/tags": [tag],
   "/api/requests": [request],
