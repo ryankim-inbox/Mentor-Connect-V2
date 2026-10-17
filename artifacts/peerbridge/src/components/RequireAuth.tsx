@@ -4,11 +4,11 @@ import { useAuth, sessionReturnPath } from "@/lib/auth-context";
 
 export function RequireAuth({
   children,
-  verified = true,
+  member = true,
   admin = false,
 }: {
   children: ReactNode;
-  verified?: boolean;
+  member?: boolean;
   admin?: boolean;
 }) {
   const { user, status, refetch } = useAuth();
@@ -42,9 +42,9 @@ export function RequireAuth({
   if (status === "anonymous")
     return <p className="px-4 py-20 text-center">Sign in to continue</p>;
 
-  if (status === "authenticated" && verified && !user?.isVerified)
+  if (status === "authenticated" && member && !user?.hasMemberAccess)
     return <VerificationNotice />;
-  if (status === "authenticated" && admin && !user?.isAdmin)
+  if (status === "authenticated" && admin && (!user?.isVerified || !user?.isAdmin))
     return (
       <p role="alert" className="px-4 py-20 text-center">
         Administrator access required
@@ -65,7 +65,7 @@ export function RequireAuth({
           </button>
         </div>
       )}
-      {user && (status !== "error" || (!verified && !admin)) && (
+      {user && (status !== "error" || (!member && !admin)) && (
         <Fragment key={user.id}>{children}</Fragment>
       )}
     </>

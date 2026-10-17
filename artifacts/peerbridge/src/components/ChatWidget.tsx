@@ -82,7 +82,7 @@ export function ChatWidget() {
   const { selection } = useChatNavigation();
   useEffect(() => { if (selection) setOpen(true); }, [selection]);
 
-  if (status !== "authenticated" || !user?.isVerified) return null;
+  if (status !== "authenticated" || !user?.hasMemberAccess) return null;
 
   return (
     <>

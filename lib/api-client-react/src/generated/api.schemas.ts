@@ -5,6 +5,47 @@
  * PeerBridge - Student Mentorship Platform API
  * OpenAPI spec version: 0.1.0
  */
+export type NotificationItemKind =
+  (typeof NotificationItemKind)[keyof typeof NotificationItemKind];
+
+export const NotificationItemKind = {
+  request_match: "request_match",
+  request_match_summary: "request_match_summary",
+} as const;
+
+export interface NotificationItem {
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  id: number;
+  kind: NotificationItemKind;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   * @nullable
+   */
+  requestId: number | null;
+  /**
+   * @minLength 1
+   * @maxLength 1000
+   */
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface NotificationsResponse {
+  /**
+   * Total unread notifications, including rows beyond the latest 50.
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  unreadCount: number;
+  /** @maxItems 50 */
+  items: NotificationItem[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -60,7 +101,10 @@ export interface User {
   /** @nullable */
   bio?: string | null;
   subjects: string[];
+  /** Actual persisted email ownership. Test member access never sets this flag. */
   isVerified: boolean;
+  /** Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access. */
+  readonly hasMemberAccess: boolean;
   createdAt: string;
   isAdmin: boolean;
 }

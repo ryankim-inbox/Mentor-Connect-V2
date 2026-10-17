@@ -7,6 +7,8 @@ import re
 import hashlib
 import secrets
 from security import require_user
+from member_access import has_member_access, has_admin_access
+from account_policy import is_synthetic_locked
 from email_delivery import deliver_verification, DeliveryUnavailable
 from email_policy import configured_test_recipient, normalize_mailbox
 
@@ -65,7 +67,8 @@ def format_user(user, district_name):
         "bio": user["bio"],
         "subjects": user["subjects"] or [],
         "isVerified": user["email_verified_at"] is not None,
-        "isAdmin": user["is_admin"],
+        "hasMemberAccess": has_member_access(user),
+        "isAdmin": has_admin_access(user),
         "createdAt": user["created_at"].isoformat(),
     }
 
@@ -105,7 +108,14 @@ def login(body: LoginBody, request: Request):
         )
         user = cur.fetchone()
 
-    if not user or not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
+    password_matches = False
+    if user and not is_synthetic_locked(user):
+        try:
+            password_matches = bcrypt.checkpw(body.password.encode(), user["password_hash"].encode())
+        except ValueError:
+            # A disabled/malformed stored hash is a failed login, never a 500.
+            pass
+    if not password_matches:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     request.session["user_id"] = user["id"]
@@ -131,7 +141,7 @@ def _limit_attempt(cur, user_id, kind):
     # Serialize all token transitions per account, including multi-worker races.
     cur.execute('SELECT * FROM users WHERE id=%s FOR UPDATE', (user_id,))
     user = cur.fetchone()
-    if not user:
+    if not user or is_synthetic_locked(user):
         raise HTTPException(401, 'Not authenticated')
     cur.execute("DELETE FROM email_verification_requests WHERE user_id=%s AND requested_at < now()-interval '1 hour'",(user_id,))
     cur.execute("SELECT count(*) AS n, COALESCE(bool_or(requested_at > now()-interval '60 seconds'),false) AS recent FROM email_verification_requests WHERE user_id=%s AND kind=%s AND requested_at > now()-(CASE WHEN %s='confirm' THEN interval '15 minutes' ELSE interval '1 hour' END)",(user_id,kind,kind))

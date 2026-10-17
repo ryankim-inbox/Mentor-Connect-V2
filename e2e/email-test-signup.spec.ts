@@ -7,7 +7,7 @@ const testMember = {
   name: "Email Test Member",
   email: "approved-test@example.com",
   role: "mentee",
-  isVerified: false,
+  isVerified: false, hasMemberAccess: false,
   isAdmin: false,
 };
 const acceptedMessage =

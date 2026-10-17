@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classroomConnection } from './classroom-snapshot.mjs';
+import { snapshotSchemaAssets } from './snapshot-schema.mjs';
 import { verifySchemaAssets } from '../lib/db/tools/schema-assets.mjs';
 import { validateAppliedMigrations } from '../lib/db/tools/migration-ledger.mjs';
 import { runMigrationTransaction } from '../lib/db/tools/migration-runner.mjs';
@@ -64,7 +65,10 @@ export async function upgradeJourney({ client, assets, target, appSha, audit, mo
     } catch (error) { await client.query('ROLLBACK'); throw error; }
   }
   check(mode === 'apply');
-  const tables = assets.catalog.tables.filter(t => !['request_applications', 'request_comments', 'email_verification_tokens', 'email_verification_requests'].includes(t)).sort();
+  // Derive the old-table preservation set from this command's frozen target,
+  // so later canonical tables cannot enter the historical 0003 -> 0005 upgrade.
+  const historical = await snapshotSchemaAssets({ rootDir, schemaVersion: '0005' });
+  const tables = historical.catalog.tables.filter(t => !['request_applications', 'request_comments'].includes(t)).sort();
   const columns = {}; let before;
   const result = await runMigrationTransaction({
     client, ledger, appSha,

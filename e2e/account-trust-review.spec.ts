@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { signedInUser, fixtures } from "./fixtures";
-const admin = { ...signedInUser, isVerified: true, isAdmin: true };
+const admin = { ...signedInUser, isVerified: true, hasMemberAccess: true, isAdmin: true };
 const member = { ...admin, isAdmin: false };
 const report = {
   id: 1,
@@ -255,14 +255,14 @@ for (const olderStatus of [200, 400])
   test(`new fragment survives older deferred ${olderStatus} response without stale feedback`, async ({
     page,
   }) => {
-    await setup(page, { ...member, isVerified: false });
+    await setup(page, { ...member, isVerified: false, hasMemberAccess: false });
     const older = deferred();
     let verified = false;
     const submitted: string[] = [];
     let meCalls = 0;
     await page.route("**/api/auth/me", (r) => {
       meCalls++;
-      return r.fulfill({ json: { ...member, isVerified: verified } });
+      return r.fulfill({ json: { ...member, isVerified: verified, hasMemberAccess: verified } });
     });
     await page.route("**/api/auth/verification/confirm", async (r) => {
       const token = r.request().postDataJSON().token;
@@ -271,7 +271,7 @@ for (const olderStatus of [200, 400])
         await older.promise;
         await r.fulfill(
           olderStatus === 200
-            ? { json: { ...member, isVerified: true } }
+            ? { json: { ...member, isVerified: true, hasMemberAccess: true } }
             : {
                 status: 400,
                 json: { detail: "Invalid or expired verification token" },
@@ -279,7 +279,7 @@ for (const olderStatus of [200, 400])
         );
       } else {
         verified = true;
-        await r.fulfill({ json: { ...member, isVerified: true } });
+        await r.fulfill({ json: { ...member, isVerified: true, hasMemberAccess: true } });
       }
     });
     try {

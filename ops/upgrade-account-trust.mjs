@@ -6,6 +6,7 @@ import { classroomConnection } from './classroom-snapshot.mjs';
 import { verifySchemaAssets } from '../lib/db/tools/schema-assets.mjs';
 import { validateAppliedMigrations } from '../lib/db/tools/migration-ledger.mjs';
 import { runMigrationTransaction } from '../lib/db/tools/migration-runner.mjs';
+import { assertAccountTrustRoleSafe, restrictAccountTrustUserWrites } from './account-trust-grants.mjs';
 const rootDir=path.resolve(import.meta.dirname,'..');
 const check=condition=>{if(!condition)throw new Error('account trust upgrade precondition');};
 const identifier=value=>'"'+value.replaceAll('"','""')+'"';
@@ -32,11 +33,13 @@ export async function upgradeAccountTrust({client,assets,target,appSha,audit,ack
       check((await locked.query('SELECT current_database() AS name')).rows[0].name===target.database);
       const roles=(await locked.query('SELECT rolsuper,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=$1',[target.appRole])).rows;
       check(roles.length===1 && Object.values(roles[0]).every(value=>value===false));
+      await assertAccountTrustRoleSafe(locked,target.appRole);
       await audit({result:'ownership-reset-acknowledged',migration:'0006_account_trust'});
     },
     async afterApply(locked){
       const role=identifier(target.appRole);
       await locked.query(`GRANT SELECT,INSERT,DELETE ON email_verification_tokens,email_verification_requests TO ${role}; GRANT USAGE ON SEQUENCE email_verification_requests_id_seq TO ${role}; GRANT UPDATE ON request_comments,reports TO ${role}`);
+      await restrictAccountTrustUserWrites(locked,target.appRole);
       // No privilege grant or synthetic ownership proof is part of the migration.
       check((await locked.query('SELECT count(*)::int AS n FROM users WHERE is_verified OR email_verified_at IS NOT NULL OR is_admin')).rows[0].n===0);
       await audit({result:'verified-before-commit',migration:'0006_account_trust'});

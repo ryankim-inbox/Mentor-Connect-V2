@@ -63,7 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         previous &&
         (previous.id !== next?.id ||
           previous.isAdmin !== next.isAdmin ||
-          previous.isVerified !== next.isVerified)
+          previous.isVerified !== next.isVerified ||
+          previous.hasMemberAccess !== next.hasMemberAccess)
       ) {
         await queryClient.cancelQueries({
           predicate: (q) => q.queryKey[0] !== getGetMeQueryKey()[0],

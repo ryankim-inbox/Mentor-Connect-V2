@@ -10,7 +10,7 @@ export const signedInUser = {
   districtName: "Classroom North",
   bio: "",
   subjects: ["Math"],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: false,
   createdAt: "2026-09-09T00:00:00Z",
 };
@@ -64,6 +64,7 @@ export const pythonEnvelope = (feature: string, data: unknown) => ({
 
 export const fixtures: Record<string, unknown> = {
   "/api/auth/me": signedInUser,
+  "/api/notifications": { unreadCount: 0, items: [] },
   "/api/districts": [district],
   "/api/tags": [tag],
   "/api/requests": [request],
@@ -160,7 +161,7 @@ export const fixtures: Record<string, unknown> = {
 export const fixtureAccounts = {
   mentor: signedInUser,
   both: { ...signedInUser, id: 3, name: "Classroom Both", email: "both@classroom.example.edu", role: "both" },
-  unverified: { ...signedInUser, id: 4, name: "Pending Member", email: "pending@classroom.example.edu", isVerified: false },
+  unverified: { ...signedInUser, id: 4, name: "Pending Member", email: "pending@classroom.example.edu", isVerified: false, hasMemberAccess: false },
   admin: { ...signedInUser, id: 5, name: "Classroom Administrator", email: "admin@classroom.example.edu", isAdmin: true },
   mentee: { ...signedInUser, id: 2, name: 'Classroom Mentee', email: 'mentee@classroom.example.edu', role: 'mentee', bio: 'Mentee fixture profile' },
 };

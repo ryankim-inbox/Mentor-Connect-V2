@@ -31,7 +31,7 @@ export function MemberSafety({
       void client.invalidateQueries();
     },
   });
-  if (status !== "authenticated" || !user?.isVerified || user.id === userId)
+  if (status !== "authenticated" || !user?.hasMemberAccess || user.id === userId)
     return null;
   return (
     <div className="mt-5 space-x-3">
@@ -67,7 +67,7 @@ export function BlockedMembers() {
   const blocks = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => listBlocks({ signal }),
-    enabled: status === "authenticated" && user?.isVerified === true,
+    enabled: status === "authenticated" && user?.hasMemberAccess === true,
   });
   const unblock = useMutation({
     mutationFn: (id: number) => unblockUser(id),
@@ -76,7 +76,7 @@ export function BlockedMembers() {
       void client.invalidateQueries();
     },
   });
-  if (status !== "authenticated" || !user?.isVerified) return null;
+  if (status !== "authenticated" || !user?.hasMemberAccess) return null;
   return (
     <section className="rounded-2xl border p-6">
       <h2 className="text-lg font-semibold">Blocked members</h2>

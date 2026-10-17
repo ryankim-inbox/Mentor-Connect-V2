@@ -18,11 +18,11 @@ export default function MemberProfile({ id }: { id: string }) {
         blockedId !== userId &&
         userId > 0 &&
         status === "authenticated" &&
-        (user?.isVerified === true || user?.id === userId),
+        (user?.hasMemberAccess === true || user?.id === userId),
     },
   });
 
-  if (user && !user.isVerified && user.id !== userId)
+  if (user && !user.hasMemberAccess && user.id !== userId)
     return <VerificationNotice />;
 
   if (blockedId === userId)

@@ -380,7 +380,7 @@ test("writes stable release metadata from the schema asset and supplied SHA", as
       path.join(rootDir, "artifacts/api-gateway/dist/release.json"),
       "utf8",
     ),
-    '{\n  "currentMigrationId": "0006_account_trust",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
+    '{\n  "currentMigrationId": "0007_notifications",\n  "releaseSha": "35faaac66ff2a6881026f6e2df6d73000131e92e"\n}\n',
   );
 });
 

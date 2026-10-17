@@ -1,5 +1,5 @@
 from fastapi import Depends
-from security import require_verified_user
+from security import require_member_user
 # chat.py — chat learning missions
 #
 # This router is the student's project: a messenger-style chat with a global
@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool
 from db import db  # imported for you — every mission's queries will use it
 
 # REST endpoints; main.py mounts this under /api (so: GET /api/chat/rooms).
-router = APIRouter(dependencies=[Depends(require_verified_user)])
+router = APIRouter(dependencies=[Depends(require_member_user)])
 
 # WebSocket endpoints; mounted WITHOUT the /api prefix (so: /ws/chat/rooms/1).
 ws_router = APIRouter()
@@ -88,7 +88,7 @@ def _require_user(request: Request) -> int:
         It raises ``HTTPException(401)`` itself, so you never repeat the check.
     Used by: Missions 1, 2, 3, 5, 6, 7.
     """
-    return require_verified_user(request)["id"]
+    return require_member_user(request)["id"]
 
 
 def _clean_body(raw: str) -> str:
@@ -577,7 +577,7 @@ def _authorized_recipients(sockets: list[WebSocket], message: dict) -> list[WebS
             if not user_id:
                 continue
             try:
-                require_verified_user(socket)
+                require_member_user(socket)
                 if "roomId" in message:
                     _load_room_for_user(cur, message["roomId"], user_id)
                 else:
@@ -640,13 +640,13 @@ def _unregister(
 
 def _authorize_room_socket(websocket: WebSocket, room_id: int, user_id: int) -> None:
     # Keep the complete blocking DB lifetime off the single ASGI event loop.
-    require_verified_user(websocket)
+    require_member_user(websocket)
     with db() as conn:
         _load_room_for_user(conn.cursor(), room_id, user_id)
 
 
 def _authorize_dm_socket(websocket: WebSocket, conversation_id: int, user_id: int) -> None:
-    require_verified_user(websocket)
+    require_member_user(websocket)
     with db() as conn:
         cur = conn.cursor()
         convo = _load_conversation_membership(cur, conversation_id, user_id)

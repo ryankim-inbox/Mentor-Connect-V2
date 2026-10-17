@@ -46,7 +46,7 @@ export function ChatNavigationProvider({ children }: { children: ReactNode }) {
     if (
       !owner ||
       status !== "authenticated" ||
-      !user?.isVerified ||
+      !user?.hasMemberAccess ||
       busy.current
     )
       return;
