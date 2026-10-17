@@ -1,60 +1,90 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-export type NotificationItem = {
-  id: number;
-  kind: "request_match" | "request_match_summary";
-  requestId: number | null;
-  message: string;
-  createdAt: string;
-  read: boolean;
-};
-
-export type NotificationsResponse = {
-  unreadCount: number;
-  items: NotificationItem[];
-};
-
-export const notificationsQueryKey = ["notifications"] as const;
-
-export async function fetchNotifications(): Promise<NotificationsResponse> {
-  const response = await fetch("/api/notifications", { credentials: "include" });
-  if (!response.ok) throw new Error(`Notifications failed: ${response.status}`);
-  return response.json();
-}
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  getGetMeQueryKey,
+  markNotificationsRead,
+  type User,
+} from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth-context";
+import { notificationsQueryKey, useNotifications } from "@/lib/notifications";
 
 export default function Notifications() {
-  const queryClient = useQueryClient();
-  const { data, isLoading, isError } = useQuery({
-    queryKey: notificationsQueryKey,
-    queryFn: fetchNotifications,
-    refetchInterval: 30_000,
-  });
-  const markRead = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/notifications/read", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error(`Mark read failed: ${response.status}`);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: notificationsQueryKey }),
-  });
+  const { user } = useAuth();
+  return user ? <MemberNotifications key={user.id} userId={user.id} /> : null;
+}
 
-  const unread = data?.unreadCount ?? 0;
+function MemberNotifications({ userId }: { userId: number }) {
+  const queryClient = useQueryClient();
+  const notifications = useNotifications();
+  const pendingRead = useRef<AbortController | null>(null);
+  const attempted = useRef<string | null>(null);
+  useEffect(() => () => pendingRead.current?.abort(), []);
+  const markRead = useMutation({
+    mutationFn: () => {
+      const current = queryClient.getQueryData<User | null>(getGetMeQueryKey());
+      if (current?.id !== userId || current.hasMemberAccess !== true) {
+        throw new Error("Member session changed");
+      }
+      pendingRead.current = new AbortController();
+      return markNotificationsRead({ signal: pendingRead.current.signal });
+    },
+    onSuccess: () => {
+      if (!pendingRead.current?.signal.aborted) {
+        return queryClient.invalidateQueries({
+          queryKey: notificationsQueryKey(userId),
+        });
+      }
+      return undefined;
+    },
+  });
+  // Attempt once per unread snapshot. A failed mutation waits for explicit retry.
+  const data = notifications.isSuccess ? notifications.data : undefined;
+  const unreadSnapshot = data?.unreadCount
+    ? `${data.items[0]?.id}:${data.unreadCount}`
+    : null;
+  const { mutate, isPending, isError } = markRead;
   useEffect(() => {
-    if (unread > 0 && !markRead.isPending) markRead.mutate();
-    // Mark everything read once when the page shows unread items.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unread]);
+    if (!unreadSnapshot) attempted.current = null;
+    else if (
+      !notifications.isFetching &&
+      !isPending &&
+      !isError &&
+      attempted.current !== unreadSnapshot
+    ) {
+      attempted.current = unreadSnapshot;
+      mutate();
+    }
+  }, [unreadSnapshot, notifications.isFetching, isPending, isError, mutate]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-semibold">Notifications</h1>
-      {isLoading && <p className="text-muted-foreground">Loading…</p>}
-      {isError && <p className="text-red-600">Could not load notifications.</p>}
-      {data && data.items.length === 0 && (
+      {notifications.isPending && (
+        <p role="status" className="text-muted-foreground">
+          Loading…
+        </p>
+      )}
+      {notifications.isError && (
+        <p role="alert" className="text-red-600">
+          Could not load notifications.{" "}
+          <button onClick={() => void notifications.refetch()}>
+            Retry notifications
+          </button>
+        </p>
+      )}
+      {markRead.isError && (
+        <div role="alert" className="mb-4 text-red-600">
+          <p>Could not mark notifications as read.</p>
+          <button
+            onClick={() => markRead.mutate()}
+            disabled={markRead.isPending}
+          >
+            Retry marking read
+          </button>
+        </div>
+      )}
+      {data?.items.length === 0 && (
         <p className="text-muted-foreground">No notifications yet.</p>
       )}
       <ul className="flex flex-col gap-3">
@@ -64,7 +94,10 @@ export default function Notifications() {
             className={`rounded-xl border border-border p-4 ${item.read ? "bg-white" : "bg-blue-50"}`}
           >
             {item.requestId ? (
-              <Link href={`/requests/${item.requestId}`} className="font-medium hover:underline">
+              <Link
+                href={`/requests/${item.requestId}`}
+                className="font-medium hover:underline"
+              >
                 {item.message}
               </Link>
             ) : (

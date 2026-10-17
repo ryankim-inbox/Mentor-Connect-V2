@@ -61,6 +61,8 @@ const server = createServer(async (req, res) => {
       res.setHeader('Set-Cookie', 'peerbridge_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax');
       return send(200, { message: 'Logged out successfully' });
     }
+    if (path === '/api/notifications' && req.method === 'GET') return send(200, { unreadCount: 0, items: [] });
+    if (path === '/api/notifications/read' && req.method === 'POST') return send(204);
     const userMatch = path.match(/^\/api\/users\/(\d+)$/);
     if (userMatch) {
       const target = Object.values(accounts).find(account => account.id === Number(userMatch[1]));

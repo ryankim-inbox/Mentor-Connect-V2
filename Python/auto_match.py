@@ -7,30 +7,11 @@ from being created if matching fails.
 import logging
 
 from db import db
+from member_access import has_member_access
 
 log = logging.getLogger(__name__)
 
 TOP_MATCHES = 5
-
-_CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS notifications (
-    id BIGSERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('request_match', 'request_match_summary')),
-    request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
-    message TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    read_at TIMESTAMPTZ,
-    UNIQUE (user_id, request_id, kind)
-);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_created
-    ON notifications (user_id, created_at DESC);
-"""
-
-
-def ensure_table(cur) -> None:
-    cur.execute(_CREATE_TABLE)
-
 
 def _lower_set(values) -> set[str]:
     return {str(v).strip().lower() for v in (values or []) if str(v).strip()}
@@ -60,7 +41,8 @@ def find_matches_for_request(cur, request_row: dict, limit: int = TOP_MATCHES) -
     tag_names = _lower_set(row["name"] for row in cur.fetchall())
     author_id = request_row["author_id"]
     cur.execute(
-        """SELECT u.id, u.name, u.subjects, u.district_id,
+        """SELECT u.id, u.name, u.subjects, u.district_id, u.role,
+                  u.email_verified_at, u.is_admin, u.password_hash,
                   COALESCE(array_agg(s.slot) FILTER (WHERE s.slot IS NOT NULL), '{}') AS slots
            FROM users u LEFT JOIN schedules s ON s.user_id = u.id
            WHERE u.role IN ('mentor', 'both') AND u.id <> %s
@@ -73,6 +55,8 @@ def find_matches_for_request(cur, request_row: dict, limit: int = TOP_MATCHES) -
     )
     scored = []
     for mentor in cur.fetchall():
+        if not has_member_access(mentor):
+            continue
         score, reason = score_mentor(request_row, tag_names, mentor)
         if score > 0:
             scored.append({"mentor_id": mentor["id"], "score": score, "reason": reason})
@@ -91,7 +75,10 @@ def auto_match_request(request_row: dict) -> int:
     try:
         with db() as conn:
             cur = conn.cursor()
-            ensure_table(cur)
+            cur.execute('SELECT * FROM users WHERE id=%s', (request_row['author_id'],))
+            author = cur.fetchone()
+            if not author or not has_member_access(author):
+                return 0
             matches = find_matches_for_request(cur, request_row)
             title = request_row["title"]
             for match in matches:
@@ -112,5 +99,7 @@ def auto_match_request(request_row: dict) -> int:
             )
             return len(matches)
     except Exception:
-        log.exception("auto-match failed for request %s", request_row.get("id"))
+        # Raw database exceptions can contain row/connection details. The saved
+        # request remains available; no automatic retry creates duplicate alerts.
+        log.warning("auto-match unavailable for request %s", request_row.get("id"))
         return 0

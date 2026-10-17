@@ -9,7 +9,7 @@ const user = {
   districtName: "School",
   bio: "",
   subjects: ["Math"],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: true,
   createdAt: "2026-09-09T00:00:00Z",
 };

@@ -8,6 +8,62 @@
 import * as zod from "zod";
 
 /**
+ * @summary List the latest 50 notifications and total unread count for the signed-in member
+ */
+export const listNotificationsResponseUnreadCountMin = 0;
+export const listNotificationsResponseUnreadCountMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemIdMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemRequestIdMax = 9007199254740991;
+
+export const listNotificationsResponseItemsItemMessageRegExp = new RegExp(
+  "^(?:\\p{Any}){0,1000}(?!\\p{Any})",
+  "u",
+);
+export const listNotificationsResponseItemsMax = 50;
+
+export const ListNotificationsResponse = zod.object({
+  unreadCount: zod
+    .number()
+    .int()
+    .min(listNotificationsResponseUnreadCountMin)
+    .max(listNotificationsResponseUnreadCountMax)
+    .describe(
+      "Total unread notifications, including rows beyond the latest 50.",
+    ),
+  items: zod
+    .array(
+      zod.object({
+        id: zod
+          .number()
+          .int()
+          .min(1)
+          .max(listNotificationsResponseItemsItemIdMax),
+        kind: zod.enum(["request_match", "request_match_summary"]),
+        requestId: zod
+          .number()
+          .int()
+          .min(1)
+          .max(listNotificationsResponseItemsItemRequestIdMax)
+          .nullable(),
+        message: zod
+          .string()
+          .min(1)
+          .regex(listNotificationsResponseItemsItemMessageRegExp),
+        createdAt: zod.string().datetime({ offset: true }),
+        read: zod.boolean(),
+      }),
+    )
+    .max(listNotificationsResponseItemsMax),
+});
+
+/**
+ * @summary Mark all notifications belonging to the signed-in member as read
+ */
+export const MarkNotificationsReadResponse = zod.void();
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -39,7 +95,16 @@ export const RegisterResponse = zod.object({
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -64,7 +129,16 @@ export const LoginResponse = zod.object({
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -90,14 +164,23 @@ export const GetMeResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
 
 /**
- * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
- * @summary Get own account or a verified member profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require server-computed member access and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a member profile summary
  */
 export const GetUserParams = zod.object({
   id: zod.coerce.number().int(),
@@ -123,7 +206,16 @@ export const GetUserResponse = zod.union([
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -181,7 +273,16 @@ export const UpdateUserResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
@@ -2410,13 +2511,22 @@ export const ConfirmEmailVerificationResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 export const listMentorsQueryLimitDefault = 50;
 export const listMentorsQueryLimitMax = 50;

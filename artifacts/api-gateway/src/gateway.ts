@@ -125,6 +125,7 @@ interface UpstreamResponse {
 interface SessionVerification {
   readonly userId: number;
   readonly isVerified: boolean;
+  readonly hasMemberAccess: boolean;
   readonly isAdmin: boolean;
   readonly setCookies: readonly string[];
 }
@@ -172,7 +173,7 @@ export function createGatewayServer(
     upstreamOrigin: config.upstreamOrigin,
     verifySession: async (request, signal, requestId) => {
       const session = await verifySession(request, config, requestId, signal);
-      assertSessionAuthority(session, "verified");
+      assertSessionAuthority(session, "member");
       return session;
     },
     assertOrigin: (request) =>
@@ -833,7 +834,7 @@ async function handleSelfProfileRequest(
   );
   if (requestedUserId !== session.userId) {
     if (method === "PATCH") throw new GatewayHttpError(404, "not_found");
-    assertSessionAuthority(session, "verified");
+    assertSessionAuthority(session, "member");
   }
   let body = await readRequestBody(
     request,
@@ -1063,6 +1064,7 @@ async function verifySession(
   return {
     userId,
     isVerified: (payload as Record<string, unknown>).isVerified === true,
+    hasMemberAccess: (payload as Record<string, unknown>).hasMemberAccess === true,
     isAdmin: (payload as Record<string, unknown>).isAdmin === true,
     setCookies: getSetCookies(upstream.response.headers),
   };
@@ -1322,6 +1324,14 @@ function sendUpstreamResponse(
     );
     return;
   }
+  // Notification operations have exactly one successful wire shape each.
+  if (
+    policy.family === "notifications" &&
+    upstream.response.status !== (policy.method === "GET" ? 200 : 204)
+  ) {
+    sendGatewayError(response, 502, "backend_error", requestId);
+    return;
+  }
   if (upstream.response.status === 204) {
     response.writeHead(204, { "x-request-id": requestId });
     response.end();
@@ -1430,10 +1440,10 @@ function logRequest(
 
 function assertSessionAuthority(
   session: SessionVerification,
-  authority: "session" | "verified" | "admin",
+  authority: "session" | "member" | "admin",
 ): void {
-  if (authority !== "session" && !session.isVerified)
+  if (authority !== "session" && !session.hasMemberAccess)
     throw new GatewayHttpError(403, "forbidden");
-  if (authority === "admin" && !session.isAdmin)
+  if (authority === "admin" && (!session.isVerified || !session.isAdmin))
     throw new GatewayHttpError(403, "forbidden");
 }

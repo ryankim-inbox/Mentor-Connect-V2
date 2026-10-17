@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from security import require_verified_user
+from security import require_member_user
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 from db import db
@@ -11,7 +11,7 @@ from request_events import record_match_event
 from routers.chat import _require_user, _require_unblocked_pair
 from routers.requests import build_request_response
 
-router = APIRouter(dependencies=[Depends(require_verified_user)])
+router = APIRouter(dependencies=[Depends(require_member_user)])
 PageLimit = Annotated[int, Query(ge=1, le=50)]
 BeforeId = Annotated[int | None, Query(ge=1, le=2147483647)]
 

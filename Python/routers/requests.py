@@ -1,5 +1,5 @@
 from fastapi import Depends
-from security import require_verified_user
+from security import require_member_user
 import re
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from typing import Annotated, Literal, Optional, List
 from db import db
 from auto_match import auto_match_request
 
-router = APIRouter(dependencies=[Depends(require_verified_user)])
+router = APIRouter(dependencies=[Depends(require_member_user)])
 
 # Weekly slot format shared with the frontend selector and the DB seed:
 # 'Ddd HH:00' on a 24-hour clock, e.g. 'Mon 17:00' .. 'Sun 23:00'.
@@ -155,7 +155,7 @@ def list_requests(
     limit: Annotated[int, Query(ge=1, le=50)] = 50,
     before: Optional[str] = None,
 ):
-    viewer = require_verified_user(request)
+    viewer = require_member_user(request)
     conditions = ["NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id=%s AND b.blocked_user_id=r.author_id) OR (b.blocker_id=r.author_id AND b.blocked_user_id=%s))"]
     params = [viewer["id"],viewer["id"]]
     effective_status = status or "open"
@@ -224,7 +224,7 @@ def create_request(body: CreateRequestBody, request: Request):
 
 @router.get("/requests/{request_id}")
 def get_request(request_id: PositiveInt, request: Request):
-    viewer = require_verified_user(request)
+    viewer = require_member_user(request)
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM requests WHERE id = %s", (request_id,))

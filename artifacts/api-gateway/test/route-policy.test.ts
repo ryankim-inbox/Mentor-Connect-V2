@@ -5,8 +5,8 @@ import { ListDistrictsQueryParams } from "../../../lib/api-zod/src/generated/api
 
 import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
 
-test("registers the complete 62-operation REST contract", () => {
-  assert.equal(publicRoutes.length, 62);
+test("registers the complete 64-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 64);
   assert.equal(
     publicRoutes.filter((route) => route.authentication === "cookie").length,
     1,
@@ -75,11 +75,29 @@ test("resolves every operation in the approved REST contract", () => {
     ["GET", "/api/scheduling/suggest?user_a=1&user_b=2"],
     ["GET", "/api/admin/flagged-users"],
     ["GET", "/api/healthz"],
+    ["GET", "/api/notifications"],
+    ["POST", "/api/notifications/read"],
+    ["POST", "/api/auth/verification/request"],
+    ["POST", "/api/auth/verification/confirm"],
+    ["GET", "/api/mentors"],
+    ["GET", "/api/admin/reports"],
+    ["PATCH", "/api/admin/reports/1"],
+    ["PATCH", "/api/requests/1/comments/2"],
+    ["DELETE", "/api/requests/1/comments/2"],
   ] as const;
 
+  const resolved = new Set<string>();
   for (const [method, target] of operations) {
-    assert.ok(resolvePublicRoute(method, target), `${method} ${target}`);
+    const route = resolvePublicRoute(method, target);
+    assert.ok(route, `${method} ${target}`);
+    resolved.add(`${route.method} ${route.template}`);
   }
+  assert.equal(operations.length, 64);
+  assert.equal(resolved.size, 64);
+  assert.deepEqual(
+    resolved,
+    new Set(publicRoutes.map((route) => `${route.method} ${route.template}`)),
+  );
 });
 
 test("resolves literal and parameterized learning routes", () => {

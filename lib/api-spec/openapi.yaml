@@ -7,6 +7,8 @@ servers:
   - url: /api
     description: Base API path
 tags:
+  - name: notifications
+    description: Private member notifications
   - name: health
     description: Health operations
   - name: auth
@@ -28,6 +30,72 @@ tags:
       unfinished ScaffoldTodo responses. WebSocket contracts are documented separately in
       docs/runbooks/api-gateway.md.
 paths:
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags:
+        - notifications
+      summary: List the latest 50 notifications and total unread count for the signed-in member
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsResponse"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      x-required-authority: member
+  /notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags:
+        - notifications
+      summary: Mark all notifications belonging to the signed-in member as read
+      responses:
+        "204":
+          description: Success
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      x-required-authority: member
   /healthz:
     get:
       operationId: healthCheck
@@ -189,9 +257,9 @@ paths:
       operationId: getUser
       tags:
         - users
-      summary: Get own account or a verified member profile summary
+      summary: Get own account or a member profile summary
       description: Own profile is available to the authenticated account before verification and returns
-        full User. Other profiles require verified membership and expose only id, name, subjects,
+        full User. Other profiles require server-computed member access and expose only id, name, subjects,
         and createdAt.
       parameters:
         - name: id
@@ -357,7 +425,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /requests:
     get:
       operationId: listRequests
@@ -428,7 +496,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: createRequest
       tags:
@@ -468,7 +536,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /requests/{id}:
     get:
       operationId: getRequest
@@ -510,7 +578,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     patch:
       operationId: updateRequest
       tags:
@@ -559,7 +627,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     delete:
       operationId: deleteRequest
       tags:
@@ -596,7 +664,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /requests/{id}/match:
     post:
       operationId: matchRequest
@@ -644,7 +712,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /tags:
     get:
       operationId: listTags
@@ -677,7 +745,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /reports:
     post:
       operationId: createReport
@@ -720,7 +788,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /blocks:
     get:
       operationId: listBlocks
@@ -753,7 +821,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: blockUser
       tags:
@@ -795,7 +863,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /blocks/{blockedUserId}:
     delete:
       operationId: unblockUser
@@ -833,7 +901,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /stats/overview:
     get:
       operationId: getStatsOverview
@@ -898,7 +966,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /chat/rooms:
     get:
       operationId: listChatRooms
@@ -936,7 +1004,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /chat/rooms/{roomId}/messages:
     get:
       operationId: listChatRoomMessages
@@ -991,7 +1059,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: sendChatRoomMessage
       tags:
@@ -1056,7 +1124,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /dms:
     get:
       operationId: listDmConversations
@@ -1097,7 +1165,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /dms/start:
     post:
       operationId: startDmConversation
@@ -1144,7 +1212,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /dms/{conversationId}/messages:
     get:
       operationId: listDmMessages
@@ -1199,7 +1267,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: sendDmMessage
       tags:
@@ -1264,7 +1332,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /matches/{questionId}:
     get:
       operationId: getMatches
@@ -1997,7 +2065,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: createRequestComment
       tags:
@@ -2049,7 +2117,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateCommentBody"
-      x-required-authority: verified
+      x-required-authority: member
   /requests/{id}/applications:
     get:
       operationId: listRequestApplications
@@ -2111,7 +2179,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
     post:
       operationId: applyToRequest
       tags:
@@ -2157,7 +2225,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /requests/{id}/applications/{applicationId}:
     patch:
       operationId: actOnRequestApplication
@@ -2217,7 +2285,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApplicationAction"
-      x-required-authority: verified
+      x-required-authority: member
   /connections:
     get:
       operationId: listConnections
@@ -2272,7 +2340,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /request-activity:
     get:
       operationId: listRequestActivity
@@ -2327,7 +2395,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: verified
+      x-required-authority: member
   /auth/verification/request:
     post:
       operationId: requestEmailVerification
@@ -2419,7 +2487,7 @@ paths:
       operationId: listMentors
       tags:
         - mentors
-      summary: List verified mentors in the current district
+      summary: List mentors with member access in the current district
       security:
         - cookieAuth: []
       parameters:
@@ -2471,7 +2539,7 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
-      x-required-authority: verified
+      x-required-authority: member
   /admin/reports:
     get:
       operationId: listAdminReports
@@ -2650,7 +2718,7 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
-      x-required-authority: verified
+      x-required-authority: member
       requestBody:
         required: true
         content:
@@ -2706,9 +2774,50 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
-      x-required-authority: verified
+      x-required-authority: member
 components:
   schemas:
+    NotificationItem:
+      type: object
+      additionalProperties: false
+      required: [id, kind, requestId, message, createdAt, read]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        kind:
+          type: string
+          enum: [request_match, request_match_summary]
+        requestId:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 9007199254740991
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          x-length-unit: unicode-code-points
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    NotificationsResponse:
+      type: object
+      additionalProperties: false
+      required: [unreadCount, items]
+      properties:
+        unreadCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: Total unread notifications, including rows beyond the latest 50.
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/NotificationItem"
     HealthStatus:
       type: object
       properties:
@@ -2809,6 +2918,11 @@ components:
             type: string
         isVerified:
           type: boolean
+          description: Actual persisted email ownership. Test member access never sets this flag.
+        hasMemberAccess:
+          type: boolean
+          readOnly: true
+          description: Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.
         createdAt:
           type: string
         isAdmin:
@@ -2820,6 +2934,7 @@ components:
         - role
         - districtId
         - isVerified
+        - hasMemberAccess
         - createdAt
         - subjects
         - isAdmin
