@@ -29,7 +29,7 @@ async function fixture(
   },
   overrides: Partial<Parameters<typeof createWebSocketUpgradeHandler>[0]> = {},
   gatewayOptions?: GatewayOptions,
-  authFlags: Record<string, unknown> = { isVerified: true, isAdmin: false },
+  authFlags: Record<string, unknown> = { isVerified: true, hasMemberAccess: true, isAdmin: false },
 ) {
   const sockets = new Set<Duplex>();
   const calls: IncomingMessage[] = [];
@@ -674,10 +674,19 @@ test("upstream FIN flushes a queued client write before closing", async (t) => {
   assert.equal(c.data().split("\r\n\r\n")[1], payload);
 });
 
+for (const path of ["/ws/chat/rooms/1", "/ws/dms/42"]) {
+  test(`real gateway accepts explicit test-member authority for ${path}`, async (t) => {
+    const f = await fixture(t, undefined, {}, {}, { isVerified: false, hasMemberAccess: true, isAdmin: false });
+    const c = await client(f.port, path);
+    assert.match(await c.handshake(), /^HTTP\/1.1 101 /);
+    assert.equal(f.calls.length, 1);
+  });
+}
+
 for (const flags of [
   {},
-  { isVerified: false, isAdmin: true },
-  { isVerified: "true", isAdmin: true },
+  { isVerified: false, hasMemberAccess: false, isAdmin: true },
+  { isVerified: "true", hasMemberAccess: "true", isAdmin: true },
 ]) {
   test(`real gateway refuses WS ownership flags ${JSON.stringify(flags)}`, async (t) => {
     const f = await fixture(t, undefined, {}, {}, flags);

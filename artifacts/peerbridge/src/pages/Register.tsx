@@ -22,7 +22,7 @@ export default function Register() {
   const confirmSession = async () => {
     try {
       const user = await refetch();
-      if (user) navigate(user.isVerified ? destination : "/verify-email");
+      if (user) navigate(user.hasMemberAccess ? destination : "/verify-email");
       else
         setError(
           "Your session isn't active yet. Recheck your session or sign in again.",

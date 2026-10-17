@@ -91,6 +91,7 @@ const user = z.object({
   bio: string.nullable().optional(),
   subjects: string.array(),
   isVerified: z.boolean(),
+  hasMemberAccess: z.boolean(),
   isAdmin: z.boolean(),
   createdAt: string,
 });

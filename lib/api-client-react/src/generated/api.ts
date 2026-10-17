@@ -651,8 +651,8 @@ export const getGetUserUrl = (id: number) => {
 };
 
 /**
- * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
- * @summary Get own account or a verified member profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require server-computed member access and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a member profile summary
  */
 export const getUser = async (
   id: number,
@@ -718,7 +718,7 @@ export type GetUserQueryError = ErrorType<
 >;
 
 /**
- * @summary Get own account or a verified member profile summary
+ * @summary Get own account or a member profile summary
  */
 
 export function useGetUser<
@@ -6910,7 +6910,7 @@ export const getListMentorsUrl = (params?: ListMentorsParams) => {
 };
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 export const listMentors = async (
   params?: ListMentorsParams,
@@ -6983,7 +6983,7 @@ export type ListMentorsQueryError = ErrorType<
 >;
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 
 export function useListMentors<

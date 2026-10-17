@@ -84,6 +84,7 @@ test("test signup cannot widen eligibility or set authority through request fiel
   testSignupEnvironment(context, "true", TEST_RECIPIENT);
   for (const extra of [
     { role: "admin" }, { isAdmin: true }, { isVerified: true },
+    { hasMemberAccess: true }, { isTestAccount: true }, { TEST_MEMBER_ACCESS_ENABLED: "true" },
     { email_verified_at: "2026-01-01" }, { EMAIL_TEST_ALLOWLIST_ENABLED: "true" },
     { EMAIL_TEST_RECIPIENT: "attacker@example.com" }, { allowlist: ["attacker@example.com"] },
     { testRecipient: "attacker@example.com" },

@@ -60,7 +60,10 @@ export interface User {
   /** @nullable */
   bio?: string | null;
   subjects: string[];
+  /** Actual persisted email ownership. Test member access never sets this flag. */
   isVerified: boolean;
+  /** Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access. */
+  readonly hasMemberAccess: boolean;
   createdAt: string;
   isAdmin: boolean;
 }

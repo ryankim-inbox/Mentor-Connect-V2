@@ -2,17 +2,24 @@
 from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
+import getpass
+import os
+import subprocess
+from http.cookiejar import CookieJar
+from urllib.request import build_opener, HTTPCookieProcessor
+from urllib.parse import quote
 
 import psycopg2
 from psycopg2 import sql
-from psycopg2.extensions import make_dsn
+from psycopg2.extensions import make_dsn, parse_dsn
 
 from backend_support import api, login
+from test_account_trust import token_from
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backend_database, backend_server):
+def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backend_database, backend_server, tmp_path):
     role = 'journey_app_' + uuid4().hex
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
         # This database is created solely for this test; no shared DB is touched.
@@ -42,13 +49,31 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
             ('SELECT,INSERT,UPDATE,DELETE', 'requests'),
             ('SELECT,INSERT,DELETE', 'request_tags,blocks'),
             ('SELECT,INSERT', 'chat_messages,dm_conversations,request_events'),
+            ('SELECT,INSERT,DELETE', 'email_verification_tokens,email_verification_requests'),
         ]
         for privileges, tables in grants:
             cur.execute(sql.SQL('GRANT '+privileges+' ON '+tables+' TO {}').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO {}').format(sql.Identifier(role)))
         conn.commit()
     try:
-        with backend_server(database_url=make_dsn(backend_database, user=role)) as base:
+        target=parse_dsn(backend_database)
+        owner_url=f"postgresql://{quote(target.get('user',getpass.getuser()),safe='')}@{target['host']}:{target['port']}/{target['dbname']}"
+        subprocess.run(['node','tests/support/apply-account-trust-grants.mjs'],cwd=ROOT,check=True,
+                       env={**os.environ,'TEST_APP_ROLE_DATABASE_URL':owner_url,'TEST_APP_ROLE':role},capture_output=True)
+        with closing(psycopg2.connect(make_dsn(backend_database,user=role))) as app,app.cursor() as cur:
+            cur.execute("SELECT has_column_privilege(current_user,'users','is_admin','INSERT'),has_column_privilege(current_user,'users','is_admin','UPDATE')")
+            assert cur.fetchone()==(False,False)
+        environment={'EMAIL_DELIVERY_MODE':'development-file','EMAIL_DEV_OUTBOX_DIR':str(tmp_path/'outbox'),'APP_ORIGIN':'http://localhost:5173'}
+        with backend_server(database_url=make_dsn(backend_database, user=role),environment=environment) as base:
+            new_user=build_opener(HTTPCookieProcessor(CookieJar()))
+            status,registration=api(new_user,base,'POST','/api/auth/register',{'email':'grant-owner@test.edu','name':'Grant owner','password':'Password123!','role':'mentee','districtId':1})
+            assert status==201,registration
+            assert registration['user']['isAdmin'] is False and registration['user']['isVerified'] is False
+            assert api(new_user,base,'PATCH',f"/api/users/{registration['user']['id']}",{'name':'Changed','bio':'local only','role':'both','subjects':['Math']})[0]==200
+            assert api(new_user,base,'POST','/api/auth/verification/request')[0]==202
+            status,verified=api(new_user,base,'POST','/api/auth/verification/confirm',{'token':token_from(tmp_path/'outbox')})
+            assert status==200 and verified['isVerified'] is True and verified['isAdmin'] is False
+            assert api(new_user,base,'GET','/api/analytics/weekly-matches')[0]==403
             owner, _ = login(base, 'student001@test.edu')
             mentor, _ = login(base, 'mentor501@test.edu')
             assert any(c['requestId'] == legacy_id for c in api(owner, base, 'GET', '/api/connections')[1])
