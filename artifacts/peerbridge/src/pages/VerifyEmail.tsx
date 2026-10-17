@@ -10,16 +10,26 @@ import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function VerifyEmail() {
   const { user, status, refetch } = useAuth();
-  const token = useSyncExternalStore(
+  const fragmentVersion = useSyncExternalStore(
     verificationFragment.subscribe,
-    verificationFragment.snapshot,
+    verificationFragment.version,
   );
+  const token = verificationFragment.snapshot();
   const [pending, setPending] = useState(false),
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
   const busy = useRef(false);
   const identity = useRef(user?.id);
-  useEffect(() => () => verificationFragment.clear(), []);
+  const account = useRef(user?.id);
+  account.current = user?.id;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      verificationFragment.clear();
+    };
+  }, []);
   useEffect(() => {
     if (
       status === "anonymous" ||
@@ -33,10 +43,24 @@ export default function VerifyEmail() {
       setError("");
       setMessage("");
     }
-  }, [token]);
+  }, [fragmentVersion, token]);
   const perform = async (confirm: boolean) => {
     if (busy.current || status !== "authenticated") return;
     busy.current = true;
+    let operationVersion = fragmentVersion;
+    const owner = user?.id;
+    let cleared = false;
+    const currentOperation = () =>
+      mounted.current &&
+      account.current === owner &&
+      verificationFragment.version() === operationVersion;
+    const clearSubmitted = () => {
+      if (!currentOperation() || !verificationFragment.clear(operationVersion))
+        return false;
+      operationVersion = verificationFragment.version();
+      cleared = true;
+      return true;
+    };
     setPending(true);
     setError("");
     setMessage("");
@@ -44,8 +68,9 @@ export default function VerifyEmail() {
       if (confirm) {
         // A plain call keeps the token out of React Query mutation variables/history.
         await confirmEmailVerification({ token });
-        verificationFragment.clear();
+        if (!clearSubmitted()) return;
         const current = await refetch();
+        if (!currentOperation()) return;
         if (current?.isVerified) setMessage("Your email is verified.");
         else
           setError(
@@ -53,16 +78,18 @@ export default function VerifyEmail() {
           );
       } else {
         await requestEmailVerification();
+        if (!currentOperation()) return;
         setMessage(
           "Verification email sent. Open the newest link within 30 minutes. Resends require at least 60 seconds.",
         );
       }
     } catch (e) {
-      if (confirm) verificationFragment.clear();
+      if (!currentOperation()) return;
+      if (confirm && !cleared && !clearSubmitted()) return;
       setError(apiErrorMessage(e));
     } finally {
       busy.current = false;
-      setPending(false);
+      if (mounted.current) setPending(false);
     }
   };
   return (

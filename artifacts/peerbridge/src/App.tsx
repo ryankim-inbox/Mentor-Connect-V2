@@ -81,6 +81,15 @@ function DashboardRoute({
   );
 }
 
+function MemberProfileRoute({ id }: { id: string }) {
+  const { user } = useAuth();
+  return (
+    <RequireAuth verified={Number(id) !== user?.id}>
+      <MemberProfile id={id} />
+    </RequireAuth>
+  );
+}
+
 function Router() {
   return (
     <div className="min-h-screen bg-background">
@@ -140,11 +149,7 @@ function Router() {
             </RequireAuth>
           </Route>
           <Route path="/profile/:id">
-            {(params) => (
-              <RequireAuth verified={false}>
-                <MemberProfile id={params.id ?? ""} />
-              </RequireAuth>
-            )}
+            {(params) => <MemberProfileRoute id={params.id ?? ""} />}
           </Route>
           <Route path="/profile">
             <RequireAuth verified={false}>
