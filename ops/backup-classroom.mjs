@@ -8,7 +8,7 @@ import {
   nativeCommand,
   snapshotEvidence,
 } from "./classroom-snapshot.mjs";
-import { verifySchemaAssets } from "../lib/db/tools/schema-assets.mjs";
+import { snapshotSchemaAssets } from "./snapshot-schema.mjs";
 import { diffCatalog, introspectCatalog } from "../lib/db/tools/catalog.mjs";
 
 const rootDir = path.resolve(
@@ -21,6 +21,7 @@ export async function backupClassroom({
   allowedHost,
   databaseName,
   outputDir,
+  schemaVersion,
 }) {
   if (!outputDir) throw new Error("BACKUP_OUTPUT_DIR is required");
   const connection = classroomConnection({
@@ -33,7 +34,7 @@ export async function backupClassroom({
     allowedHost,
     databaseName,
   });
-  const assets = await verifySchemaAssets({ rootDir });
+  const assets = await snapshotSchemaAssets({ rootDir, schemaVersion });
   await mkdir(outputDir, { recursive: true, mode: 0o700 });
   await chmod(outputDir, 0o700);
   const dumpPath = path.resolve(outputDir, `classroom-${randomUUID()}.dump`);
@@ -105,6 +106,7 @@ if (
     allowedHost: process.env.CLASSROOM_ALLOWED_HOST,
     databaseName: process.env.CLASSROOM_DATABASE_NAME,
     outputDir: process.env.BACKUP_OUTPUT_DIR,
+    schemaVersion: process.env.CLASSROOM_SCHEMA_VERSION,
   })
     .then((result) => console.log(JSON.stringify(result)))
     .catch(() => {

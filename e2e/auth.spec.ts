@@ -9,7 +9,7 @@ const accountA = {
   districtName: "School",
   bio: "Original bio",
   subjects: ["Math"],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: false,
   createdAt: "2026-01-01T00:00:00Z",
 };

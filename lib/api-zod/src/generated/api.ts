@@ -39,7 +39,16 @@ export const RegisterResponse = zod.object({
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -64,7 +73,16 @@ export const LoginResponse = zod.object({
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -90,14 +108,23 @@ export const GetMeResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
 
 /**
- * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
- * @summary Get own account or a verified member profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require server-computed member access and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a member profile summary
  */
 export const GetUserParams = zod.object({
   id: zod.coerce.number().int(),
@@ -123,7 +150,16 @@ export const GetUserResponse = zod.union([
     districtName: zod.string().nullish(),
     bio: zod.string().nullish(),
     subjects: zod.array(zod.string()),
-    isVerified: zod.boolean(),
+    isVerified: zod
+      .boolean()
+      .describe(
+        "Actual persisted email ownership. Test member access never sets this flag.",
+      ),
+    hasMemberAccess: zod
+      .boolean()
+      .describe(
+        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
   }),
@@ -181,7 +217,16 @@ export const UpdateUserResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
@@ -2410,13 +2455,22 @@ export const ConfirmEmailVerificationResponse = zod.object({
   districtName: zod.string().nullish(),
   bio: zod.string().nullish(),
   subjects: zod.array(zod.string()),
-  isVerified: zod.boolean(),
+  isVerified: zod
+    .boolean()
+    .describe(
+      "Actual persisted email ownership. Test member access never sets this flag.",
+    ),
+  hasMemberAccess: zod
+    .boolean()
+    .describe(
+      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+    ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
 });
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 export const listMentorsQueryLimitDefault = 50;
 export const listMentorsQueryLimitMax = 50;

@@ -23,11 +23,11 @@ function MemberLinks({ className }: { className: string }) {
   const { user, status } = useAuth();
   const links = memberLinks.filter(([label]) => {
     if (["Profile", "Settings"].includes(label)) return true;
-    if (status !== "authenticated" || !user?.isVerified) return false;
+    if (status !== "authenticated" || !user?.hasMemberAccess) return false;
     return (
       !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
         label,
-      ) || user.isAdmin
+      ) || (user.isVerified && user.isAdmin)
     );
   });
   return (
@@ -75,7 +75,7 @@ export function Navbar() {
       )}
       {user && !user.isVerified && (
         <p className="px-4 py-2 text-sm">
-          Email ownership pending.{" "}
+          {user.hasMemberAccess ? "Test member access · Email ownership unverified" : "Email ownership pending."}{" "}
           <Link href="/verify-email" className="underline">
             Verify email
           </Link>

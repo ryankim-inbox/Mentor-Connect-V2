@@ -738,10 +738,10 @@ export function resolvePublicRoute(
 }
 
 // Session-only auth and own-profile access are handled separately. All other
-// protected operations require fresh ownership, and operational families require admin.
+// protected operations require fresh member access, and operational families require admin.
 export function requiredAuthority(
   route: PublicRoute,
-): "session" | "verified" | "admin" {
+): "session" | "member" | "admin" {
   if (["auth", "users"].includes(route.family)) return "session";
   return [
     "practice",
@@ -753,5 +753,5 @@ export function requiredAuthority(
     "admin",
   ].includes(route.family)
     ? "admin"
-    : "verified";
+    : "member";
 }

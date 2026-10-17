@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { signedInUser, fixtures } from "./fixtures";
-const member = { ...signedInUser, isVerified: true, isAdmin: false };
+const member = { ...signedInUser, isVerified: true, hasMemberAccess: true, isAdmin: false };
 const operational = [
   "/recommendations",
   "/practice-lab",
@@ -63,7 +63,7 @@ for (const role of ["mentor", "mentee", "both"] as const)
 test("unverified own settings remain available and member queries and chat stay disabled", async ({
   page,
 }) => {
-  await setup(page, { ...member, isVerified: false });
+  await setup(page, { ...member, isVerified: false, hasMemberAccess: false });
   const memberCalls: string[] = [];
   page.on("request", (r) => {
     if (/\/api\/(blocks|chat|dms|connections|requests|mentors)/.test(r.url()))
@@ -87,12 +87,12 @@ test("verification captures and scrubs each fragment and requires explicit confi
   let submitted: unknown[] = [];
   await setup(page, member);
   await page.route("**/api/auth/me", (r) =>
-    r.fulfill({ json: { ...member, isVerified: verified } }),
+    r.fulfill({ json: { ...member, isVerified: verified, hasMemberAccess: verified } }),
   );
   await page.route("**/api/auth/verification/confirm", (r) => {
     submitted.push(r.request().postDataJSON());
     verified = true;
-    return r.fulfill({ json: { ...member, isVerified: true } });
+    return r.fulfill({ json: { ...member, isVerified: true, hasMemberAccess: true } });
   });
   await page.goto("/verify-email#token=" + "a".repeat(43));
   await expect(page).toHaveURL(/\/verify-email$/);
@@ -294,7 +294,7 @@ test("own comments edit and delete with retained replies and no controls on othe
 test("failed delivery and wrong-account confirmation never claim success or retry automatically", async ({
   page,
 }) => {
-  await setup(page, { ...member, isVerified: false });
+  await setup(page, { ...member, isVerified: false, hasMemberAccess: false });
   let confirmations = 0,
     sends = 0;
   await page.route("**/api/auth/verification/request", (r) => {

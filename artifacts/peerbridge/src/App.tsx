@@ -71,7 +71,7 @@ function DashboardRoute({
     <Dashboard
       key={`${user?.id}-${operational}`}
       initialTab={initialTab}
-      PracticeLab={user?.isAdmin ? PracticeLab : undefined}
+      PracticeLab={user?.isVerified && user?.isAdmin ? PracticeLab : undefined}
     />
   );
   return operational ? (
@@ -84,7 +84,7 @@ function DashboardRoute({
 function MemberProfileRoute({ id }: { id: string }) {
   const { user } = useAuth();
   return (
-    <RequireAuth verified={Number(id) !== user?.id}>
+    <RequireAuth member={Number(id) !== user?.id}>
       <MemberProfile id={id} />
     </RequireAuth>
   );
@@ -152,12 +152,12 @@ function Router() {
             {(params) => <MemberProfileRoute id={params.id ?? ""} />}
           </Route>
           <Route path="/profile">
-            <RequireAuth verified={false}>
+            <RequireAuth member={false}>
               <Profile />
             </RequireAuth>
           </Route>
           <Route path="/settings">
-            <RequireAuth verified={false}>
+            <RequireAuth member={false}>
               <Settings />
             </RequireAuth>
           </Route>

@@ -7,7 +7,7 @@ import {
   nativeCommand,
   snapshotEvidence,
 } from "./classroom-snapshot.mjs";
-import { verifySchemaAssets } from "../lib/db/tools/schema-assets.mjs";
+import { snapshotSchemaAssets } from "./snapshot-schema.mjs";
 import { diffCatalog, introspectCatalog } from "../lib/db/tools/catalog.mjs";
 
 const rootDir = path.resolve(
@@ -20,6 +20,7 @@ export async function restoreClassroom({
   databaseName,
   dumpPath,
   allowedHost,
+  schemaVersion,
 }) {
   const started = performance.now();
   if (!databaseUrl || !databaseName || !dumpPath)
@@ -57,7 +58,7 @@ export async function restoreClassroom({
     (await fileChecksum(dumpPath)) !== manifest.sha256
   )
     throw new Error("classroom dump checksum mismatch");
-  const assets = await verifySchemaAssets({ rootDir });
+  const assets = await snapshotSchemaAssets({ rootDir, schemaVersion });
   if (manifest.schemaVersion !== assets.version.schemaVersion)
     throw new Error("classroom backup schema version mismatch");
   const client = connection.createClient();
@@ -118,6 +119,7 @@ if (
     databaseUrl: process.env.RESTORE_DATABASE_URL,
     databaseName: process.env.RESTORE_EXPECTED_DATABASE,
     dumpPath: process.argv[2],
+    schemaVersion: process.env.CLASSROOM_SCHEMA_VERSION,
   })
     .then((result) => console.log(JSON.stringify(result)))
     .catch((error) => {
