@@ -27,7 +27,7 @@ export interface RequestComment {
   parentId: number | null;
   /** @nullable */
   parentAuthorName: string | null;
-  /** @maxLength 2000 */
+  /** @pattern ^(?:\p{Any}){0,2000}(?!\p{Any}) */
   body: string;
   createdAt: string;
   /** @nullable */

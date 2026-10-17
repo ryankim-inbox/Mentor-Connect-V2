@@ -10,8 +10,8 @@ import type { ModerateReportBodyStatus } from "./moderateReportBodyStatus";
 export interface ModerateReportBody {
   status: ModerateReportBodyStatus;
   /**
-   * @maxLength 2000
    * @nullable
+   * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */
   note?: string | null;
 }

@@ -12,8 +12,8 @@ export interface CreateReportBody {
   reportedUserId: number;
   reason: CreateReportBodyReason;
   /**
-   * @maxLength 2000
    * @nullable
+   * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */
   description?: string | null;
 }

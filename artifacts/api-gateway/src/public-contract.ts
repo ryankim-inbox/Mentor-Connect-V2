@@ -1,3 +1,4 @@
+import { hasAtMostCodePoints } from "./text-limits.js";
 import { z } from "zod";
 
 const id = z.number().int().positive().safe();
@@ -143,7 +144,7 @@ const comment = z.object({
   authorName: text,
   parentId: id.nullable(),
   parentAuthorName: text.nullable(),
-  body: z.string().max(2000),
+  body: z.string().refine((v) => hasAtMostCodePoints(v, 2000)),
   createdAt: timestamp,
   updatedAt: timestamp.nullable(),
   deletedAt: timestamp.nullable(),
@@ -170,9 +171,13 @@ const report = z.object({
     "fake_account",
     "other",
   ]),
-  description: z.string().max(2000).nullable(),
+  // Preserve legacy report evidence; only new submissions are length-limited.
+  description: z.string().nullable(),
   status: z.enum(["open", "reviewing", "resolved", "dismissed"]),
-  note: z.string().max(2000).nullable(),
+  note: z
+    .string()
+    .refine((v) => hasAtMostCodePoints(v, 2000))
+    .nullable(),
   reviewedBy: id.nullable(),
   reviewedAt: timestamp.nullable(),
   createdAt: timestamp,
