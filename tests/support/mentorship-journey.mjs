@@ -53,7 +53,18 @@ export async function runMentorshipJourney({ origin, credentials }, browser, res
     for (const page of [mentor, owner]) await expect(page.getByText('E2E TEST one named DM', { exact: true })).toHaveCount(1);
     await restart();
     for (const page of [mentor, owner]) {
-      await page.goto(detail);
+      // A fresh navigation loads auth before detail. Check the first detail
+      // response explicitly, then retain the normal five-second render check.
+      // Retire the previous document so its detail poll cannot satisfy this wait.
+      await page.goto('about:blank');
+      const detailApi = new URL(detail);
+      detailApi.pathname = '/api' + detailApi.pathname;
+      const [response] = await Promise.all([
+        page.waitForResponse(response => response.url() === detailApi.href && response.request().method() === 'GET'),
+        page.goto(detail),
+      ]);
+      expect(response.status()).toBe(200);
+      expect(await response.finished()).toBeNull();
       await expect(page.getByRole('heading', { name: 'This request has been matched' })).toBeVisible();
       await expect(page.getByText('E2E TEST author reply', { exact: true })).toBeVisible();
       await expect(page.getByText('Comment deleted', { exact: true })).toBeVisible();
