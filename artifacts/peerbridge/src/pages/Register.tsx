@@ -53,7 +53,6 @@ export default function Register() {
     districtId: 0,
   });
   const [error, setError] = useState("");
-  const [emailError, setEmailError] = useState("");
   const [districtSearch, setDistrictSearch] = useState("");
 
   const {
@@ -73,16 +72,6 @@ export default function Register() {
 
   const registerMutation = useRegister();
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setForm((f) => ({ ...f, email: val }));
-    if (val && !val.toLowerCase().endsWith(".edu")) {
-      setEmailError("Only .edu school email addresses are accepted");
-    } else {
-      setEmailError("");
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy.current || districtsUnavailable) return;
@@ -91,11 +80,6 @@ export default function Register() {
     const name = trimDisplayName(form.name);
     if (!name || new TextEncoder().encode(form.name).length > 120) {
       setError("Use a name of 1–120 UTF-8 bytes.");
-      return;
-    }
-
-    if (!form.email.toLowerCase().endsWith(".edu")) {
-      setError("Only .edu school email addresses are accepted");
       return;
     }
 
@@ -162,24 +146,25 @@ export default function Register() {
 
             <div>
               <label htmlFor="register-email" className="block text-sm font-medium text-foreground mb-1.5">
-                School email{" "}
-                <span className="text-muted-foreground font-normal">
-                  (must be .edu)
-                </span>
+                School email
               </label>
               <input
                 id="register-email"
                 type="email"
                 autoComplete="username"
+                aria-describedby="register-email-help"
                 value={form.email}
-                onChange={handleEmailChange}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
                 placeholder="you@school.edu"
                 required
-                className={`w-full px-3 py-2.5 border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition ${emailError ? "border-destructive" : "border-input"}`}
+                className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
               />
-              {emailError && (
-                <p className="text-xs text-destructive mt-1" role="alert">{emailError}</p>
-              )}
+              <p id="register-email-help" className="text-xs text-muted-foreground mt-1">
+                Use your .edu school email. A non-.edu address is allowed only
+                for an approved test account.
+              </p>
             </div>
 
             <div>
@@ -322,7 +307,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={pending || !!emailError || districtsUnavailable || !selectedDistrict}
+              disabled={pending || districtsUnavailable || !selectedDistrict}
               className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {pending ? "Creating account..." : "Create account"}

@@ -30,7 +30,7 @@ export async function runAccountTrustJourney({ origin, outbox }, browser) {
     );
     await page.getByRole("button", { name: "Send verification email" }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: "Verification email sent." }),
+      page.getByRole("status").filter({ hasText: "Verification email accepted for delivery." }),
     ).toBeVisible();
     expect(statSync(outbox).mode & 0o777).toBe(0o700);
     const files = readdirSync(outbox).filter((f) => f.endsWith(".json"));

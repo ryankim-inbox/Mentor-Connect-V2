@@ -10,6 +10,33 @@ interface LimitEntry {
   startedAt: number;
 }
 
+// Keep this conservative bare-mailbox policy aligned with Python/email_policy.py.
+// Do not fold dots/plus aliases or accept wildcard-looking addresses.
+function normalizeMailbox(value: unknown): string | undefined {
+  if (
+    typeof value !== "string" || value.length > 254 ||
+    !/^[\x21-\x7e]+$/.test(value)
+  ) return undefined;
+  const parts = value.split("@");
+  if (parts.length !== 2) return undefined;
+  const [local, domain] = parts;
+  if (
+    local.length > 64 ||
+    !/^[A-Za-z0-9!#$%&'+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'+/=?^_`{|}~-]+)*$/.test(local)
+  ) return undefined;
+  const labels = domain.split(".");
+  if (
+    labels.length < 2 ||
+    !labels.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label))
+  ) return undefined;
+  return value.toLowerCase();
+}
+
+function configuredTestRecipient(): string | undefined {
+  if (process.env.EMAIL_TEST_ALLOWLIST_ENABLED !== "true") return undefined;
+  return normalizeMailbox(process.env.EMAIL_TEST_RECIPIENT);
+}
+
 export function validateAuthBody(
   kind: "login" | "register",
   body: Buffer | undefined,
@@ -52,8 +79,7 @@ export function validateAuthBody(
 
   if (
     kind === "register" &&
-    (!payload.email.toLowerCase().endsWith(".edu") ||
-      typeof payload.name !== "string" ||
+    (typeof payload.name !== "string" ||
       typeof payload.role !== "string" ||
       !["mentor", "mentee", "both"].includes(payload.role) ||
       !Number.isSafeInteger(payload.districtId))
@@ -61,19 +87,23 @@ export function validateAuthBody(
     throw new Error("invalid_auth_body");
   }
 
+  const accountKey = createHash("sha256")
+    .update(payload.email.trim().toLowerCase(), "utf8")
+    .digest("hex");
+
   if (kind === "register") {
+    const email = normalizeMailbox(payload.email);
+    if (!email || (!email.endsWith(".edu") && email !== configuredTestRecipient())) {
+      throw new Error("invalid_auth_body");
+    }
     const name = readDisplayName(payload.name);
     if (!name) throw new Error("invalid_auth_body");
+    payload.email = email;
     payload.name = name;
     body = Buffer.from(JSON.stringify(payload));
   }
 
-  return {
-    body,
-    accountKey: createHash("sha256")
-      .update(payload.email.trim().toLowerCase(), "utf8")
-      .digest("hex"),
-  };
+  return { body, accountKey };
 }
 
 // Names trim the union of Python whitespace and JavaScript trim whitespace.

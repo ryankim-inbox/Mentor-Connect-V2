@@ -80,7 +80,7 @@ export default function VerifyEmail() {
         await requestEmailVerification();
         if (!currentOperation()) return;
         setMessage(
-          "Verification email sent. Open the newest link within 30 minutes. Resends require at least 60 seconds.",
+          "Verification email accepted for delivery. Open the newest link within 30 minutes. Resends require at least 60 seconds.",
         );
       }
     } catch (e) {
