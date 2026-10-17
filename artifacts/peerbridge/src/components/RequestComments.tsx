@@ -12,6 +12,7 @@ import {
   type CreateCommentBody,
   type RequestComment,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 
 export default function RequestComments({
@@ -22,6 +23,8 @@ export default function RequestComments({
   userId: number;
 }) {
   const client = useQueryClient();
+  const { user } = useAuth();
+  const canParticipate = user?.isAdmin === false;
   const [editing, setEditing] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [draft, setDraft] = useState("");
@@ -71,7 +74,13 @@ export default function RequestComments({
     event.preventDefault();
     const body = draft.trim(),
       parentId = reply?.id ?? null;
-    if (!body || Array.from(body).length > 2000 || busy.current) return;
+    if (
+      !canParticipate ||
+      !body ||
+      Array.from(body).length > 2000 ||
+      busy.current
+    )
+      return;
     busy.current = true;
     if (
       attempt.current?.body !== body ||
@@ -115,7 +124,9 @@ export default function RequestComments({
       )}
       {!comments.isPending && !comments.error && rows.length === 0 && (
         <p className="text-sm text-muted-foreground mb-4">
-          No comments yet. Start the discussion.
+          {canParticipate
+            ? "No comments yet. Start the discussion."
+            : "No comments yet."}
         </p>
       )}
       <ol className="space-y-3 mb-5">
@@ -146,9 +157,9 @@ export default function RequestComments({
                 </span>
               )}
             </p>
-            {c.authorId === userId && !c.deletedAt && (
+            {(c.authorId === userId || user?.isAdmin) && !c.deletedAt && (
               <div className="my-2 flex flex-wrap gap-3">
-                {editing === c.id ? (
+                {canParticipate && editing === c.id ? (
                   <div className="w-full">
                     <label htmlFor={`edit-comment-${c.id}`}>
                       Edit comment text
@@ -175,15 +186,17 @@ export default function RequestComments({
                   </div>
                 ) : (
                   <>
-                    <button
-                      disabled={change.isPending}
-                      onClick={() => {
-                        setEditing(c.id);
-                        setEditText(c.body);
-                      }}
-                    >
-                      Edit comment
-                    </button>
+                    {canParticipate && (
+                      <button
+                        disabled={change.isPending}
+                        onClick={() => {
+                          setEditing(c.id);
+                          setEditText(c.body);
+                        }}
+                      >
+                        Edit comment
+                      </button>
+                    )}
                     <button
                       disabled={change.isPending}
                       onClick={() => {
@@ -199,7 +212,7 @@ export default function RequestComments({
                 )}
               </div>
             )}
-            {!c.parentId && (
+            {canParticipate && !c.parentId && (
               <button
                 type="button"
                 className="text-xs text-primary mt-2"
@@ -212,53 +225,55 @@ export default function RequestComments({
         ))}
       </ol>
       {change.error && <p role="alert">{apiErrorMessage(change.error)}</p>}
-      <form onSubmit={submit}>
-        {reply && (
-          <p className="text-sm mb-2">
-            Replying to {reply.authorName}{" "}
-            <button
-              type="button"
-              className="text-primary"
-              onClick={() => setReply(null)}
-            >
-              Cancel reply
-            </button>
-          </p>
-        )}
-        <label
-          htmlFor="request-comment"
-          className="block text-sm font-medium mb-2"
-        >
-          Comment
-        </label>
-        <textarea
-          id="request-comment"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={3}
-          className="w-full rounded-lg border p-3 text-sm"
-        />
-        <button
-          type="submit"
-          disabled={
-            !draft.trim() ||
-            Array.from(draft.trim()).length > 2000 ||
-            mutation.isPending
-          }
-          className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        >
-          {reply ? "Post reply" : "Post comment"}
-        </button>
-        {Array.from(draft.trim()).length > 2000 && (
-          <p role="alert">Use at most 2,000 characters.</p>
-        )}
-        {mutation.error && (
-          <p role="alert" className="text-sm text-destructive mt-2">
-            {apiErrorMessage(mutation.error)} You can retry this unchanged
-            comment safely.
-          </p>
-        )}
-      </form>
+      {canParticipate && (
+        <form onSubmit={submit}>
+          {reply && (
+            <p className="text-sm mb-2">
+              Replying to {reply.authorName}{" "}
+              <button
+                type="button"
+                className="text-primary"
+                onClick={() => setReply(null)}
+              >
+                Cancel reply
+              </button>
+            </p>
+          )}
+          <label
+            htmlFor="request-comment"
+            className="block text-sm font-medium mb-2"
+          >
+            Comment
+          </label>
+          <textarea
+            id="request-comment"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border p-3 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={
+              !draft.trim() ||
+              Array.from(draft.trim()).length > 2000 ||
+              mutation.isPending
+            }
+            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {reply ? "Post reply" : "Post comment"}
+          </button>
+          {Array.from(draft.trim()).length > 2000 && (
+            <p role="alert">Use at most 2,000 characters.</p>
+          )}
+          {mutation.error && (
+            <p role="alert" className="text-sm text-destructive mt-2">
+              {apiErrorMessage(mutation.error)} You can retry this unchanged
+              comment safely.
+            </p>
+          )}
+        </form>
+      )}
     </section>
   );
 }

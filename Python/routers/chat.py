@@ -1,5 +1,5 @@
 from fastapi import Depends
-from security import require_member_user
+from security import require_member_user, require_student_user
 # chat.py — chat learning missions
 #
 # This router is the student's project: a messenger-style chat with a global
@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool
 from db import db  # imported for you — every mission's queries will use it
 
 # REST endpoints; main.py mounts this under /api (so: GET /api/chat/rooms).
-router = APIRouter(dependencies=[Depends(require_member_user)])
+router = APIRouter(dependencies=[Depends(require_student_user)])
 
 # WebSocket endpoints; mounted WITHOUT the /api prefix (so: /ws/chat/rooms/1).
 ws_router = APIRouter()
@@ -410,7 +410,8 @@ def _save_message(cur, kind: str, thread_id: int, user_id: int, text: str, key: 
 @router.post("/chat/rooms/{room_id}/messages", status_code=201)
 def send_room_message(room_id: int, body: SendMessageBody, request: Request, background_tasks: BackgroundTasks = None):
     """Mission 3 — post a message into a room, return the saved row (201)."""
-    user_id = _require_user(request)
+    # WS calls this function directly, so router dependencies alone are insufficient.
+    user_id = require_student_user(request)["id"]
     text = _clean_body(body.body)
     with db() as conn:
         cur = conn.cursor()
@@ -528,7 +529,7 @@ def list_dm_messages(conversation_id: int, request: Request,
 @router.post("/dms/{conversation_id}/messages", status_code=201)
 def send_dm_message(conversation_id: int, body: SendMessageBody, request: Request, background_tasks: BackgroundTasks = None) -> dict:
     """Mission 7b — validate and persist a participant's private message."""
-    user_id = _require_user(request)
+    user_id = require_student_user(request)["id"]
     text = _clean_body(body.body)
     with db() as conn:
         cur = conn.cursor()
@@ -577,7 +578,7 @@ def _authorized_recipients(sockets: list[WebSocket], message: dict) -> list[WebS
             if not user_id:
                 continue
             try:
-                require_member_user(socket)
+                require_student_user(socket)
                 if "roomId" in message:
                     _load_room_for_user(cur, message["roomId"], user_id)
                 else:
@@ -640,13 +641,13 @@ def _unregister(
 
 def _authorize_room_socket(websocket: WebSocket, room_id: int, user_id: int) -> None:
     # Keep the complete blocking DB lifetime off the single ASGI event loop.
-    require_member_user(websocket)
+    require_student_user(websocket)
     with db() as conn:
         _load_room_for_user(conn.cursor(), room_id, user_id)
 
 
 def _authorize_dm_socket(websocket: WebSocket, conversation_id: int, user_id: int) -> None:
-    require_member_user(websocket)
+    require_student_user(websocket)
     with db() as conn:
         cur = conn.cursor()
         convo = _load_conversation_membership(cur, conversation_id, user_id)

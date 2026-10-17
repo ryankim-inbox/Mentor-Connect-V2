@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ActivityRank,
   AdminEnvelope,
   ApplicationAction,
   AuthResponse,
@@ -967,9 +968,7 @@ export const getUpdateUserUrl = (id: number) => {
 };
 
 /**
- * The gateway accepts only name, bio, and subjects for the authenticated
- * session owner. Identity and authorization fields, including id, email,
- * role, and is_verified, are rejected before any upstream request.
+ * The gateway accepts only name, bio, and subjects for the authenticated session owner. Administrators may update name only. Identity and authorization fields, including id, email, role, and is_verified, are rejected.
  * @summary Update the authenticated user's allowed profile fields
  */
 export const updateUser = async (
@@ -2664,6 +2663,7 @@ export const getGetStatsOverviewUrl = () => {
 };
 
 /**
+ * Administrator-only aggregate information. Student roles cannot access these statistics.
  * @summary Platform statistics overview
  */
 export const getStatsOverview = async (
@@ -2682,7 +2682,12 @@ export const getGetStatsOverviewQueryKey = () => {
 export const getGetStatsOverviewQueryOptions = <
   TData = Awaited<ReturnType<typeof getStatsOverview>>,
   TError = ErrorType<
-    Error429Response | Error502Response | Error503Response | Error504Response
+    | Error401Response
+    | Error403Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
   >,
 >(options?: {
   query?: UseQueryOptions<
@@ -2711,7 +2716,12 @@ export type GetStatsOverviewQueryResult = NonNullable<
   Awaited<ReturnType<typeof getStatsOverview>>
 >;
 export type GetStatsOverviewQueryError = ErrorType<
-  Error429Response | Error502Response | Error503Response | Error504Response
+  | Error401Response
+  | Error403Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
 >;
 
 /**
@@ -2721,7 +2731,12 @@ export type GetStatsOverviewQueryError = ErrorType<
 export function useGetStatsOverview<
   TData = Awaited<ReturnType<typeof getStatsOverview>>,
   TError = ErrorType<
-    Error429Response | Error502Response | Error503Response | Error504Response
+    | Error401Response
+    | Error403Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
   >,
 >(options?: {
   query?: UseQueryOptions<
@@ -2745,6 +2760,7 @@ export const getGetDistrictStatsUrl = (id: number) => {
 };
 
 /**
+ * Administrator-only aggregate information. Student roles cannot access these statistics.
  * @summary Stats for a specific district
  */
 export const getDistrictStats = async (
@@ -7795,3 +7811,121 @@ export const useDeleteRequestComment = <
 > => {
   return useMutation(getDeleteRequestCommentMutationOptions(options));
 };
+
+export const getGetUserActivityRankUrl = (id: number) => {
+  return `/api/users/${id}/activity-rank`;
+};
+
+/**
+ * Requires fresh member access. Administrators may inspect eligible student badges for moderation but have no badge of their own. Missing, ineligible and blocked targets return 404. Counts distinct eligible accepted study partners; zero activity has null rank and tier. No private account fields are returned.
+ * @summary Get an eligible student’s public activity badge
+ */
+export const getUserActivityRank = async (
+  id: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<ActivityRank> => {
+  return customFetch<ActivityRank>(getGetUserActivityRankUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserActivityRankQueryKey = (id: number) => {
+  return [`/api/users/${id}/activity-rank`] as const;
+};
+
+export const getGetUserActivityRankQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserActivityRank>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserActivityRank>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserActivityRankQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUserActivityRank>>
+  > = ({ signal }) => getUserActivityRank(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: id !== null && id !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserActivityRank>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserActivityRankQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserActivityRank>>
+>;
+export type GetUserActivityRankQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary Get an eligible student’s public activity badge
+ */
+
+export function useGetUserActivityRank<
+  TData = Awaited<ReturnType<typeof getUserActivityRank>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserActivityRank>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserActivityRankQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

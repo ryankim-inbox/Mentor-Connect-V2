@@ -98,8 +98,9 @@ def test_popular_subjects_count_current_requests_and_break_ties_by_tag_id(analyt
 
 def test_real_gateway_analytics_counts_both_directions_and_deleted_requests(gateway_server, backend_database):
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
-        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(501,))
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(2,))
         conn.commit()
+    admin, _ = login(gateway_server, "aiko.yoon.0002@test.edu")
     mentor, _ = login(gateway_server, "mentor501@test.edu")
     both, _ = login(gateway_server, "both951@test.edu")
     mentee, _ = login(gateway_server, "student001@test.edu")
@@ -114,7 +115,8 @@ def test_real_gateway_analytics_counts_both_directions_and_deleted_requests(gate
         assert api(author, gateway_server, "PATCH", f"/api/requests/{request['id']}/applications/{application['id']}", {"action": "accept"})[0] == 200
         assert api(author, gateway_server, "DELETE", f"/api/requests/{request['id']}")[0] == 204
     for path in ["weekly-matches", "popular-subjects", "mentor-response-rates"]:
-        status, result = api(mentor, gateway_server, "GET", "/api/analytics/" + path)
+        assert api(mentor, gateway_server, "GET", "/api/analytics/" + path)[0] == 403
+        status, result = api(admin, gateway_server, "GET", "/api/analytics/" + path)
         assert status == 200 and result["success"] and result["source"] == "python", result
         if path == "weekly-matches":
             assert len(result["data"]) == 8

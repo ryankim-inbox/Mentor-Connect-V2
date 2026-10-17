@@ -28,24 +28,40 @@ export default function RequestDetail({ id }: Props) {
   const queryClient = useQueryClient();
   const [showReport, setShowReport] = useState(false);
 
-  const { data: request, error: requestError, isLoading, refetch } = useGetRequest(requestId, {
-    query: { queryKey: getGetRequestQueryKey(requestId), enabled: !!requestId, refetchInterval: 10_000, staleTime: 0 }
+  const {
+    data: request,
+    error: requestError,
+    isLoading,
+    refetch,
+  } = useGetRequest(requestId, {
+    query: {
+      queryKey: getGetRequestQueryKey(requestId),
+      enabled: !!requestId,
+      refetchInterval: 10_000,
+      staleTime: 0,
+    },
   });
 
   const isAuthor = user?.id === request?.authorId;
   const isMatched = user?.id === request?.matchedUserId;
-  const showMatchedPanel = request?.status === "matched" && (isAuthor || isMatched);
+  const showMatchedPanel =
+    !user?.isAdmin && request?.status === "matched" && (isAuthor || isMatched);
 
   const deleteMutation = useDeleteRequest();
 
   const handleDelete = () => {
     if (!confirm("Delete this request?")) return;
-    deleteMutation.mutate({ id: requestId }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListRequestsQueryKey() });
-        navigate("/requests");
+    deleteMutation.mutate(
+      { id: requestId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListRequestsQueryKey(),
+          });
+          navigate("/requests");
+        },
       },
-    });
+    );
   };
 
   if (isLoading) {
@@ -60,7 +76,11 @@ export default function RequestDetail({ id }: Props) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center" role="alert">
         <p className="text-destructive">{apiErrorMessage(requestError)}</p>
-        <button type="button" onClick={() => void refetch()} className="mt-4 text-primary underline">
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-4 text-primary underline"
+        >
           Retry
         </button>
       </div>
@@ -71,7 +91,11 @@ export default function RequestDetail({ id }: Props) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <p className="text-muted-foreground">Request not found.</p>
-        <Link href="/requests"><button className="mt-4 text-primary hover:underline text-sm">Back to requests</button></Link>
+        <Link href="/requests">
+          <button className="mt-4 text-primary hover:underline text-sm">
+            Back to requests
+          </button>
+        </Link>
       </div>
     );
   }
@@ -79,7 +103,11 @@ export default function RequestDetail({ id }: Props) {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/requests"><span className="hover:text-foreground transition-colors">Requests</span></Link>
+        <Link href="/requests">
+          <span className="hover:text-foreground transition-colors">
+            Requests
+          </span>
+        </Link>
         <span>/</span>
         <span className="text-foreground truncate">{request.title}</span>
       </div>
@@ -88,18 +116,34 @@ export default function RequestDetail({ id }: Props) {
         <div className="mb-5 bg-green-50 border border-green-200 rounded-2xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-              <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="w-5 h-5 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-green-800 text-base">
                 This request has been matched
               </h3>
-              <p className="text-green-700 text-sm mt-1 mb-3">Agree on your goals and a time to meet.</p>
+              <p className="text-green-700 text-sm mt-1 mb-3">
+                Agree on your goals and a time to meet.
+              </p>
               <MessageButton
                 userId={isAuthor ? request.matchedUserId! : request.authorId}
-                name={isAuthor ? request.matchedUserName ?? "your connection" : request.authorName}
+                name={
+                  isAuthor
+                    ? (request.matchedUserName ?? "your connection")
+                    : request.authorName
+                }
               />
             </div>
           </div>
@@ -110,26 +154,38 @@ export default function RequestDetail({ id }: Props) {
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
-                request.authorRole === "mentor"
-                  ? "text-blue-600 bg-blue-50 border-blue-100"
-                  : "text-emerald-600 bg-emerald-50 border-emerald-100"
-              }`}>
-                {request.authorRole === "mentor" ? "Offering mentorship" : "Seeking a mentor"}
+              <span
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+                  request.authorRole === "mentor"
+                    ? "text-blue-600 bg-blue-50 border-blue-100"
+                    : "text-emerald-600 bg-emerald-50 border-emerald-100"
+                }`}
+              >
+                {request.authorRole === "mentor"
+                  ? "Offering mentorship"
+                  : "Seeking a mentor"}
               </span>
               {request.status !== "open" && (
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                  request.status === "matched" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                }`}>
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                    request.status === "matched"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
                   {request.status}
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-foreground">{request.title}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {request.title}
+            </h1>
           </div>
         </div>
 
-        <p className="text-foreground leading-relaxed mb-5 whitespace-pre-wrap">{request.description}</p>
+        <p className="text-foreground leading-relaxed mb-5 whitespace-pre-wrap">
+          {request.description}
+        </p>
 
         <div className="flex flex-wrap gap-2 mb-5">
           {request.tags.map((tag) => (
@@ -139,7 +195,9 @@ export default function RequestDetail({ id }: Props) {
 
         {request.preferredTimes && request.preferredTimes.length > 0 && (
           <div className="mb-5">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Preferred times</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Preferred times
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {sortTimeSlots(request.preferredTimes).map((slot) => (
                 <span
@@ -155,18 +213,26 @@ export default function RequestDetail({ id }: Props) {
 
         <div className="border-t border-border pt-4 flex items-center justify-between">
           <div>
-            <span className="font-semibold text-foreground">{request.authorName}</span>
+            <span className="font-semibold text-foreground">
+              {request.authorName}
+            </span>
             <span className="text-muted-foreground mx-2">·</span>
             <Link href={`/districts/${request.districtId}`}>
-              <span className="text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors">{request.districtName}</span>
+              <span className="text-sm text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                {request.districtName}
+              </span>
             </Link>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {new Date(request.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              {new Date(request.createdAt).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
             </p>
           </div>
 
           <div className="flex gap-2">
-            {!isAuthor && user && (
+            {!isAuthor && user && !user.isAdmin && (
               <button
                 onClick={() => setShowReport(true)}
                 className="px-3 py-2 border border-destructive/30 text-destructive rounded-lg text-sm hover:bg-destructive/5 transition-colors"
@@ -174,7 +240,7 @@ export default function RequestDetail({ id }: Props) {
                 Report
               </button>
             )}
-            {isAuthor && (
+            {(isAuthor || user?.isAdmin) && (
               <button
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
@@ -190,8 +256,20 @@ export default function RequestDetail({ id }: Props) {
 
       {user && (
         <>
-          <ConnectAction key={`applications-${user.id}-${requestId}`} requestId={requestId} userId={user.id} isAuthor={isAuthor} status={request.status} />
-          <RequestComments key={`comments-${user.id}-${requestId}`} requestId={requestId} userId={user.id} />
+          {!user.isAdmin && (
+            <ConnectAction
+              key={`applications-${user.id}-${requestId}`}
+              requestId={requestId}
+              userId={user.id}
+              isAuthor={isAuthor}
+              status={request.status}
+            />
+          )}
+          <RequestComments
+            key={`comments-${user.id}-${requestId}`}
+            requestId={requestId}
+            userId={user.id}
+          />
         </>
       )}
 
@@ -206,6 +284,8 @@ export default function RequestDetail({ id }: Props) {
 
       {showReport && request && (
         <ReportModal
+          requestId={requestId}
+          requestTitle={request.title}
           reportedUserId={request.authorId}
           reportedUserName={request.authorName}
           onClose={() => setShowReport(false)}

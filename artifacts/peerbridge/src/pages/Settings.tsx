@@ -43,7 +43,7 @@ export default function Settings() {
         subjects: user.subjects?.join(", ") ?? "",
       });
     }
-  }, [user?.id]);
+  }, [user?.id, user?.isAdmin]);
 
   if (!user) {
     return (
@@ -75,9 +75,10 @@ export default function Settings() {
     if (
       !trimDisplayName(form.name) ||
       bytes(form.name) > 120 ||
-      bytes(form.bio) > 2000 ||
-      subjects.length > 20 ||
-      subjects.some((subject) => bytes(subject) > 80)
+      (!user.isAdmin &&
+        (bytes(form.bio) > 2000 ||
+          subjects.length > 20 ||
+          subjects.some((subject) => bytes(subject) > 80)))
     ) {
       setError(
         "Use a name up to 120 UTF-8 bytes, a bio up to 2,000 bytes, and at most 20 subjects of 80 bytes each.",
@@ -90,7 +91,10 @@ export default function Settings() {
     try {
       const profile = await updateUser.mutateAsync({
         id: user.id,
-        data: { name: trimDisplayName(form.name), bio: form.bio, subjects },
+        data: {
+          name: trimDisplayName(form.name),
+          ...(!user.isAdmin ? { bio: form.bio, subjects } : {}),
+        },
       });
       // A save from a former account must never repopulate its cache after logout.
       if (!mounted.current) return;
@@ -137,12 +141,16 @@ export default function Settings() {
       <div className="bg-card border border-card-border rounded-2xl p-6 mb-6">
         <h2 className="font-semibold text-lg mb-5">Profile</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Name: 120 UTF-8 bytes. Bio: 2,000 bytes. Up to 20 subjects, 80 bytes
-          each. Non-English characters may use several bytes.
+          {user.isAdmin
+            ? "Administrator account: update your name here. Student profile fields are unavailable."
+            : "Name: 120 UTF-8 bytes. Bio: 2,000 bytes. Up to 20 subjects, 80 bytes each. Non-English characters may use several bytes."}
         </p>
         <form onSubmit={handleSave} className="space-y-4" aria-busy={pending}>
           <div>
-            <label htmlFor="settings-name" className="block text-sm font-medium text-foreground mb-1.5">
+            <label
+              htmlFor="settings-name"
+              className="block text-sm font-medium text-foreground mb-1.5"
+            >
               Full name
             </label>
             <input
@@ -157,7 +165,10 @@ export default function Settings() {
           </div>
 
           <div>
-            <label htmlFor="settings-email" className="block text-sm font-medium text-foreground mb-1.5">
+            <label
+              htmlFor="settings-email"
+              className="block text-sm font-medium text-foreground mb-1.5"
+            >
               Email
             </label>
             <input
@@ -170,41 +181,56 @@ export default function Settings() {
             />
           </div>
 
-          <div>
-            <label htmlFor="settings-bio" className="block text-sm font-medium text-foreground mb-1.5">
-              Bio
-            </label>
-            <textarea
-              id="settings-bio"
-              value={form.bio}
-              onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
-              placeholder="Tell others about yourself, your interests and goals..."
-              rows={3}
-              className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none"
-            />
-          </div>
+          {!user.isAdmin && (
+            <>
+              <div>
+                <label
+                  htmlFor="settings-bio"
+                  className="block text-sm font-medium text-foreground mb-1.5"
+                >
+                  Bio
+                </label>
+                <textarea
+                  id="settings-bio"
+                  value={form.bio}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, bio: e.target.value }))
+                  }
+                  placeholder="Tell others about yourself, your interests and goals..."
+                  rows={3}
+                  className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="settings-subjects" className="block text-sm font-medium text-foreground mb-1.5">
-              Subjects{" "}
-              <span className="text-muted-foreground font-normal">
-                (comma-separated)
-              </span>
-            </label>
-            <input
-              id="settings-subjects"
-              type="text"
-              value={form.subjects}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, subjects: e.target.value }))
-              }
-              placeholder="Math, Science, English, CS..."
-              className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
-            />
-          </div>
+              <div>
+                <label
+                  htmlFor="settings-subjects"
+                  className="block text-sm font-medium text-foreground mb-1.5"
+                >
+                  Subjects{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (comma-separated)
+                  </span>
+                </label>
+                <input
+                  id="settings-subjects"
+                  type="text"
+                  value={form.subjects}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, subjects: e.target.value }))
+                  }
+                  placeholder="Math, Science, English, CS..."
+                  className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+                />
+              </div>
+            </>
+          )}
 
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2" role="alert">
+            <p
+              className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2"
+              role="alert"
+            >
               {error}
             </p>
           )}

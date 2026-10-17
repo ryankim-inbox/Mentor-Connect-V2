@@ -85,7 +85,8 @@ def calculate_match_score(student: dict, mentor: dict, question: dict):
     - same location/district matters
     - language match matters
 
-    The only fixes are key-name compatibility and safer None/list handling.
+    A subject or preferred-time overlap contributes once, whether a lesson uses
+    one value or a production request supplies several tags and time slots.
     """
     mentor_subjects = _normalize_list(mentor.get("subjects"))
     mentor_location = _normalize_text(_first_present(mentor, "district", "location"))
@@ -97,19 +98,19 @@ def calculate_match_score(student: dict, mentor: dict, question: dict):
 
     student_location = _normalize_text(_first_present(student, "district", "location"))
 
-    q_subject = _normalize_text(_first_present(question, "subject", "Subject"))
+    q_subjects = _normalize_list(_first_present(question, "subject", "Subject", "subjects"))
     q_location = _normalize_text(_first_present(question, "district", "location", default=student_location))
     q_language = _normalize_text(
         _first_present(question, "preferred_language", "language", "languages")
     )
-    q_time = _normalize_text(_first_present(question, "preferred_time", "time"))
+    q_times = _normalize_list(_first_present(question, "preferred_time", "time", "preferred_times"))
     q_teaching_style = _normalize_text(
         _first_present(question, "preferred_teaching_style", "teaching_style")
     )
 
     score = 0
 
-    if q_subject and q_subject in mentor_subjects:
+    if set(q_subjects).intersection(mentor_subjects):
         score += 50
 
     if q_location and mentor_location and q_location == mentor_location:
@@ -120,7 +121,7 @@ def calculate_match_score(student: dict, mentor: dict, question: dict):
     if q_language and q_language in mentor_languages:
         score += 15
 
-    if q_time and q_time in mentor_available_times:
+    if set(q_times).intersection(mentor_available_times):
         score += 10
 
     if q_teaching_style and q_teaching_style == mentor_teaching_style:
@@ -132,13 +133,14 @@ def calculate_match_score(student: dict, mentor: dict, question: dict):
 def _build_reason(student: dict, mentor: dict, question: dict):
     reasons = []
 
-    q_subject = _normalize_text(_first_present(question, "subject", "Subject"))
-    if q_subject and q_subject in _normalize_list(mentor.get("subjects")):
+    q_subjects = _first_present(question, "subject", "Subject", "subjects")
+    if _overlap(q_subjects, mentor.get("subjects")):
         reasons.append("Same subject")
 
     student_location = _normalize_text(_first_present(student, "district", "location"))
     mentor_location = _normalize_text(_first_present(mentor, "district", "location"))
-    if student_location and mentor_location and student_location == mentor_location:
+    q_location = _normalize_text(_first_present(question, "district", "location", default=student_location))
+    if mentor_location and mentor_location in (q_location, student_location):
         reasons.append("Same location")
 
     q_language = _normalize_text(
@@ -147,8 +149,8 @@ def _build_reason(student: dict, mentor: dict, question: dict):
     if q_language and q_language in _normalize_list(mentor.get("languages")):
         reasons.append("Preferred language match")
 
-    q_time = _normalize_text(_first_present(question, "preferred_time", "time"))
-    if q_time and q_time in _normalize_list(_first_present(mentor, "available_times", "availability", default=[])):
+    q_times = _first_present(question, "preferred_time", "time", "preferred_times")
+    if _overlap(q_times, _first_present(mentor, "available_times", "availability", default=[])):
         reasons.append("Preferred time match")
 
     q_teaching_style = _normalize_text(
@@ -185,6 +187,40 @@ def _load_block_pairs() -> set[tuple[int, int]]:
 
 def _is_blocked(student_id, mentor_id, block_pairs):
     return (student_id, mentor_id) in block_pairs or (mentor_id, student_id) in block_pairs
+
+
+def rank_candidates(student: dict, mentors, question: dict, limit: int = 5):
+    """Rank prefiltered candidates without I/O or mutation of the input records.
+
+    Callers apply their account/block policy before passing candidates. Shared
+    scoring excludes self and zero scores, then breaks ties by numeric user ID.
+    """
+    matches = []
+    student_id = student.get("id")
+    for mentor in mentors:
+        mentor_id = mentor.get("id")
+        if student_id is not None and int(mentor_id) == int(student_id):
+            continue
+        score = calculate_match_score(student, mentor, question)
+        if score <= 0:
+            continue
+        requested_subjects = none_null_list(_first_present(question, "subject", "Subject", "subjects"))
+        mentor_subjects = _normalize_list(mentor.get("subjects"))
+        matches.append({
+            "mentor_id": mentor_id,
+            "mentor_name": mentor.get("name"),
+            "score": score,
+            "reason": _build_reason(student, mentor, question),
+            "matched_subjects": [subject for subject in requested_subjects
+                                 if _normalize_text(subject) in mentor_subjects],
+            "district": _first_present(mentor, "district", "location"),
+            "availability": _first_present(mentor, "available_times", "availability", default=[]),
+            "language": mentor.get("languages") or [],
+            "teaching_style": mentor.get("teaching_style"),
+        })
+    matches.sort(key=lambda item: (-item["score"], int(item["mentor_id"])))
+    return [{"rank": rank, **match}
+            for rank, match in enumerate(matches[:max(0, limit)], start=1)]
 
 
 def find_matches(question_id: int, limit: int = 5):
@@ -249,46 +285,9 @@ def find_matches(question_id: int, limit: int = 5):
             message="Could not load blocked relationships from the database.",
             error=exc,
         )
-    matches = []
-
-    for mentor in mentors:
-        mentor_id = mentor.get("id")
-
-        if mentor_id == student_id:
-            continue
-
-        if _is_blocked(student_id, mentor_id, block_pairs):
-            continue
-
-        score = calculate_match_score(student, mentor, question)
-
-        if score <= 0:
-            continue
-
-        q_subject = _first_present(question, "subject", "Subject")
-        matched_subjects = []
-        if _normalize_text(q_subject) in _normalize_list(mentor.get("subjects")):
-            matched_subjects.append(q_subject)
-
-        matches.append(
-            {
-                "mentor_id": mentor_id,
-                "mentor_name": mentor.get("name"),
-                "score": score,
-                "reason": _build_reason(student, mentor, question),
-                "matched_subjects": matched_subjects,
-                "district": _first_present(mentor, "district", "location"),
-                "availability": mentor.get("available_times") or [],
-                "language": mentor.get("languages") or [],
-                "teaching_style": mentor.get("teaching_style"),
-            }
-        )
-
-    matches.sort(key=lambda item: item["score"], reverse=True)
-
-    ranked_matches = []
-    for rank, match in enumerate(matches[:limit], start=1):
-        ranked_matches.append({"rank": rank, **match})
+    eligible_mentors = [mentor for mentor in mentors
+                        if not _is_blocked(student_id, mentor.get("id"), block_pairs)]
+    ranked_matches = rank_candidates(student, eligible_mentors, question, limit)
 
     return {
         "success": True,

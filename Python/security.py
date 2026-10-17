@@ -1,7 +1,7 @@
 """Database-backed authority: signed session attributes are never privilege grants."""
 from fastapi import HTTPException, Request
 from db import db
-from member_access import has_member_access, has_admin_access
+from member_access import has_member_access, has_admin_access, has_student_access
 from account_policy import is_synthetic_locked
 
 
@@ -40,6 +40,13 @@ def member(user):
 
 def require_member_user(request: Request):
     return member(current_user(request))
+
+
+def require_student_user(request: Request):
+    user = member(current_user(request))
+    if not has_student_access(user):
+        raise HTTPException(403, 'Student access required')
+    return user
 
 
 def require_admin(request: Request):

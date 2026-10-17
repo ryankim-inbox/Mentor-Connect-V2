@@ -60,11 +60,11 @@ const realEmpty = {
   data: [],
 };
 
-async function routeApi(page: Page, handler: (route: Route, path: string) => unknown) {
+async function routeApi(page: Page, handler: (route: Route, path: string) => unknown, options: { student?: boolean } = {}) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/auth/me") {
-      await route.fulfill({ json: user });
+      await route.fulfill({ json: { ...user, isAdmin: !options.student } });
       return;
     }
     const handled = await handler(route, path);
@@ -161,7 +161,7 @@ test("DM TODO preserves the draft and is not rendered as a sent message", async 
       return true;
     }
     return undefined;
-  });
+  }, { student: true });
 
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Open chat" }).click();
@@ -190,7 +190,7 @@ test("chat polls only while real authenticated panel state is mounted", async ({
       return true;
     }
     return undefined;
-  });
+  }, { student: true });
 
   await page.clock.install();
   await page.goto("/dashboard");
@@ -226,7 +226,7 @@ test("chat keeps its draft and backs off after rate limits and network failures"
       return true;
     }
     return undefined;
-  });
+  }, { student: true });
 
   await page.clock.install();
   await page.goto("/dashboard");
@@ -261,7 +261,7 @@ test("cached chat rooms expose background failures and retry without losing the 
       return true;
     }
     return undefined;
-  });
+  }, { student: true });
 
   await page.clock.install();
   await page.goto("/dashboard");
@@ -303,7 +303,7 @@ test("failed application rechecks server state and never shows matched success",
       return true;
     }
     return undefined;
-  });
+  }, { student: true });
 
   await page.goto("/requests/11");
   await page.getByRole("button", { name: "Apply to connect", exact: true }).click();

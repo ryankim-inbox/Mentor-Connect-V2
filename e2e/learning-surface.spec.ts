@@ -54,6 +54,8 @@ const memberLinkNames = [
   "Dashboard",
   "Districts",
   "Requests",
+  "My connections",
+  "Mentors",
   "Notifications",
   "New Request",
   "Matches",
@@ -193,7 +195,7 @@ const fixtures: Record<string, unknown> = {
 
 async function interceptApi(
   page: Page,
-  options: { anonymous?: boolean; failures?: Set<string> } = {},
+  options: { anonymous?: boolean; failures?: Set<string>; student?: boolean } = {},
 ) {
   const unknownRequests: string[] = [];
   let currentRequest = request;
@@ -207,6 +209,15 @@ async function interceptApi(
         status: 401,
         json: { error: "unauthorized" },
       });
+      return;
+    }
+
+    if (pathname === "/api/auth/me") {
+      await route.fulfill({ json: { ...signedInUser, isAdmin: !options.student } });
+      return;
+    }
+    if (/^\/api\/users\/\d+\/activity-rank$/.test(pathname)) {
+      await route.fulfill({ status: 404, json: { detail: "Activity rank unavailable" } });
       return;
     }
 
@@ -254,14 +265,12 @@ test("register loads public district choices from the production bundle", async 
   expect(unknownRequests).toEqual([]);
 });
 
-test("all named learning routes render their real page", async ({ page }) => {
+test("administrator learning routes render their real page", async ({ page }) => {
   const unknownRequests = await interceptApi(page);
   const routes = [
     ["dashboard", "/dashboard", "Welcome back, Classroom"],
     ["districts", "/districts", "High School District Channels"],
     ["requests", "/requests", "Browse Mentorship Requests"],
-    ["notifications", "/notifications", "No notifications yet."],
-    ["new request", "/requests/new", "Post a mentorship request"],
     ["matches", "/recommendations", "Question ID"],
     ["practice", "/practice-lab", "Python Practice Lab"],
     ["analytics", "/analytics", "Mentor Analytics"],
@@ -345,34 +354,43 @@ test("Practice submits location inputs and shows successful compatible or disjoi
   expect(unknownRequests).toEqual([]);
 });
 
-test("mobile menu exposes every signed-in destination and chat", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const unknownRequests = await interceptApi(page);
+for (const student of [false, true]) {
+  const names = memberLinkNames.filter((name) => student
+    ? !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(name)
+    : !["New Request", "Notifications", "My connections"].includes(name));
+  test(`${student ? "student" : "administrator"} mobile menu exposes only its destinations`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const unknownRequests = await interceptApi(page, { student });
+    await page.goto("/dashboard");
+    await page.getByText("Menu", { exact: true }).click();
+    for (const name of names) await expect(page.getByRole("navigation").getByRole("link", { name, exact: true })).toBeVisible();
+    for (const name of memberLinkNames.filter((name) => !names.includes(name)))
+      await expect(page.getByRole("navigation").getByRole("link", { name, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(student ? 1 : 0);
+    expect(unknownRequests).toEqual([]);
+  });
+  test(`${student ? "student" : "administrator"} desktop navigation exposes only its destinations`, async ({ page }) => {
+    const unknownRequests = await interceptApi(page, { student });
+    await page.goto("/dashboard");
+    const navigation = page.getByRole("navigation");
+    for (const name of names) await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
+    for (const name of memberLinkNames.filter((name) => !names.includes(name)))
+      await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
+    expect(unknownRequests).toEqual([]);
+  });
+}
 
-  await page.goto("/dashboard");
-  await page.getByText("Menu", { exact: true }).click();
-
-  for (const name of memberLinkNames) {
-    await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
-  }
-  await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
-  expect(unknownRequests).toEqual([]);
-});
-
-test("desktop navigation exposes every signed-in destination", async ({ page }) => {
-  const unknownRequests = await interceptApi(page);
-
-  await page.goto("/dashboard");
-
-  const navigation = page.getByRole("navigation");
-  for (const name of memberLinkNames) {
-    await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
-  }
+test("student inbox and new request render their real page", async ({ page }) => {
+  const unknownRequests = await interceptApi(page, { student: true });
+  await page.goto("/notifications");
+  await expect(page.getByText("No notifications yet.", { exact: true })).toBeVisible();
+  await page.goto("/requests/new");
+  await expect(page.getByRole("heading", { name: "Post a mentorship request", exact: true })).toBeVisible();
   expect(unknownRequests).toEqual([]);
 });
 
 test("request detail application remains pending through the production control", async ({ page }) => {
-  const unknownRequests = await interceptApi(page);
+  const unknownRequests = await interceptApi(page, { student: true });
 
   await page.goto("/requests/11");
   await expect(page.getByRole("heading", { name: "Calculus study session" })).toBeVisible();
@@ -505,7 +523,7 @@ test("request browsing pages older and newer, resets filters, and discloses prev
 });
 
 test("request creation validates UTF-8 byte lengths before sending", async ({ page }) => {
-  await interceptApi(page);
+  await interceptApi(page, { student: true });
   await page.goto("/requests/new");
   const title = page.getByPlaceholder("e.g. Need help with AP Calculus BC");
   const description = page.getByPlaceholder("Describe what you're looking for, your background, and your goals...");

@@ -1,3 +1,4 @@
+import { ActivityBadge } from "@/components/ActivityBadge";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 
@@ -11,7 +12,7 @@ export default function Profile() {
   }
 
   const roleLabel =
-    user.role === "mentor" ? "Mentor" : user.role === "mentee" ? "Mentee" : "Mentor & Mentee";
+    user.isAdmin ? "Administrator" : user.role === "mentor" ? "Mentor" : user.role === "mentee" ? "Mentee" : "Mentor & Mentee";
   const roleColor =
     user.role === "mentor"
       ? "text-blue-600 bg-blue-50 border-blue-100"
@@ -22,13 +23,14 @@ export default function Profile() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="bg-card border border-card-border rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
+          <div className="flex min-w-0 max-w-full items-start gap-4">
+            <div className="w-16 h-16 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">{user.name}</h1>
+            <div className="min-w-0">
+              <h1 className="break-words text-xl font-bold text-foreground">{user.name}</h1>
+              {!user.isAdmin && user.hasMemberAccess && <ActivityBadge userId={user.id} />}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className={"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border " + roleColor}>
                   {roleLabel}

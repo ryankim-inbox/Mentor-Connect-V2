@@ -40,6 +40,8 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
         cur.execute((ROOT / 'database/migrations/0006_account_trust.sql').read_text())
         cur.execute('SELECT count(*) FROM users WHERE is_verified OR email_verified_at IS NOT NULL')
         assert cur.fetchone()[0] == 0
+        for migration in sorted((ROOT / 'database/migrations').glob('000[7-8]_*.sql')):
+            cur.execute(migration.read_text())
         cur.execute('UPDATE users SET email_verified_at=now(),is_verified=true')
         cur.execute(sql.SQL('CREATE ROLE {} LOGIN').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))
@@ -49,6 +51,8 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
             ('SELECT,INSERT,UPDATE,DELETE', 'requests'),
             ('SELECT,INSERT,DELETE', 'request_tags,blocks'),
             ('SELECT,INSERT', 'chat_messages,dm_conversations,request_events'),
+            ('SELECT,INSERT', 'request_submission_keys,notifications'),
+            ('UPDATE(read_at)', 'notifications'),
             ('SELECT,INSERT,DELETE', 'email_verification_tokens,email_verification_requests'),
         ]
         for privileges, tables in grants:

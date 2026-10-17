@@ -726,6 +726,6 @@ def synthetic_unit_identity(monkeypatch):
     def identity_db():
         state={'id':1}
         def query(sql,params): state['id']=params[0]
-        cursor=SimpleNamespace(execute=query,fetchone=lambda:{'id':state['id'],'email_verified_at':datetime(2026,1,1,tzinfo=timezone.utc)})
+        cursor=SimpleNamespace(execute=query,fetchone=lambda:{'id':state['id'],'is_admin':False,'role':'mentee','email_verified_at':datetime(2026,1,1,tzinfo=timezone.utc)})
         yield SimpleNamespace(cursor=lambda:cursor)
     monkeypatch.setattr(security,'db',identity_db)

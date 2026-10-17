@@ -4,6 +4,7 @@ from typing import Optional, List
 from db import db
 from routers.auth import normalize_display_name, format_user
 from security import require_user, member
+from member_access import has_admin_access
 from routers.chat import _require_unblocked_pair
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -44,14 +45,18 @@ def get_user(user_id: int, request: Request):
         raise HTTPException(status_code=404, detail="User not found")
 
     if viewer["id"] != user_id:
-        with db() as conn:
-            _require_unblocked_pair(conn.cursor(),viewer["id"],user_id)
+        if not has_admin_access(viewer):
+            with db() as conn:
+                _require_unblocked_pair(conn.cursor(),viewer["id"],user_id)
         return {"id":user["id"],"name":user["name"],"subjects":user["subjects"] or [],"createdAt":user["created_at"].isoformat()}
     return format_user(user, user["district_name"])
 
 @router.patch("/users/{user_id}")
 def update_user(user_id: int, body: UpdateUserBody, request: Request):
-    session_user_id = require_user(request)["id"]
+    viewer = require_user(request)
+    session_user_id = viewer['id']
+    if viewer['is_admin'] and body.model_fields_set - {'name'}:
+        raise HTTPException(403, 'Administrators may only change their account name')
     if not session_user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if session_user_id != user_id:

@@ -32,7 +32,10 @@ export function ChatNavigationProvider({ children }: { children: ReactNode }) {
   const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const account = useRef(user?.id);
-  account.current = user?.id;
+  account.current =
+    status === "authenticated" && user?.hasMemberAccess && !user.isAdmin
+      ? user.id
+      : undefined;
   const busy = useRef(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pending, setPending] = useState<number | null>(null);
@@ -40,13 +43,14 @@ export function ChatNavigationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSelection(null);
     setFailure(null);
-  }, [user?.id]);
+  }, [user?.id, user?.isAdmin, user?.hasMemberAccess, status]);
   const openDm = async (userId: number) => {
     const owner = user?.id;
     if (
       !owner ||
       status !== "authenticated" ||
       !user?.hasMemberAccess ||
+      user.isAdmin ||
       busy.current
     )
       return;
@@ -74,7 +78,7 @@ export function ChatNavigationProvider({ children }: { children: ReactNode }) {
   return (
     <ChatNavigation.Provider
       value={{
-        selection: selection?.accountId === user?.id ? selection : null,
+        selection: selection?.accountId === account.current ? selection : null,
         openDm: (id) => void openDm(id),
         pending,
         failure,
@@ -97,6 +101,9 @@ export function MessageButton({
   name: string;
 }) {
   const { openDm, pending, failure } = useChatNavigation();
+  const { user, status } = useAuth();
+  if (status !== "authenticated" || !user?.hasMemberAccess || user.isAdmin)
+    return null;
   return (
     <div>
       <button

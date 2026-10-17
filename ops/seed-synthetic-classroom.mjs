@@ -460,7 +460,7 @@ if (
   main().catch(() => {
     // Database errors can contain row contents or connection details. Keep CLI output safe.
     console.error(
-      "synthetic seed did not confirm completion. Check target, schema 0007, UTC anchor, and batch conflicts; inspect or rerun the same batch before retrying a different plan.",
+      "synthetic seed did not confirm completion. Check target, current schema ledger, UTC anchor, and batch conflicts; inspect or rerun the same batch before retrying a different plan.",
     );
     process.exitCode = 1;
   });

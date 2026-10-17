@@ -23,7 +23,11 @@ function MemberNotifications({ userId }: { userId: number }) {
   const markRead = useMutation({
     mutationFn: () => {
       const current = queryClient.getQueryData<User | null>(getGetMeQueryKey());
-      if (current?.id !== userId || current.hasMemberAccess !== true) {
+      if (
+        current?.id !== userId ||
+        current.hasMemberAccess !== true ||
+        current.isAdmin
+      ) {
         throw new Error("Member session changed");
       }
       pendingRead.current = new AbortController();

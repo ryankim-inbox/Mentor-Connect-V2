@@ -173,7 +173,7 @@ export function createGatewayServer(
     upstreamOrigin: config.upstreamOrigin,
     verifySession: async (request, signal, requestId) => {
       const session = await verifySession(request, config, requestId, signal);
-      assertSessionAuthority(session, "member");
+      assertSessionAuthority(session, "student");
       return session;
     },
     assertOrigin: (request) =>
@@ -848,7 +848,9 @@ async function handleSelfProfileRequest(
     config.requestBodyTimeoutMs,
     clientSignal,
   );
-  if (method === "PATCH") body = validateSelfProfilePatch(body);
+  if (method === "PATCH") {
+    body = validateSelfProfilePatch(body, session.isAdmin);
+  }
 
   if (method !== "GET") {
     takeRateLimit(
@@ -880,7 +882,10 @@ async function handleSelfProfileRequest(
   logRequest(config, trace, requestId, "proxied", response.statusCode);
 }
 
-function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
+function validateSelfProfilePatch(
+  body: Buffer | undefined,
+  isAdmin: boolean,
+): Buffer {
   if (!body || body.length === 0) {
     throw new GatewayHttpError(400, "invalid_profile_update");
   }
@@ -898,6 +903,8 @@ function validateSelfProfilePatch(body: Buffer | undefined): Buffer {
 
   const allowedFields = new Set(["name", "bio", "subjects"]);
   const keys = Object.keys(payload);
+  if (isAdmin && keys.some((key) => key !== "name"))
+    throw new GatewayHttpError(403, "forbidden");
   if (keys.length === 0 || keys.some((key) => !allowedFields.has(key))) {
     throw new GatewayHttpError(400, "invalid_profile_update");
   }
@@ -1064,7 +1071,8 @@ async function verifySession(
   return {
     userId,
     isVerified: (payload as Record<string, unknown>).isVerified === true,
-    hasMemberAccess: (payload as Record<string, unknown>).hasMemberAccess === true,
+    hasMemberAccess:
+      (payload as Record<string, unknown>).hasMemberAccess === true,
     isAdmin: (payload as Record<string, unknown>).isAdmin === true,
     setCookies: getSetCookies(upstream.response.headers),
   };
@@ -1324,10 +1332,11 @@ function sendUpstreamResponse(
     );
     return;
   }
-  // Notification operations have exactly one successful wire shape each.
+  // These operations have exactly one successful wire shape each.
   if (
-    policy.family === "notifications" &&
-    upstream.response.status !== (policy.method === "GET" ? 200 : 204)
+    (policy.family === "notifications" &&
+      upstream.response.status !== (policy.method === "GET" ? 200 : 204)) ||
+    (policy.family === "activity-ranks" && upstream.response.status !== 200)
   ) {
     sendGatewayError(response, 502, "backend_error", requestId);
     return;
@@ -1344,6 +1353,11 @@ function sendUpstreamResponse(
       policy.template,
       policy.method,
     );
+    if (
+      policy.family === "activity-ranks" &&
+      (payload as { userId: number }).userId !== policy.resourceId
+    )
+      throw new TypeError("invalid_activity_profile");
   } catch {
     sendGatewayError(response, 502, "backend_error", requestId);
     return;
@@ -1440,9 +1454,11 @@ function logRequest(
 
 function assertSessionAuthority(
   session: SessionVerification,
-  authority: "session" | "member" | "admin",
+  authority: "session" | "member" | "student" | "admin",
 ): void {
   if (authority !== "session" && !session.hasMemberAccess)
+    throw new GatewayHttpError(403, "forbidden");
+  if (authority === "student" && session.isAdmin)
     throw new GatewayHttpError(403, "forbidden");
   if (authority === "admin" && (!session.isVerified || !session.isAdmin))
     throw new GatewayHttpError(403, "forbidden");

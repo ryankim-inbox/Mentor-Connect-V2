@@ -26,4 +26,6 @@ export interface CreateRequestBody {
    * @items.pattern ^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$
    */
   preferredTimes?: string[];
+  /** Optional stable client publication key. Reusing it with different content returns 409. An explicit identical retry returns the original request; clients must not blindly retry an uncertain publish. */
+  clientRequestId?: string;
 }

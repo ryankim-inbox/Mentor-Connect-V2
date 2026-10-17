@@ -27,7 +27,6 @@ test("administrator learning routes load their required APIs through the built g
     ["/dashboard", "Welcome back, Classroom", ["/api/stats/overview", "/api/requests", "/api/districts"]],
     ["/districts", "High School District Channels", ["/api/districts"]],
     ["/requests", "Browse Mentorship Requests", ["/api/requests", "/api/tags"]],
-    ["/requests/new", "Post a mentorship request", ["/api/tags", "/api/districts"]],
     ["/recommendations", "Top mentors for you", ["/api/practice/matching/1", "/api/practice/blocks/status"]],
     ["/practice-lab", "Python Practice Lab", ["/api/practice/status", "/api/practice/locations/status", "/api/practice/blocks/status"]],
     ["/analytics", "Mentor Analytics", ["/api/analysis/status", "/api/analytics/weekly-matches", "/api/analytics/popular-subjects", "/api/analytics/popular-time-slots", "/api/analytics/mentor-response-rates"]],

@@ -227,6 +227,8 @@ export interface CreateRequestBody {
    * @items.pattern ^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$
    */
   preferredTimes?: string[];
+  /** Optional stable client publication key. Reusing it with different content returns 409. An explicit identical retry returns the original request; clients must not blindly retry an uncertain publish. */
+  clientRequestId?: string;
 }
 
 /**
@@ -275,6 +277,12 @@ export interface CreateReportBody {
    * @nullable
    */
   description?: string | null;
+  /**
+   * When present, report this request. reportedUserId must equal its server-resolved author.
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  requestId?: number;
 }
 
 export interface BlockUserBody {
@@ -904,6 +912,14 @@ export const ModerationReportStatus = {
   dismissed: "dismissed",
 } as const;
 
+export type ModerationReportTargetType =
+  (typeof ModerationReportTargetType)[keyof typeof ModerationReportTargetType];
+
+export const ModerationReportTargetType = {
+  profile: "profile",
+  request: "request",
+} as const;
+
 export interface ModerationReport {
   /**
    * @minimum 1
@@ -942,6 +958,20 @@ export interface ModerationReport {
   /** @nullable */
   reviewedAt: string | null;
   createdAt: string;
+  targetType: ModerationReportTargetType;
+  /**
+   * Null for profile reports and deleted requests.
+   * @minimum 1
+   * @maximum 2147483647
+   * @nullable
+   */
+  requestId: number | null;
+  /**
+   * Server-captured title retained for moderation after request deletion.
+   * @maxLength 200
+   * @nullable
+   */
+  requestTitle: string | null;
 }
 
 export interface EditCommentBody {
@@ -950,6 +980,51 @@ export interface EditCommentBody {
    * @maxLength 2000
    */
   body: string;
+}
+
+/**
+ * Absolute distinct-partner thresholds: 1, 3, 5, 10, 20, 35, 50, 75, 100 respectively. Null for zero activity.
+ * @nullable
+ */
+export type ActivityRankTier =
+  | (typeof ActivityRankTier)[keyof typeof ActivityRankTier]
+  | null;
+
+export const ActivityRankTier = {
+  Bronze: "Bronze",
+  Silver: "Silver",
+  Gold: "Gold",
+  Platinum: "Platinum",
+  Emerald: "Emerald",
+  Diamond: "Diamond",
+  Master: "Master",
+  Grand_Master: "Grand Master",
+  Challenger: "Challenger",
+} as const;
+
+export interface ActivityRank {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  userId: number;
+  /**
+   * @minimum 0
+   * @maximum 2147483647
+   */
+  distinctPartners: number;
+  /**
+   * Competition rank among eligible students, null when distinctPartners is zero.
+   * @minimum 1
+   * @maximum 2147483647
+   * @nullable
+   */
+  rank: number | null;
+  /**
+   * Absolute distinct-partner thresholds: 1, 3, 5, 10, 20, 35, 50, 75, 100 respectively. Null for zero activity.
+   * @nullable
+   */
+  tier: ActivityRankTier;
 }
 
 /**

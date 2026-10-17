@@ -34,7 +34,7 @@ export default function Requests() {
           <h1 className="text-2xl font-bold text-foreground">Browse Mentorship Requests</h1>
           <p className="text-muted-foreground mt-1">Find a mentor or connect with someone to mentor</p>
         </div>
-        {user && (
+        {user && !user.isAdmin && (
           <Link href="/requests/new">
             <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors">
               Post a request
@@ -105,7 +105,7 @@ export default function Requests() {
             <div className="text-center py-16 text-muted-foreground">
               <p className="text-lg font-medium mb-2">{before ? "No older requests match your filters" : "No requests match your filters"}</p>
               <p className="text-sm mb-4">{before ? "Use Newer requests to return to the previous page." : "Try changing the filters or be the first to post"}</p>
-              {user && !before && (
+              {user && !user.isAdmin && !before && (
                 <Link href="/requests/new">
                   <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90">
                     Post a request
