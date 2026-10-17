@@ -54,6 +54,7 @@ const memberLinkNames = [
   "Dashboard",
   "Districts",
   "Requests",
+  "Notifications",
   "New Request",
   "Matches",
   "Practice",
@@ -84,6 +85,7 @@ const pythonEnvelope = (feature: string, data: unknown) => ({
 
 const fixtures: Record<string, unknown> = {
   "/api/auth/me": signedInUser,
+  "/api/notifications": { unreadCount: 0, items: [] },
   "/api/admin/reports": [],
   "/api/blocks": [],
   "/api/districts": [district],
@@ -258,6 +260,7 @@ test("all named learning routes render their real page", async ({ page }) => {
     ["dashboard", "/dashboard", "Welcome back, Classroom"],
     ["districts", "/districts", "High School District Channels"],
     ["requests", "/requests", "Browse Mentorship Requests"],
+    ["notifications", "/notifications", "No notifications yet."],
     ["new request", "/requests/new", "Post a mentorship request"],
     ["matches", "/recommendations", "Question ID"],
     ["practice", "/practice-lab", "Python Practice Lab"],
