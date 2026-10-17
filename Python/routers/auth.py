@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.concurrency import run_in_threadpool
 from db import db
 import bcrypt
 import re
@@ -128,6 +129,8 @@ def _limit_attempt(cur, user_id, kind):
     # Serialize all token transitions per account, including multi-worker races.
     cur.execute('SELECT * FROM users WHERE id=%s FOR UPDATE', (user_id,))
     user = cur.fetchone()
+    if not user:
+        raise HTTPException(401, 'Not authenticated')
     cur.execute("DELETE FROM email_verification_requests WHERE user_id=%s AND requested_at < now()-interval '1 hour'",(user_id,))
     cur.execute("SELECT count(*) AS n, COALESCE(bool_or(requested_at > now()-interval '60 seconds'),false) AS recent FROM email_verification_requests WHERE user_id=%s AND kind=%s AND requested_at > now()-(CASE WHEN %s='confirm' THEN interval '15 minutes' ELSE interval '1 hour' END)",(user_id,kind,kind))
     history = cur.fetchone()
@@ -139,23 +142,28 @@ def _limit_attempt(cur, user_id, kind):
 
 @router.post('/auth/verification/request',status_code=202)
 async def request_verification(request: Request):
-    user = require_user(request)
+    user = await run_in_threadpool(require_user, request)
     if await request.body():
         raise HTTPException(422,'Request body must be empty')
-    failure = None
+    return await run_in_threadpool(_request_verification, user['id'])
+
+
+def _request_verification(user_id):
+    # Keep the lock, delivery, and commit together without blocking the event loop.
+    delivery_failed = False
     with db() as conn:
         cur = conn.cursor()
-        user = _limit_attempt(cur,user['id'],'request')
+        user = _limit_attempt(cur,user_id,'request')
         token = secrets.token_urlsafe(32)
         try:
             deliver_verification(user['email'],token)
-        except DeliveryUnavailable as exc:
-            failure = str(exc)
+        except DeliveryUnavailable:
+            delivery_failed = True
         else:
             cur.execute('DELETE FROM email_verification_tokens WHERE user_id=%s',(user['id'],))
             cur.execute("INSERT INTO email_verification_tokens(user_id,email,token_hash,expires_at) VALUES (%s,%s,%s,now()+interval '30 minutes')",(user['id'],user['email'],hashlib.sha256(token.encode()).hexdigest()))
-    if failure:
-        raise HTTPException(503,failure)
+    if delivery_failed:
+        raise HTTPException(503, 'Email delivery unavailable')
     return {'message':'Verification email sent'}
 
 
