@@ -22,6 +22,54 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from routers import auth, users, districts, tags, requests, reports, stats, matches, chat
 from api.routers import admin, analytics, practice, python_reports, scheduling
+# Python/dependencies.py
+from fastapi import HTTPException, Depends, status
+
+# Mock function to get current user (replace with your actual auth logic)
+async def get_current_user():
+    # Your JWT decoding / user fetching logic here
+    pass
+
+# Admin role verification dependency
+def verify_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Admin privileges required."
+        )
+    return current_user
+
+
+# Python/routers/questions.py
+from fastapi import APIRouter, BackgroundTasks, Depends
+from services.matching import trigger_match_and_notify
+
+router = APIRouter()
+
+@router.post("/questions")
+async def create_question(
+        question_data: dict,
+        background_tasks: BackgroundTasks
+):
+    # 1. Save the posted question to your database
+    new_question_id = 123  # Replace with actual DB insertion return value
+
+    # 2. Automatically queue the match & notification task in the background
+    background_tasks.add_task(trigger_match_and_notify, new_question_id)
+
+    return {"status": "success", "message": "Question posted successfully!"}
+
+# Python/services/matching.py
+async def trigger_match_and_notify(question_id: int):
+    """
+    Finds relevant mentors/peers matching the question criteria
+    and sends them a notification.
+    """
+    # 1. Fetch question details from DB
+    # 2. Run your match function logic
+    # 3. Trigger email, WebSocket, or push notifications
+    print(f"Triggering matching logic and notifications for question {question_id}...")
+
 
 app = FastAPI(title="PeerBridge Python API")
 
