@@ -92,3 +92,50 @@ def test_gateway_websocket_handshake_denies_revoked_ownership(gateway_server, ba
                      origin='http://127.0.0.1:14200', additional_headers={'Cookie': cookie}, open_timeout=3):
             pytest.fail('Revoked ownership accepted at gateway handshake')
     assert error.value.response.status_code == 403
+
+
+def test_gateway_character_limits_match_python_at_astral_boundary(gateway_server, backend_database):
+    base = gateway_server
+    owner, _ = login(base, 'student001@test.edu')
+    status, row = api(owner, base, 'POST', '/api/requests', {
+        'districtId': 1, 'title': 'E2E TEST Unicode boundaries', 'description': 'Contract only', 'role': 'mentee',
+    })
+    assert status == 201
+    path = f"/api/requests/{row['id']}/comments"
+    at_limit, beyond_limit = '\U00010400' * 2000, '\U00010400' * 2001
+    status, comment = api(owner, base, 'POST', path, {'body': at_limit, 'clientCommentId': str(uuid4())})
+    assert status == 201 and comment['body'] == at_limit
+    comment_path = path + f"/{comment['id']}"
+    assert api(owner, base, 'PATCH', comment_path, {'body': '\U0001f600' * 2000})[0] == 200
+    assert api(owner, base, 'PATCH', comment_path, {'body': beyond_limit})[0] == 422
+    assert api(owner, base, 'POST', path, {'body': beyond_limit, 'clientCommentId': str(uuid4())})[0] == 422
+    assert api(owner, base, 'GET', path)[1][0]['body'] == '\U0001f600' * 2000
+    assert api(owner, base, 'POST', '/api/reports', {'reportedUserId': 501, 'reason': 'other', 'description': at_limit})[0] == 201
+    assert api(owner, base, 'POST', '/api/reports', {'reportedUserId': 501, 'reason': 'other', 'description': beyond_limit})[0] == 422
+    execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=501')
+    admin, _ = login(base, 'mentor501@test.edu')
+    status, reports = api(admin, base, 'GET', '/api/admin/reports')
+    assert status == 200 and reports[0]['description'] == at_limit
+    report_path = f"/api/admin/reports/{reports[0]['id']}"
+    status, report = api(admin, base, 'PATCH', report_path, {'status': 'reviewing', 'note': at_limit})
+    assert status == 200 and report['description'] == at_limit and report['note'] == at_limit
+    assert api(admin, base, 'PATCH', report_path, {'status': 'resolved', 'note': beyond_limit})[0] == 422
+
+
+def test_gateway_preserves_legacy_report_evidence_after_moderation(gateway_server, backend_database):
+    base = gateway_server
+    evidence = 'a' * 4001 + '\U0001f600' * 3001
+    report_id = execute(backend_database,
+                        "INSERT INTO reports (reporter_id,reported_user_id,reason,description) VALUES (1,501,'other',%s) RETURNING id",
+                        (evidence,))[0][0]
+    student, _ = login(base, 'student001@test.edu')
+    assert api(student, base, 'GET', '/api/admin/reports')[0] == 403
+    execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=501')
+    admin, _ = login(base, 'mentor501@test.edu')
+    status, reports = api(admin, base, 'GET', '/api/admin/reports?limit=50')
+    assert status == 200 and reports[0]['description'] == evidence
+    status, report = api(admin, base, 'PATCH', f'/api/admin/reports/{report_id}', {'status': 'resolved', 'note': '\U0001f600' * 2000})
+    assert status == 200 and report['description'] == evidence and report['status'] == 'resolved'
+    assert report['reviewedBy'] == 501 and report['reviewedAt']
+    assert execute(backend_database, 'SELECT description FROM reports WHERE id=%s', (report_id,)) == [(evidence,)]
+    assert api(student, base, 'GET', '/api/admin/reports')[0] == 403

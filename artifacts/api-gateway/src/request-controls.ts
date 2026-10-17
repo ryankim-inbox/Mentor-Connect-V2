@@ -1,3 +1,4 @@
+import { hasAtMostCodePoints } from "./text-limits.js";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 
@@ -217,7 +218,7 @@ export function validateSensitiveBody(
     z
       .string()
       .min(1)
-      .max(max)
+      .refine((v) => hasAtMostCodePoints(v, max))
       .refine((v) => v.trim().length > 0);
   const requestText = (maxBytes: number) =>
     z
@@ -249,7 +250,11 @@ export function validateSensitiveBody(
     schema = z
       .object({
         status: z.enum(["open", "reviewing", "resolved", "dismissed"]),
-        note: z.string().max(2000).nullable().optional(),
+        note: z
+          .string()
+          .refine((v) => hasAtMostCodePoints(v, 2000))
+          .nullable()
+          .optional(),
       })
       .strict();
   else if (
@@ -280,7 +285,11 @@ export function validateSensitiveBody(
           "fake_account",
           "other",
         ]),
-        description: z.string().max(2000).nullable().optional(),
+        description: z
+          .string()
+          .refine((v) => hasAtMostCodePoints(v, 2000))
+          .nullable()
+          .optional(),
       })
       .strict();
   else if (path === "/api/blocks" && method === "POST")

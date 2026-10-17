@@ -521,7 +521,10 @@ export const ListTagsResponse = zod.array(ListTagsResponseItem);
  * @summary Report a user
  */
 
-export const createReportBodyDescriptionMax = 2000;
+export const createReportBodyDescriptionRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const CreateReportBody = zod.object({
   reportedUserId: zod.number().int().min(1),
@@ -532,7 +535,7 @@ export const CreateReportBody = zod.object({
     "fake_account",
     "other",
   ]),
-  description: zod.string().max(createReportBodyDescriptionMax).nullish(),
+  description: zod.string().regex(createReportBodyDescriptionRegExp).nullish(),
 });
 
 export const CreateReportResponse = zod.object({
@@ -751,10 +754,13 @@ export const SendChatRoomMessageParams = zod.object({
   roomId: zod.coerce.number().int(),
 });
 
-export const sendChatRoomMessageBodyBodyMax = 2000;
+export const sendChatRoomMessageBodyBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const SendChatRoomMessageBody = zod.object({
-  body: zod.string().min(1).max(sendChatRoomMessageBodyBodyMax),
+  body: zod.string().min(1).regex(sendChatRoomMessageBodyBodyRegExp),
   clientMessageId: zod
     .string()
     .uuid()
@@ -1014,10 +1020,13 @@ export const SendDmMessageParams = zod.object({
   conversationId: zod.coerce.number().int(),
 });
 
-export const sendDmMessageBodyBodyMax = 2000;
+export const sendDmMessageBodyBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const SendDmMessageBody = zod.object({
-  body: zod.string().min(1).max(sendDmMessageBodyBodyMax),
+  body: zod.string().min(1).regex(sendDmMessageBodyBodyRegExp),
   clientMessageId: zod
     .string()
     .uuid()
@@ -2058,7 +2067,10 @@ export const listRequestCommentsResponseRequestIdMax = 2147483647;
 
 export const listRequestCommentsResponseAuthorIdMax = 2147483647;
 
-export const listRequestCommentsResponseBodyMax = 2000;
+export const listRequestCommentsResponseBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const ListRequestCommentsResponseItem = zod.object({
   id: zod.number().int().min(1).max(listRequestCommentsResponseIdMax),
@@ -2075,7 +2087,7 @@ export const ListRequestCommentsResponseItem = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string().max(listRequestCommentsResponseBodyMax),
+  body: zod.string().regex(listRequestCommentsResponseBodyRegExp),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
@@ -2093,10 +2105,13 @@ export const CreateRequestCommentParams = zod.object({
   id: zod.coerce.number().int().min(1).max(createRequestCommentPathIdMax),
 });
 
-export const createRequestCommentBodyBodyMax = 2000;
+export const createRequestCommentBodyBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const CreateRequestCommentBody = zod.object({
-  body: zod.string().min(1).max(createRequestCommentBodyBodyMax),
+  body: zod.string().min(1).regex(createRequestCommentBodyBodyRegExp),
   parentId: zod.number().int().min(1).nullish(),
   clientCommentId: zod.string().uuid(),
 });
@@ -2107,7 +2122,10 @@ export const createRequestCommentResponseRequestIdMax = 2147483647;
 
 export const createRequestCommentResponseAuthorIdMax = 2147483647;
 
-export const createRequestCommentResponseBodyMax = 2000;
+export const createRequestCommentResponseBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const CreateRequestCommentResponse = zod.object({
   id: zod.number().int().min(1).max(createRequestCommentResponseIdMax),
@@ -2124,7 +2142,7 @@ export const CreateRequestCommentResponse = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string().max(createRequestCommentResponseBodyMax),
+  body: zod.string().regex(createRequestCommentResponseBodyRegExp),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
@@ -2461,9 +2479,10 @@ export const listAdminReportsResponseReporterIdMax = 2147483647;
 
 export const listAdminReportsResponseReportedUserIdMax = 2147483647;
 
-export const listAdminReportsResponseDescriptionMax = 2000;
-
-export const listAdminReportsResponseNoteMax = 2000;
+export const listAdminReportsResponseNoteRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const ListAdminReportsResponseItem = zod.object({
   id: zod.number().int().min(1).max(listAdminReportsResponseIdMax),
@@ -2488,10 +2507,12 @@ export const ListAdminReportsResponseItem = zod.object({
   ]),
   description: zod
     .string()
-    .max(listAdminReportsResponseDescriptionMax)
-    .nullable(),
+    .nullable()
+    .describe(
+      "Preserved report evidence, including legacy descriptions longer than the new-submission limit. Subject to the overall gateway response byte limit; never truncated.",
+    ),
   status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
-  note: zod.string().max(listAdminReportsResponseNoteMax).nullable(),
+  note: zod.string().regex(listAdminReportsResponseNoteRegExp).nullable(),
   reviewedBy: zod.number().int().min(1).nullable(),
   reviewedAt: zod.string().nullable(),
   createdAt: zod.string(),
@@ -2509,11 +2530,14 @@ export const ModerateReportParams = zod.object({
   id: zod.coerce.number().int().min(1).max(moderateReportPathIdMax),
 });
 
-export const moderateReportBodyNoteMax = 2000;
+export const moderateReportBodyNoteRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const ModerateReportBody = zod.object({
   status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
-  note: zod.string().max(moderateReportBodyNoteMax).nullish(),
+  note: zod.string().regex(moderateReportBodyNoteRegExp).nullish(),
 });
 
 export const moderateReportResponseIdMax = 2147483647;
@@ -2522,9 +2546,10 @@ export const moderateReportResponseReporterIdMax = 2147483647;
 
 export const moderateReportResponseReportedUserIdMax = 2147483647;
 
-export const moderateReportResponseDescriptionMax = 2000;
-
-export const moderateReportResponseNoteMax = 2000;
+export const moderateReportResponseNoteRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const ModerateReportResponse = zod.object({
   id: zod.number().int().min(1).max(moderateReportResponseIdMax),
@@ -2549,10 +2574,12 @@ export const ModerateReportResponse = zod.object({
   ]),
   description: zod
     .string()
-    .max(moderateReportResponseDescriptionMax)
-    .nullable(),
+    .nullable()
+    .describe(
+      "Preserved report evidence, including legacy descriptions longer than the new-submission limit. Subject to the overall gateway response byte limit; never truncated.",
+    ),
   status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
-  note: zod.string().max(moderateReportResponseNoteMax).nullable(),
+  note: zod.string().regex(moderateReportResponseNoteRegExp).nullable(),
   reviewedBy: zod.number().int().min(1).nullable(),
   reviewedAt: zod.string().nullable(),
   createdAt: zod.string(),
@@ -2574,10 +2601,13 @@ export const EditRequestCommentParams = zod.object({
     .max(editRequestCommentPathCommentIdMax),
 });
 
-export const editRequestCommentBodyBodyMax = 2000;
+export const editRequestCommentBodyBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const EditRequestCommentBody = zod.object({
-  body: zod.string().min(1).max(editRequestCommentBodyBodyMax),
+  body: zod.string().min(1).regex(editRequestCommentBodyBodyRegExp),
 });
 
 export const editRequestCommentResponseIdMax = 2147483647;
@@ -2586,7 +2616,10 @@ export const editRequestCommentResponseRequestIdMax = 2147483647;
 
 export const editRequestCommentResponseAuthorIdMax = 2147483647;
 
-export const editRequestCommentResponseBodyMax = 2000;
+export const editRequestCommentResponseBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const EditRequestCommentResponse = zod.object({
   id: zod.number().int().min(1).max(editRequestCommentResponseIdMax),
@@ -2603,7 +2636,7 @@ export const EditRequestCommentResponse = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string().max(editRequestCommentResponseBodyMax),
+  body: zod.string().regex(editRequestCommentResponseBodyRegExp),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
@@ -2631,7 +2664,10 @@ export const deleteRequestCommentResponseRequestIdMax = 2147483647;
 
 export const deleteRequestCommentResponseAuthorIdMax = 2147483647;
 
-export const deleteRequestCommentResponseBodyMax = 2000;
+export const deleteRequestCommentResponseBodyRegExp = new RegExp(
+  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "u",
+);
 
 export const DeleteRequestCommentResponse = zod.object({
   id: zod.number().int().min(1).max(deleteRequestCommentResponseIdMax),
@@ -2648,7 +2684,7 @@ export const DeleteRequestCommentResponse = zod.object({
   authorName: zod.string(),
   parentId: zod.number().int().nullable(),
   parentAuthorName: zod.string().nullable(),
-  body: zod.string().max(deleteRequestCommentResponseBodyMax),
+  body: zod.string().regex(deleteRequestCommentResponseBodyRegExp),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),

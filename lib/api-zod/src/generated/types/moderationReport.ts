@@ -28,14 +28,14 @@ export interface ModerationReport {
   reportedUserName: string;
   reason: ModerationReportReason;
   /**
-   * @maxLength 2000
+   * Preserved report evidence, including legacy descriptions longer than the new-submission limit. Subject to the overall gateway response byte limit; never truncated.
    * @nullable
    */
   description: string | null;
   status: ModerationReportStatus;
   /**
-   * @maxLength 2000
    * @nullable
+   * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */
   note: string | null;
   /**

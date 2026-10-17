@@ -9,7 +9,7 @@
 export interface CreateCommentBody {
   /**
    * @minLength 1
-   * @maxLength 2000
+   * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */
   body: string;
   /**

@@ -1,5 +1,6 @@
 import { defineConfig, InputTransformerFn } from "orval";
 import path from "path";
+import { codePointTransformer } from "./code-point-transformer";
 
 const root = path.resolve(__dirname, "..", "..");
 const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
@@ -44,7 +45,7 @@ export default defineConfig({
     input: {
       target: "./openapi.yaml",
       override: {
-        transformer: titleTransformer,
+        transformer: codePointTransformer,
       },
     },
     output: {
