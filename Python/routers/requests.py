@@ -8,6 +8,7 @@ from pydantic import ConfigDict, BaseModel, Field, PositiveInt, field_validator
 from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional, List
 from db import db
+from auto_match import auto_match_request
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 
@@ -212,11 +213,14 @@ def create_request(body: CreateRequestBody, request: Request):
                         (req["id"], tag_id),
                     )
 
-            return build_request_response(cur, req)
+            response = build_request_response(cur, req)
     except ForeignKeyViolation as exc:
         if exc.diag.constraint_name in ("requests_district_id_fkey", "request_tags_tag_id_fkey"):
             raise HTTPException(status_code=404, detail="District or tag not found") from None
         raise
+
+    auto_match_request(dict(req))
+    return response
 
 @router.get("/requests/{request_id}")
 def get_request(request_id: PositiveInt, request: Request):

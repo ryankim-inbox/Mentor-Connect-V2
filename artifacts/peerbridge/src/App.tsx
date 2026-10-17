@@ -18,6 +18,7 @@ import { RequireAdmin, RequireAuth } from "@/components/RequireAuth";
 import { releaseSurface } from "@/lib/release-flags";
 
 const Connections = lazy(() => import("@/pages/Connections"));
+const Notifications = lazy(() => import("@/pages/Notifications"));
 const Register = lazy(() => import("@/pages/Register"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Districts = lazy(() => import("@/pages/Districts"));
@@ -141,6 +142,11 @@ function Router() {
           <Route path={releaseSurface.appRoutes.requests}>
             <RequireAuth>
               <Requests />
+            </RequireAuth>
+          </Route>
+          <Route path="/notifications">
+            <RequireAuth>
+              <Notifications />
             </RequireAuth>
           </Route>
           <Route path="/connections">

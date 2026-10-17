@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useNotifications } from "@/lib/notifications";
 import { releaseSurface } from "@/lib/release-flags";
 
 const memberLinks = [
@@ -8,6 +9,7 @@ const memberLinks = [
   ["Districts", releaseSurface.appRoutes.districts],
   ["Requests", releaseSurface.appRoutes.requests],
   ["My connections", "/connections"],
+  ["Notifications", "/notifications"],
   ["New Request", "/requests/new"],
   ["Mentors", "/mentors"],
   ["Matches", releaseSurface.appRoutes.matching],
@@ -21,13 +23,16 @@ const memberLinks = [
 
 function MemberLinks({ className }: { className: string }) {
   const { user, status } = useAuth();
+  const notifications = useNotifications();
+  const unread = notifications.isSuccess ? notifications.data.unreadCount : 0;
   const links = memberLinks.filter(([label]) => {
     if (["Profile", "Settings"].includes(label)) return true;
     if (status !== "authenticated" || !user?.hasMemberAccess) return false;
     return (
       !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
         label,
-      ) || (user.isVerified && user.isAdmin)
+      ) ||
+      (user.isVerified && user.isAdmin)
     );
   });
   return (
@@ -39,6 +44,11 @@ function MemberLinks({ className }: { className: string }) {
           className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           {label}
+          {label === "Notifications" && unread > 0 && (
+            <span className="ml-1 rounded-full bg-red-600 px-1.5 text-xs text-white">
+              {unread}
+            </span>
+          )}
         </Link>
       ))}
     </div>
@@ -75,7 +85,9 @@ export function Navbar() {
       )}
       {user && !user.isVerified && (
         <p className="px-4 py-2 text-sm">
-          {user.hasMemberAccess ? "Test member access · Email ownership unverified" : "Email ownership pending."}{" "}
+          {user.hasMemberAccess
+            ? "Test member access · Email ownership unverified"
+            : "Email ownership pending."}{" "}
           <Link href="/verify-email" className="underline">
             Verify email
           </Link>

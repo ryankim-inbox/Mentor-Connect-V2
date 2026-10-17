@@ -32,6 +32,11 @@
       "id": "0006_account_trust",
       "path": "0006_account_trust.sql",
       "sha256": "744fa0f04b51fd8a49f29084b06a5486126668e5ab6cd90911c0832a6dd7279f"
+    },
+    {
+      "id": "0007_notifications",
+      "path": "0007_notifications.sql",
+      "sha256": "a04b73684422bb0cc73ca9552774328b37cacebf360bd8de21e13282c222b8b6"
     }
   ]
 }

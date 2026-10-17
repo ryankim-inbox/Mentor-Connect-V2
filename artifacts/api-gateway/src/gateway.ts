@@ -1324,6 +1324,14 @@ function sendUpstreamResponse(
     );
     return;
   }
+  // Notification operations have exactly one successful wire shape each.
+  if (
+    policy.family === "notifications" &&
+    upstream.response.status !== (policy.method === "GET" ? 200 : 204)
+  ) {
+    sendGatewayError(response, 502, "backend_error", requestId);
+    return;
+  }
   if (upstream.response.status === 204) {
     response.writeHead(204, { "x-request-id": requestId });
     response.end();
