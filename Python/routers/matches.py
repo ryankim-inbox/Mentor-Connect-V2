@@ -1,11 +1,13 @@
+from fastapi import Depends
+from security import require_admin
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import ConfigDict, BaseModel, Field, PositiveInt
 
 import integration_api
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/matches/{question_id}")
@@ -17,6 +19,7 @@ def get_matches(question_id: PositiveInt, limit: Annotated[int, Query(ge=1, le=2
 
 
 class MatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     question_id: PositiveInt
     limit: int = Field(default=5, ge=1, le=20)
 

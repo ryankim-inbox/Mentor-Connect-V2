@@ -10,6 +10,7 @@ const accountA = {
   bio: "Original bio",
   subjects: ["Math"],
   isVerified: true,
+  isAdmin: false,
   createdAt: "2026-01-01T00:00:00Z",
 };
 const accountB = {

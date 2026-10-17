@@ -2,9 +2,11 @@
 import asyncio
 from contextlib import contextmanager
 from types import SimpleNamespace
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import BackgroundTasks
+import security
 from routers import chat
 
 
@@ -38,3 +40,15 @@ def test_only_committed_messages_schedule_broadcast(monkeypatch, kind, commit_fa
         send(1, chat.SendMessageBody(body='hello'), SimpleNamespace(session={'user_id': 1}), tasks)
     asyncio.run(tasks())
     assert events == ([] if commit_fails else ['commit', 7])
+
+
+@pytest.fixture(autouse=True)
+def synthetic_unit_identity(monkeypatch):
+    """Only this unit module: model a persisted verified account for SQL fakes."""
+    @contextmanager
+    def identity_db():
+        state={'id':1}
+        def query(sql,params): state['id']=params[0]
+        cursor=SimpleNamespace(execute=query,fetchone=lambda:{'id':state['id'],'email_verified_at':datetime(2026,1,1,tzinfo=timezone.utc)})
+        yield SimpleNamespace(cursor=lambda:cursor)
+    monkeypatch.setattr(security,'db',identity_db)

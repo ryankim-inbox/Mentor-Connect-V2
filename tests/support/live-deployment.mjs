@@ -12,7 +12,10 @@ import { createReadinessChecker } from "../../artifacts/api-gateway/dist/readine
 import { bootstrapClassroom } from "../../ops/bootstrap-classroom.mjs";
 import { verifySchemaAssets } from "../../lib/db/tools/schema-assets.mjs";
 import { runMentorshipJourney } from "./mentorship-journey.mjs";
+import { runAccountTrustJourney } from "./account-trust-journey.mjs";
+import { runReportModerationJourney } from "./report-moderation-journey.mjs";
 import { runLiveChat } from "../../scripts/smoke-live-chat.mjs";
+import { containerRuntime } from "./container-runtime.mjs";
 const { Client } = createRequire(
   new URL("../../lib/db/package.json", import.meta.url),
 )("pg");
@@ -26,6 +29,7 @@ await db.connect();
 const { ledger } = await verifySchemaAssets({ rootDir: root });
 await bootstrapClassroom({ client: db, ledger, appSha: "448e39ff" });
 await db.query(readFileSync("tests/fixtures/chat-canonical.sql", "utf8"));
+await db.query(readFileSync("tests/fixtures/account-trust-verified.sql", "utf8"));
 await db.end();
 const key = path.join(temp, "key.pem"),
   cert = path.join(temp, "cert.pem");
@@ -57,6 +61,8 @@ const backendPort = await listen(portFinder);
 await new Promise((resolve) => portFinder.close(resolve));
 let python, gateway, checker, browser, containerId, gatewayPort;
 const containerImage = process.env.DEPLOYMENT_TEST_IMAGE;
+let developmentDelivery = !containerImage;
+const ownershipOutbox = path.join(temp, "ownership-outbox");
 const sockets = new Set();
 const tls = httpsServer(
   { key: readFileSync(key), cert: readFileSync(cert) },
@@ -130,7 +136,10 @@ async function startPython() {
         ...process.env,
         DATABASE_URL: dsn,
         SESSION_SECRET: "local-test-session-secret-is-long-enough",
-        NODE_ENV: "production",
+        NODE_ENV: developmentDelivery ? "test" : "production",
+        EMAIL_DELIVERY_MODE: developmentDelivery ? "development-file" : "disabled",
+        EMAIL_DEV_OUTBOX_DIR: ownershipOutbox,
+        APP_ORIGIN: origin,
       },
       stdio: "ignore",
     },
@@ -176,12 +185,17 @@ async function startStack() {
     await startGateway();
     return;
   }
-  const url = new URL(dsn);
-  url.hostname = "host.docker.internal";
+  const portFinder = net.createServer();
+  const availablePort = await listen(portFinder);
+  await new Promise((resolve) => portFinder.close(resolve));
+  const runtime = containerRuntime({
+    databaseUrl: dsn, port: availablePort, platform: process.platform,
+    cpus: process.env.DEPLOYMENT_TEST_CPUS || "0.1",
+  });
   const envFile = path.join(temp, "container.env");
   writeFileSync(
     envFile,
-    `DATABASE_URL=${url.href}\nREADINESS_DATABASE_URL=${url.href}\nSESSION_SECRET=local-test-session-secret-is-long-enough\nGATEWAY_PUBLIC_ORIGIN=${origin}\n`,
+    `DATABASE_URL=${runtime.databaseUrl}\nREADINESS_DATABASE_URL=${runtime.databaseUrl}\nSESSION_SECRET=local-test-session-secret-is-long-enough\nGATEWAY_PUBLIC_ORIGIN=${origin}\nPORT=${runtime.port}\n`,
     { mode: 0o600 },
   );
   containerId = execFileSync(
@@ -190,11 +204,7 @@ async function startStack() {
       "run",
       "-d",
       "--rm",
-      "--memory=512m",
-      "--memory-swap=512m",
-      "--cpus=0.1",
-      "-p",
-      "127.0.0.1::10000",
+      ...runtime.dockerArgs,
       "--env-file",
       envFile,
       containerImage,
@@ -204,12 +214,19 @@ async function startStack() {
   const inspected = JSON.parse(
     execFileSync("docker", ["inspect", containerId], { encoding: "utf8" }),
   );
-  gatewayPort = Number(
+  gatewayPort = process.platform === "linux" ? runtime.port : Number(
     inspected[0].NetworkSettings.Ports["10000/tcp"][0].HostPort,
   );
-  for (let attempt = 0; attempt < 150; attempt++) {
+  console.log(JSON.stringify({ task: "container-runtime", platform: process.platform,
+    cpus: process.env.DEPLOYMENT_TEST_CPUS || "0.1", limitMiB: 512 }));
+  // A 0.1-CPU AMD64 image under ARM emulation can need ~50s to start.
+  // Bound the test launch wait without changing the service's request limits.
+  const readinessDeadline = Date.now() + 90_000;
+  while (Date.now() < readinessDeadline) {
     try {
-      if ((await fetch(`http://127.0.0.1:${gatewayPort}/readyz`)).ok) return;
+      if ((await fetch(`http://127.0.0.1:${gatewayPort}/readyz`, {
+        signal: AbortSignal.timeout(2_500),
+      })).ok) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
@@ -247,6 +264,19 @@ try {
     newContext: (options) =>
       browser.newContext({ ...options, ignoreHTTPSErrors: true }),
   };
+  const moderationDb = new Client({ connectionString: dsn });
+  await moderationDb.connect();
+  try {
+    await runReportModerationJourney({ origin, db: moderationDb }, localBrowser);
+  } finally {
+    await moderationDb.end();
+  }
+  if (developmentDelivery) {
+    await runAccountTrustJourney({origin, outbox:ownershipOutbox},localBrowser);
+    await stopStack();
+    developmentDelivery = false;
+    await startStack();
+  }
   const config = {
     origin,
     credentials: {

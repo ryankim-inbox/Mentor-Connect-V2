@@ -90,7 +90,7 @@ test("forwards one valid request from every REST family with exact method, targe
 
     if (request.url === "/api/auth/me") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify(userFixture));
+      response.end(JSON.stringify({ ...userFixture, isAdmin: true }));
       return;
     }
     if (request.url === "/api/users/2") {
@@ -326,7 +326,7 @@ test("forwards every allowed raw practice module once after session validation",
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
       request.url === "/api/auth/me"
-        ? JSON.stringify(userFixture)
+        ? JSON.stringify({ ...userFixture, isAdmin: true })
         : '{"success":true,"status":"connected"}',
     );
   });
@@ -365,7 +365,7 @@ test("limits the practice location test body to 16 KiB before its upstream route
     calls.push(request.url ?? "/");
     if (request.url === "/api/auth/me") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify(userFixture));
+      response.end(JSON.stringify({ ...userFixture, isAdmin: true }));
       return;
     }
     response.writeHead(200, { "content-type": "application/json" });

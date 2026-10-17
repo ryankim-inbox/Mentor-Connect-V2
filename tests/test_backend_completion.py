@@ -106,6 +106,8 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     mentor, _ = login(base, "completion-mentor@test.edu")
     student_id = call(student, "GET", "/api/auth/me")["id"]
     mentor_id = call(mentor, "GET", "/api/auth/me")["id"]
+    sql("UPDATE users SET email_verified_at=now(),is_verified=true WHERE id IN (%s,%s)",(student_id,mentor_id))
+    sql("UPDATE users SET is_admin=true WHERE id=%s",(student_id,))
     profile_path = f"/api/users/{student_id}"
     call(student, "PATCH", profile_path, {"bio": "Synthetic bio", "subjects": ["Math"]})
     call(student, "PATCH", profile_path, {"bio": ""})

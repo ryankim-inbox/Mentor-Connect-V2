@@ -10,7 +10,8 @@ export const signedInUser = {
   districtName: "Classroom North",
   bio: "",
   subjects: ["Math"],
-  isVerified: false,
+  isVerified: true,
+  isAdmin: false,
   createdAt: "2026-09-09T00:00:00Z",
 };
 
@@ -158,6 +159,9 @@ export const fixtures: Record<string, unknown> = {
 
 export const fixtureAccounts = {
   mentor: signedInUser,
+  both: { ...signedInUser, id: 3, name: "Classroom Both", email: "both@classroom.example.edu", role: "both" },
+  unverified: { ...signedInUser, id: 4, name: "Pending Member", email: "pending@classroom.example.edu", isVerified: false },
+  admin: { ...signedInUser, id: 5, name: "Classroom Administrator", email: "admin@classroom.example.edu", isAdmin: true },
   mentee: { ...signedInUser, id: 2, name: 'Classroom Mentee', email: 'mentee@classroom.example.edu', role: 'mentee', bio: 'Mentee fixture profile' },
 };
 export const fixtureRooms = [{ id: 1, type: 'global', districtId: null, name: 'Classroom Global' }];

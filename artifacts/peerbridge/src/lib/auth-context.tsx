@@ -52,7 +52,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const logoutPending = useRef<Promise<void> | null>(null);
-  const { data, error, isPending } = useQuery(sessionQueryOptions);
+  const options = {
+    ...sessionQueryOptions,
+    queryFn: async (context: { signal: AbortSignal }) => {
+      const next = await sessionQueryOptions.queryFn(context);
+      const previous = queryClient.getQueryData<User | null>(
+        getGetMeQueryKey(),
+      );
+      if (
+        previous &&
+        (previous.id !== next?.id ||
+          previous.isAdmin !== next.isAdmin ||
+          previous.isVerified !== next.isVerified)
+      ) {
+        await queryClient.cancelQueries({
+          predicate: (q) => q.queryKey[0] !== getGetMeQueryKey()[0],
+        });
+        queryClient.removeQueries({
+          predicate: (q) => q.queryKey[0] !== getGetMeQueryKey()[0],
+        });
+        queryClient.getMutationCache().clear();
+      }
+      return next;
+    },
+  };
+  const { data, error, isPending } = useQuery(options);
   const user = data ?? null;
   const status: AuthStatus = error
     ? "error"
@@ -63,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : "anonymous";
 
   const refreshSession = (): Promise<User | null> =>
-    queryClient.fetchQuery(sessionQueryOptions);
+    queryClient.fetchQuery(options);
 
   const logout = (): Promise<void> => {
     if (logoutPending.current) return logoutPending.current;
@@ -77,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],
       });
+      queryClient.getMutationCache().clear();
       queryClient.setQueryData(getGetMeQueryKey(), null);
       navigate("/");
     })().finally(() => {

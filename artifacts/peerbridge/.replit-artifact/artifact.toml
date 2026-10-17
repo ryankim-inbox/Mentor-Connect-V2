@@ -27,6 +27,14 @@ from = "/login"
 to = "/index.html"
 
 [[services.production.rewrites]]
+from = "/verify-email"
+to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/mentors"
+to = "/index.html"
+
+[[services.production.rewrites]]
 from = "/register"
 to = "/index.html"
 

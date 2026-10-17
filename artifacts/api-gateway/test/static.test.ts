@@ -30,6 +30,8 @@ test("serves the built SPA with safe fallback and security headers", async () =>
     for (const route of [
       "/",
       "/login",
+      "/verify-email",
+      "/mentors",
       "/dashboard",
       "/requests/42",
       "/connections",

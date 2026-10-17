@@ -27,6 +27,11 @@
       "id": "0005_request_interactions",
       "path": "0005_request_interactions.sql",
       "sha256": "d1fc64f655e4bcef0bc0dbea2adf461a8055d3aa1311d7834ec7d289d2150812"
+    },
+    {
+      "id": "0006_account_trust",
+      "path": "0006_account_trust.sql",
+      "sha256": "744fa0f04b51fd8a49f29084b06a5486126668e5ab6cd90911c0832a6dd7279f"
     }
   ]
 }

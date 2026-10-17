@@ -52,7 +52,8 @@ async function fingerprint(client, tables, columns) {
 
 export async function upgradeJourney({ client, assets, target, appSha, audit, mode }) {
   await client.query("SET statement_timeout='60s'; SET lock_timeout='5s'; SET idle_in_transaction_session_timeout='30s'");
-  const { ledger } = assets;
+  // This command retains its approved 0005 target even when later migrations exist.
+  const ledger = {...assets.ledger,migrations:assets.ledger.migrations.filter(m => m.sequence <= 5)};
   if (mode === 'dry-run') {
     await client.query('BEGIN READ ONLY');
     try {
@@ -63,7 +64,7 @@ export async function upgradeJourney({ client, assets, target, appSha, audit, mo
     } catch (error) { await client.query('ROLLBACK'); throw error; }
   }
   check(mode === 'apply');
-  const tables = assets.catalog.tables.filter(t => !['request_applications', 'request_comments'].includes(t)).sort();
+  const tables = assets.catalog.tables.filter(t => !['request_applications', 'request_comments', 'email_verification_tokens', 'email_verification_requests'].includes(t)).sort();
   const columns = {}; let before;
   const result = await runMigrationTransaction({
     client, ledger, appSha,

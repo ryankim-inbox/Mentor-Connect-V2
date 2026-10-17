@@ -6,6 +6,8 @@
     "districts",
     "dm_conversations",
     "dm_messages",
+    "email_verification_requests",
+    "email_verification_tokens",
     "questions",
     "reports",
     "request_applications",
@@ -283,6 +285,78 @@
       "default": null
     },
     {
+      "table": "email_verification_requests",
+      "position": 1,
+      "name": "id",
+      "type": "integer",
+      "nullable": false,
+      "default": "sequence"
+    },
+    {
+      "table": "email_verification_requests",
+      "position": 2,
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "email_verification_requests",
+      "position": 3,
+      "name": "kind",
+      "type": "text",
+      "nullable": false,
+      "default": "'request'::text"
+    },
+    {
+      "table": "email_verification_requests",
+      "position": 4,
+      "name": "requested_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "email_verification_tokens",
+      "position": 1,
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "email_verification_tokens",
+      "position": 2,
+      "name": "email",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "email_verification_tokens",
+      "position": 3,
+      "name": "token_hash",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "email_verification_tokens",
+      "position": 4,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
+      "table": "email_verification_tokens",
+      "position": 5,
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": null
+    },
+    {
       "table": "questions",
       "position": 1,
       "name": "id",
@@ -411,6 +485,38 @@
       "default": "now()"
     },
     {
+      "table": "reports",
+      "position": 7,
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "default": "'open'::text"
+    },
+    {
+      "table": "reports",
+      "position": 8,
+      "name": "note",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 9,
+      "name": "reviewed_by",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 10,
+      "name": "reviewed_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
       "table": "request_applications",
       "position": 1,
       "name": "id",
@@ -513,6 +619,22 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+    },
+    {
+      "table": "request_comments",
+      "position": 8,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "request_comments",
+      "position": 9,
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
     },
     {
       "table": "request_events",
@@ -816,7 +938,7 @@
       "name": "is_verified",
       "type": "boolean",
       "nullable": false,
-      "default": "true"
+      "default": "false"
     },
     {
       "table": "users",
@@ -873,6 +995,22 @@
       "type": "text",
       "nullable": true,
       "default": null
+    },
+    {
+      "table": "users",
+      "position": 17,
+      "name": "email_verified_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 18,
+      "name": "is_admin",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
     }
   ],
   "constraints": [
@@ -1021,6 +1159,48 @@
       "definition": "FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE"
     },
     {
+      "table": "email_verification_requests",
+      "name": "email_verification_requests_kind_check",
+      "type": "c",
+      "definition": "CHECK (kind = ANY (ARRAY['request'::text, 'confirm'::text]))"
+    },
+    {
+      "table": "email_verification_requests",
+      "name": "email_verification_requests_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table": "email_verification_requests",
+      "name": "email_verification_requests_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (user_id)"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_token_hash_check",
+      "type": "c",
+      "definition": "CHECK (token_hash ~ '^[a-f0-9]{64}$'::text)"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_token_hash_key",
+      "type": "u",
+      "definition": "UNIQUE (token_hash)"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_user_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
       "table": "questions",
       "name": "questions_pkey",
       "type": "p",
@@ -1040,6 +1220,12 @@
     },
     {
       "table": "reports",
+      "name": "reports_note_check",
+      "type": "c",
+      "definition": "CHECK (length(note) <= 2000)"
+    },
+    {
+      "table": "reports",
       "name": "reports_pkey",
       "type": "p",
       "definition": "PRIMARY KEY (id)"
@@ -1055,6 +1241,18 @@
       "name": "reports_reporter_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (reporter_id) REFERENCES users(id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_reviewed_by_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (reviewed_by) REFERENCES users(id)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_status_check",
+      "type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['open'::text, 'reviewing'::text, 'resolved'::text, 'dismissed'::text]))"
     },
     {
       "table": "request_applications",
@@ -1250,6 +1448,12 @@
     },
     {
       "table": "users",
+      "name": "users_email_ownership_check",
+      "type": "c",
+      "definition": "CHECK (is_verified = (email_verified_at IS NOT NULL))"
+    },
+    {
+      "table": "users",
       "name": "users_pkey",
       "type": "p",
       "definition": "PRIMARY KEY (id)"
@@ -1348,6 +1552,26 @@
       "definition": "CREATE INDEX idx_dm_messages_conversation_created ON public.dm_messages USING btree (conversation_id, created_at)"
     },
     {
+      "table": "email_verification_requests",
+      "name": "email_verification_requests_pkey",
+      "definition": "CREATE UNIQUE INDEX email_verification_requests_pkey ON public.email_verification_requests USING btree (id)"
+    },
+    {
+      "table": "email_verification_requests",
+      "name": "idx_email_verification_requests_user",
+      "definition": "CREATE INDEX idx_email_verification_requests_user ON public.email_verification_requests USING btree (user_id, kind, requested_at)"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_pkey",
+      "definition": "CREATE UNIQUE INDEX email_verification_tokens_pkey ON public.email_verification_tokens USING btree (user_id)"
+    },
+    {
+      "table": "email_verification_tokens",
+      "name": "email_verification_tokens_token_hash_key",
+      "definition": "CREATE UNIQUE INDEX email_verification_tokens_token_hash_key ON public.email_verification_tokens USING btree (token_hash)"
+    },
+    {
       "table": "questions",
       "name": "idx_questions_preferred_times",
       "definition": "CREATE INDEX idx_questions_preferred_times ON public.questions USING gin (preferred_times)"
@@ -1366,6 +1590,11 @@
       "table": "reports",
       "name": "idx_reports_reported",
       "definition": "CREATE INDEX idx_reports_reported ON public.reports USING btree (reported_user_id)"
+    },
+    {
+      "table": "reports",
+      "name": "idx_reports_status_id",
+      "definition": "CREATE INDEX idx_reports_status_id ON public.reports USING btree (status, id)"
     },
     {
       "table": "reports",

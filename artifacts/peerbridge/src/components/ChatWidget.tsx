@@ -77,12 +77,12 @@ function pollDelay(
 }
 
 export function ChatWidget() {
-  const { user, isLoading } = useAuth();
+  const { user, status } = useAuth();
   const [open, setOpen] = useState(false);
   const { selection } = useChatNavigation();
   useEffect(() => { if (selection) setOpen(true); }, [selection]);
 
-  if (isLoading || !user) return null;
+  if (status !== "authenticated" || !user?.isVerified) return null;
 
   return (
     <>

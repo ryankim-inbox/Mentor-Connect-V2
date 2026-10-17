@@ -38,3 +38,6 @@ export const ListRequestApplicationsParams = api.ListRequestApplicationsParams;
 export type ListRequestApplicationsParams = types.ListRequestApplicationsParams;
 export const ListRequestCommentsParams = api.ListRequestCommentsParams;
 export type ListRequestCommentsParams = types.ListRequestCommentsParams;
+
+export const ModerateReportBody = api.ModerateReportBody;
+export type ModerateReportBody = types.ModerateReportBody;

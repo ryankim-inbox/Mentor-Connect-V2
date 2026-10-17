@@ -24,6 +24,7 @@ import type {
   BlockedUser,
   ChatMessage,
   ChatRoom,
+  ConfirmVerificationBody,
   Connection,
   CreateCommentBody,
   CreateReportBody,
@@ -32,6 +33,7 @@ import type {
   DistrictStats,
   DmConversation,
   DmMessage,
+  EditCommentBody,
   Error400Response,
   Error401Response,
   Error403Response,
@@ -46,10 +48,12 @@ import type {
   GetPracticeMatchingParams,
   GetSchedulingSuggestionsParams,
   HealthStatus,
+  ListAdminReportsParams,
   ListChatRoomMessagesParams,
   ListConnectionsParams,
   ListDistrictsParams,
   ListDmMessagesParams,
+  ListMentorsParams,
   ListRequestActivityParams,
   ListRequestApplicationsParams,
   ListRequestCommentsParams,
@@ -58,8 +62,11 @@ import type {
   MatchRequest,
   MatchingResult,
   MentorActivityEnvelope,
+  MentorDirectoryEntry,
   MentorshipRequest,
   MessageResponse,
+  ModerateReportBody,
+  ModerationReport,
   PopularSubjectsEnvelope,
   PracticeStatus,
   ProfileSummary,
@@ -644,14 +651,14 @@ export const getGetUserUrl = (id: number) => {
 };
 
 /**
- * A signed-in user may request any canonical user id. The gateway exposes only id, name, subjects, and createdAt; the self-only rule applies to PATCH.
- * @summary Get a minimum profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a verified member profile summary
  */
 export const getUser = async (
   id: number,
   options?: Parameters<typeof customFetch>[1],
-): Promise<ProfileSummary> => {
-  return customFetch<ProfileSummary>(getGetUserUrl(id), {
+): Promise<User | ProfileSummary> => {
+  return customFetch<User | ProfileSummary>(getGetUserUrl(id), {
     ...options,
     method: "GET",
   });
@@ -665,6 +672,7 @@ export const getGetUserQueryOptions = <
   TData = Awaited<ReturnType<typeof getUser>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -701,6 +709,7 @@ export type GetUserQueryResult = NonNullable<
 >;
 export type GetUserQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error429Response
   | Error502Response
@@ -709,13 +718,14 @@ export type GetUserQueryError = ErrorType<
 >;
 
 /**
- * @summary Get a minimum profile summary
+ * @summary Get own account or a verified member profile summary
  */
 
 export function useGetUser<
   TData = Awaited<ReturnType<typeof getUser>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -752,7 +762,7 @@ export const updateUser = async (
   id: number,
   updateUserBody: UpdateUserBody,
   options?: Parameters<typeof customFetch>[1],
-): Promise<ProfileSummary> => {
+): Promise<User> => {
   const getHeaders = (
     h?: NonNullable<RequestInit["headers"]>,
   ): Record<string, string | readonly string[]> => {
@@ -774,7 +784,7 @@ export const updateUser = async (
     }
     return headers;
   };
-  return customFetch<ProfileSummary>(getUpdateUserUrl(id), {
+  return customFetch<User>(getUpdateUserUrl(id), {
     ...options,
     method: "PATCH",
     headers: {
@@ -1010,6 +1020,7 @@ export const getGetDistrictQueryOptions = <
   TData = Awaited<ReturnType<typeof getDistrict>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -1052,6 +1063,7 @@ export type GetDistrictQueryResult = NonNullable<
 >;
 export type GetDistrictQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error429Response
   | Error502Response
@@ -1067,6 +1079,7 @@ export function useGetDistrict<
   TData = Awaited<ReturnType<typeof getDistrict>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -1130,6 +1143,7 @@ export const getListRequestsQueryOptions = <
   TData = Awaited<ReturnType<typeof listRequests>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1166,6 +1180,7 @@ export type ListRequestsQueryResult = NonNullable<
 >;
 export type ListRequestsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -1180,6 +1195,7 @@ export function useListRequests<
   TData = Awaited<ReturnType<typeof listRequests>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1253,6 +1269,7 @@ export const getCreateRequestMutationKey = () => ["createRequest"] as const;
 export const getCreateRequestMutationOptions = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -1302,6 +1319,7 @@ export type CreateRequestMutationResult = NonNullable<
 export type CreateRequestMutationBody = BodyType<CreateRequestBody>;
 export type CreateRequestMutationError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -1319,6 +1337,7 @@ export type CreateRequestMutationVariables = {
 export const useCreateRequest = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -1369,6 +1388,7 @@ export const getGetRequestQueryOptions = <
   TData = Awaited<ReturnType<typeof getRequest>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -1412,6 +1432,7 @@ export type GetRequestQueryResult = NonNullable<
 >;
 export type GetRequestQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -1428,6 +1449,7 @@ export function useGetRequest<
   TData = Awaited<ReturnType<typeof getRequest>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -1861,6 +1883,7 @@ export const getListTagsQueryOptions = <
   TData = Awaited<ReturnType<typeof listTags>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1890,6 +1913,7 @@ export type ListTagsQueryResult = NonNullable<
 >;
 export type ListTagsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -1904,6 +1928,7 @@ export function useListTags<
   TData = Awaited<ReturnType<typeof listTags>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -1971,6 +1996,7 @@ export const getCreateReportMutationOptions = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2021,6 +2047,7 @@ export type CreateReportMutationBody = BodyType<CreateReportBody>;
 export type CreateReportMutationError = ErrorType<
   | Error400Response
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -2039,6 +2066,7 @@ export const useCreateReport = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2088,6 +2116,7 @@ export const getListBlocksQueryOptions = <
   TData = Awaited<ReturnType<typeof listBlocks>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -2121,6 +2150,7 @@ export type ListBlocksQueryResult = NonNullable<
 >;
 export type ListBlocksQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -2135,6 +2165,7 @@ export function useListBlocks<
   TData = Awaited<ReturnType<typeof listBlocks>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -2206,6 +2237,7 @@ export const getBlockUserMutationOptions = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2256,6 +2288,7 @@ export type BlockUserMutationBody = BodyType<BlockUserBody>;
 export type BlockUserMutationError = ErrorType<
   | Error400Response
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -2272,6 +2305,7 @@ export const useBlockUser = <
   TError = ErrorType<
     | Error400Response
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2319,6 +2353,7 @@ export const getUnblockUserMutationKey = () => ["unblockUser"] as const;
 export const getUnblockUserMutationOptions = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2368,6 +2403,7 @@ export type UnblockUserMutationResult = NonNullable<
 
 export type UnblockUserMutationError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -2383,6 +2419,7 @@ export type UnblockUserMutationVariables = { blockedUserId: number };
 export const useUnblockUser = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -2514,6 +2551,7 @@ export const getGetDistrictStatsQueryOptions = <
   TData = Awaited<ReturnType<typeof getDistrictStats>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -2556,6 +2594,7 @@ export type GetDistrictStatsQueryResult = NonNullable<
 >;
 export type GetDistrictStatsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error429Response
   | Error502Response
@@ -2571,6 +2610,7 @@ export function useGetDistrictStats<
   TData = Awaited<ReturnType<typeof getDistrictStats>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -3593,6 +3633,7 @@ export const getGetMatchesQueryOptions = <
   TData = Awaited<ReturnType<typeof getMatches>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -3638,6 +3679,7 @@ export type GetMatchesQueryResult = NonNullable<
 >;
 export type GetMatchesQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error422Response
   | Error429Response
@@ -3654,6 +3696,7 @@ export function useGetMatches<
   TData = Awaited<ReturnType<typeof getMatches>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error422Response
     | Error429Response
@@ -3730,6 +3773,7 @@ export const getPostMatchesMutationKey = () => ["postMatches"] as const;
 export const getPostMatchesMutationOptions = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -3778,6 +3822,7 @@ export type PostMatchesMutationResult = NonNullable<
 export type PostMatchesMutationBody = BodyType<MatchRequest>;
 export type PostMatchesMutationError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -3792,6 +3837,7 @@ export type PostMatchesMutationVariables = { data: BodyType<MatchRequest> };
 export const usePostMatches = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -3840,6 +3886,7 @@ export const getGetPracticeStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getPracticeStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -3873,6 +3920,7 @@ export type GetPracticeStatusQueryResult = NonNullable<
 >;
 export type GetPracticeStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -3887,6 +3935,7 @@ export function useGetPracticeStatus<
   TData = Awaited<ReturnType<typeof getPracticeStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -3959,6 +4008,7 @@ export const getGetPracticeMatchingQueryOptions = <
   TData = Awaited<ReturnType<typeof getPracticeMatching>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -4005,6 +4055,7 @@ export type GetPracticeMatchingQueryResult = NonNullable<
 >;
 export type GetPracticeMatchingQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error429Response
   | Error502Response
@@ -4020,6 +4071,7 @@ export function useGetPracticeMatching<
   TData = Awaited<ReturnType<typeof getPracticeMatching>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -4075,6 +4127,7 @@ export const getGetPracticeLocationsStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getPracticeLocationsStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4109,6 +4162,7 @@ export type GetPracticeLocationsStatusQueryResult = NonNullable<
 >;
 export type GetPracticeLocationsStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4123,6 +4177,7 @@ export function useGetPracticeLocationsStatus<
   TData = Awaited<ReturnType<typeof getPracticeLocationsStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4194,6 +4249,7 @@ export const getTestPracticeLocationsMutationKey = () =>
 export const getTestPracticeLocationsMutationOptions = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -4243,6 +4299,7 @@ export type TestPracticeLocationsMutationBody =
   BodyType<TestPracticeLocationsBody>;
 export type TestPracticeLocationsMutationError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error422Response
   | Error429Response
   | Error502Response
@@ -4259,6 +4316,7 @@ export type TestPracticeLocationsMutationVariables = {
 export const useTestPracticeLocations = <
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error422Response
     | Error429Response
     | Error502Response
@@ -4307,6 +4365,7 @@ export const getGetPracticeBlocksStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getPracticeBlocksStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4341,6 +4400,7 @@ export type GetPracticeBlocksStatusQueryResult = NonNullable<
 >;
 export type GetPracticeBlocksStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4355,6 +4415,7 @@ export function useGetPracticeBlocksStatus<
   TData = Awaited<ReturnType<typeof getPracticeBlocksStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4406,6 +4467,7 @@ export const getGetPracticeRawModuleQueryOptions = <
   TData = Awaited<ReturnType<typeof getPracticeRawModule>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -4450,6 +4512,7 @@ export type GetPracticeRawModuleQueryResult = NonNullable<
 >;
 export type GetPracticeRawModuleQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error404Response
   | Error429Response
   | Error502Response
@@ -4465,6 +4528,7 @@ export function useGetPracticeRawModule<
   TData = Awaited<ReturnType<typeof getPracticeRawModule>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error404Response
     | Error429Response
     | Error502Response
@@ -4515,6 +4579,7 @@ export const getGetAnalysisStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getAnalysisStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4548,6 +4613,7 @@ export type GetAnalysisStatusQueryResult = NonNullable<
 >;
 export type GetAnalysisStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4562,6 +4628,7 @@ export function useGetAnalysisStatus<
   TData = Awaited<ReturnType<typeof getAnalysisStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4608,6 +4675,7 @@ export const getGetWeeklyMatchesQueryOptions = <
   TData = Awaited<ReturnType<typeof getWeeklyMatches>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4641,6 +4709,7 @@ export type GetWeeklyMatchesQueryResult = NonNullable<
 >;
 export type GetWeeklyMatchesQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4655,6 +4724,7 @@ export function useGetWeeklyMatches<
   TData = Awaited<ReturnType<typeof getWeeklyMatches>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4701,6 +4771,7 @@ export const getGetPopularSubjectsQueryOptions = <
   TData = Awaited<ReturnType<typeof getPopularSubjects>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4734,6 +4805,7 @@ export type GetPopularSubjectsQueryResult = NonNullable<
 >;
 export type GetPopularSubjectsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4748,6 +4820,7 @@ export function useGetPopularSubjects<
   TData = Awaited<ReturnType<typeof getPopularSubjects>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4794,6 +4867,7 @@ export const getGetPopularTimeSlotsQueryOptions = <
   TData = Awaited<ReturnType<typeof getPopularTimeSlots>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4827,6 +4901,7 @@ export type GetPopularTimeSlotsQueryResult = NonNullable<
 >;
 export type GetPopularTimeSlotsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4841,6 +4916,7 @@ export function useGetPopularTimeSlots<
   TData = Awaited<ReturnType<typeof getPopularTimeSlots>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4888,6 +4964,7 @@ export const getGetMentorResponseRatesQueryOptions = <
   TData = Awaited<ReturnType<typeof getMentorResponseRates>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4922,6 +4999,7 @@ export type GetMentorResponseRatesQueryResult = NonNullable<
 >;
 export type GetMentorResponseRatesQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -4936,6 +5014,7 @@ export function useGetMentorResponseRates<
   TData = Awaited<ReturnType<typeof getMentorResponseRates>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -4982,6 +5061,7 @@ export const getGetPythonReportsStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getPythonReportsStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5016,6 +5096,7 @@ export type GetPythonReportsStatusQueryResult = NonNullable<
 >;
 export type GetPythonReportsStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5030,6 +5111,7 @@ export function useGetPythonReportsStatus<
   TData = Awaited<ReturnType<typeof getPythonReportsStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5076,6 +5158,7 @@ export const getGetPythonReportsSummaryQueryOptions = <
   TData = Awaited<ReturnType<typeof getPythonReportsSummary>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5110,6 +5193,7 @@ export type GetPythonReportsSummaryQueryResult = NonNullable<
 >;
 export type GetPythonReportsSummaryQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5124,6 +5208,7 @@ export function useGetPythonReportsSummary<
   TData = Awaited<ReturnType<typeof getPythonReportsSummary>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5170,6 +5255,7 @@ export const getGetSchedulingStatusQueryOptions = <
   TData = Awaited<ReturnType<typeof getSchedulingStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5203,6 +5289,7 @@ export type GetSchedulingStatusQueryResult = NonNullable<
 >;
 export type GetSchedulingStatusQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5217,6 +5304,7 @@ export function useGetSchedulingStatus<
   TData = Awaited<ReturnType<typeof getSchedulingStatus>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5263,6 +5351,7 @@ export const getGetSchedulingOverviewQueryOptions = <
   TData = Awaited<ReturnType<typeof getSchedulingOverview>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5296,6 +5385,7 @@ export type GetSchedulingOverviewQueryResult = NonNullable<
 >;
 export type GetSchedulingOverviewQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5310,6 +5400,7 @@ export function useGetSchedulingOverview<
   TData = Awaited<ReturnType<typeof getSchedulingOverview>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5373,6 +5464,7 @@ export const getGetSchedulingSuggestionsQueryOptions = <
   TData = Awaited<ReturnType<typeof getSchedulingSuggestions>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5411,6 +5503,7 @@ export type GetSchedulingSuggestionsQueryResult = NonNullable<
 >;
 export type GetSchedulingSuggestionsQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5425,6 +5518,7 @@ export function useGetSchedulingSuggestions<
   TData = Awaited<ReturnType<typeof getSchedulingSuggestions>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5474,6 +5568,7 @@ export const getGetFlaggedUsersQueryOptions = <
   TData = Awaited<ReturnType<typeof getFlaggedUsers>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -5507,6 +5602,7 @@ export type GetFlaggedUsersQueryResult = NonNullable<
 >;
 export type GetFlaggedUsersQueryError = ErrorType<
   | Error401Response
+  | Error403Response
   | Error429Response
   | Error502Response
   | Error503Response
@@ -5521,6 +5617,7 @@ export function useGetFlaggedUsers<
   TData = Awaited<ReturnType<typeof getFlaggedUsers>>,
   TError = ErrorType<
     | Error401Response
+    | Error403Response
     | Error429Response
     | Error502Response
     | Error503Response
@@ -6528,3 +6625,959 @@ export function useListRequestActivity<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export const getRequestEmailVerificationUrl = () => {
+  return `/api/auth/verification/request`;
+};
+
+/**
+ * @summary Request an email ownership verification link
+ */
+export const requestEmailVerification = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getRequestEmailVerificationUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRequestEmailVerificationMutationKey = () =>
+  ["requestEmailVerification"] as const;
+
+export const getRequestEmailVerificationMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestEmailVerification>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestEmailVerification>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = getRequestEmailVerificationMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestEmailVerification>>,
+    void
+  > = () => {
+    return requestEmailVerification(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestEmailVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestEmailVerification>>
+>;
+
+export type RequestEmailVerificationMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary Request an email ownership verification link
+ */
+export const useRequestEmailVerification = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestEmailVerification>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestEmailVerification>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRequestEmailVerificationMutationOptions(options));
+};
+
+export const getConfirmEmailVerificationUrl = () => {
+  return `/api/auth/verification/confirm`;
+};
+
+/**
+ * @summary Confirm email ownership with a one-use token
+ */
+export const confirmEmailVerification = async (
+  confirmVerificationBody: ConfirmVerificationBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<User> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<User>(getConfirmEmailVerificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(confirmVerificationBody),
+  });
+};
+
+export const getConfirmEmailVerificationMutationKey = () =>
+  ["confirmEmailVerification"] as const;
+
+export const getConfirmEmailVerificationMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmEmailVerification>>,
+    TError,
+    ConfirmEmailVerificationMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmEmailVerification>>,
+  TError,
+  ConfirmEmailVerificationMutationVariables,
+  TContext
+> => {
+  const mutationKey = getConfirmEmailVerificationMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmEmailVerification>>,
+    ConfirmEmailVerificationMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return confirmEmailVerification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmEmailVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmEmailVerification>>
+>;
+export type ConfirmEmailVerificationMutationBody =
+  BodyType<ConfirmVerificationBody>;
+export type ConfirmEmailVerificationMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type ConfirmEmailVerificationMutationVariables = {
+  data: BodyType<ConfirmVerificationBody>;
+};
+
+/**
+ * @summary Confirm email ownership with a one-use token
+ */
+export const useConfirmEmailVerification = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmEmailVerification>>,
+    TError,
+    ConfirmEmailVerificationMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmEmailVerification>>,
+  TError,
+  ConfirmEmailVerificationMutationVariables,
+  TContext
+> => {
+  return useMutation(getConfirmEmailVerificationMutationOptions(options));
+};
+
+export const getListMentorsUrl = (params?: ListMentorsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/mentors?${stringifiedParams}`
+    : `/api/mentors`;
+};
+
+/**
+ * @summary List verified mentors in the current district
+ */
+export const listMentors = async (
+  params?: ListMentorsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<MentorDirectoryEntry[]> => {
+  return customFetch<MentorDirectoryEntry[]>(getListMentorsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMentorsQueryKey = (params?: ListMentorsParams) => {
+  return [`/api/mentors`, ...(params ? [params] : [])] as const;
+};
+
+export const getListMentorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMentors>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListMentorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMentors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMentorsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listMentors>>> = ({
+    signal,
+  }) => listMentors(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMentors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMentorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMentors>>
+>;
+export type ListMentorsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary List verified mentors in the current district
+ */
+
+export function useListMentors<
+  TData = Awaited<ReturnType<typeof listMentors>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListMentorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMentors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMentorsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getListAdminReportsUrl = (params?: ListAdminReportsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/reports?${stringifiedParams}`
+    : `/api/admin/reports`;
+};
+
+/**
+ * @summary List moderation reports
+ */
+export const listAdminReports = async (
+  params?: ListAdminReportsParams,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<ModerationReport[]> => {
+  return customFetch<ModerationReport[]>(getListAdminReportsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminReportsQueryKey = (
+  params?: ListAdminReportsParams,
+) => {
+  return [`/api/admin/reports`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminReports>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListAdminReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminReportsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminReports>>
+  > = ({ signal }) => listAdminReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminReports>>
+>;
+export type ListAdminReportsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary List moderation reports
+ */
+
+export function useListAdminReports<
+  TData = Awaited<ReturnType<typeof listAdminReports>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(
+  params?: ListAdminReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getModerateReportUrl = (id: number) => {
+  return `/api/admin/reports/${id}`;
+};
+
+/**
+ * Update status and record the current administrator and review time. An omitted note preserves the saved note atomically; an explicit null clears it, and a supplied string replaces it.
+ * @summary Review a moderation report
+ */
+export const moderateReport = async (
+  id: number,
+  moderateReportBody: ModerateReportBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<ModerationReport> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<ModerationReport>(getModerateReportUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(moderateReportBody),
+  });
+};
+
+export const getModerateReportMutationKey = () => ["moderateReport"] as const;
+
+export const getModerateReportMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof moderateReport>>,
+    TError,
+    ModerateReportMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof moderateReport>>,
+  TError,
+  ModerateReportMutationVariables,
+  TContext
+> => {
+  const mutationKey = getModerateReportMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof moderateReport>>,
+    ModerateReportMutationVariables
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return moderateReport(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ModerateReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof moderateReport>>
+>;
+export type ModerateReportMutationBody = BodyType<ModerateReportBody>;
+export type ModerateReportMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type ModerateReportMutationVariables = {
+  id: number;
+  data: BodyType<ModerateReportBody>;
+};
+
+/**
+ * @summary Review a moderation report
+ */
+export const useModerateReport = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof moderateReport>>,
+    TError,
+    ModerateReportMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof moderateReport>>,
+  TError,
+  ModerateReportMutationVariables,
+  TContext
+> => {
+  return useMutation(getModerateReportMutationOptions(options));
+};
+
+export const getEditRequestCommentUrl = (id: number, commentId: number) => {
+  return `/api/requests/${id}/comments/${commentId}`;
+};
+
+/**
+ * @summary Edit an own comment
+ */
+export const editRequestComment = async (
+  id: number,
+  commentId: number,
+  editCommentBody: EditCommentBody,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestComment> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<RequestComment>(getEditRequestCommentUrl(id, commentId), {
+    ...options,
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(editCommentBody),
+  });
+};
+
+export const getEditRequestCommentMutationKey = () =>
+  ["editRequestComment"] as const;
+
+export const getEditRequestCommentMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editRequestComment>>,
+    TError,
+    EditRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editRequestComment>>,
+  TError,
+  EditRequestCommentMutationVariables,
+  TContext
+> => {
+  const mutationKey = getEditRequestCommentMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editRequestComment>>,
+    EditRequestCommentMutationVariables
+  > = (props) => {
+    const { id, commentId, data } = props ?? {};
+
+    return editRequestComment(id, commentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditRequestCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editRequestComment>>
+>;
+export type EditRequestCommentMutationBody = BodyType<EditCommentBody>;
+export type EditRequestCommentMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type EditRequestCommentMutationVariables = {
+  id: number;
+  commentId: number;
+  data: BodyType<EditCommentBody>;
+};
+
+/**
+ * @summary Edit an own comment
+ */
+export const useEditRequestComment = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editRequestComment>>,
+    TError,
+    EditRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editRequestComment>>,
+  TError,
+  EditRequestCommentMutationVariables,
+  TContext
+> => {
+  return useMutation(getEditRequestCommentMutationOptions(options));
+};
+
+export const getDeleteRequestCommentUrl = (id: number, commentId: number) => {
+  return `/api/requests/${id}/comments/${commentId}`;
+};
+
+/**
+ * @summary Delete an own comment and preserve its replies
+ */
+export const deleteRequestComment = async (
+  id: number,
+  commentId: number,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<RequestComment> => {
+  return customFetch<RequestComment>(
+    getDeleteRequestCommentUrl(id, commentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteRequestCommentMutationKey = () =>
+  ["deleteRequestComment"] as const;
+
+export const getDeleteRequestCommentMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRequestComment>>,
+    TError,
+    DeleteRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRequestComment>>,
+  TError,
+  DeleteRequestCommentMutationVariables,
+  TContext
+> => {
+  const mutationKey = getDeleteRequestCommentMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRequestComment>>,
+    DeleteRequestCommentMutationVariables
+  > = (props) => {
+    const { id, commentId } = props ?? {};
+
+    return deleteRequestComment(id, commentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteRequestCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteRequestComment>>
+>;
+
+export type DeleteRequestCommentMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error409Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type DeleteRequestCommentMutationVariables = {
+  id: number;
+  commentId: number;
+};
+
+/**
+ * @summary Delete an own comment and preserve its replies
+ */
+export const useDeleteRequestComment = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error409Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRequestComment>>,
+    TError,
+    DeleteRequestCommentMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRequestComment>>,
+  TError,
+  DeleteRequestCommentMutationVariables,
+  TContext
+> => {
+  return useMutation(getDeleteRequestCommentMutationOptions(options));
+};

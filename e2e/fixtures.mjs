@@ -90,10 +90,18 @@ const server = createServer(async (req, res) => {
       const kind = interaction[2];
       if (kind === 'comments') {
         if (req.method === 'GET') return send(200, comments.filter(c => c.requestId === item.id));
+        if (interaction[3] && ['PATCH','DELETE'].includes(req.method)) {
+          const comment=comments.find(c=>c.id===Number(interaction[3])&&c.requestId===item.id);
+          if(!comment) return send(404,{detail:'Comment not found'});
+          if(comment.authorId!==user.id)return send(403,{detail:'Forbidden'});
+          if(req.method==='DELETE'){comment.body='';comment.deletedAt??=new Date().toISOString();}
+          else {if(comment.deletedAt)return send(409,{detail:'Deleted comments cannot be edited'});comment.body=body.body;comment.updatedAt=new Date().toISOString();}
+          return send(200,comment);
+        }
         const prior = comments.find(c => c.clientCommentId === body.clientCommentId && c.authorId === user.id && c.requestId === item.id);
         if (prior) return send(201, prior);
         const parent = comments.find(c => c.id === body.parentId);
-        const comment = { id: comments.length+1, requestId:item.id, authorId:user.id, authorName:user.name, parentId:body.parentId??null, parentAuthorName:parent?.authorName??null, body:body.body, clientCommentId:body.clientCommentId, createdAt:new Date().toISOString() };
+        const comment = { id: comments.length+1, requestId:item.id, authorId:user.id, authorName:user.name, parentId:body.parentId??null, parentAuthorName:parent?.authorName??null, body:body.body, clientCommentId:body.clientCommentId, updatedAt:null, deletedAt:null, createdAt:new Date().toISOString() };
         comments.push(comment); return send(201,comment);
       }
       if (req.method === 'GET') return send(200, applications.filter(a => a.requestId === item.id && (item.authorId === user.id || a.applicantId === user.id)).reverse());
@@ -149,8 +157,11 @@ const server = createServer(async (req, res) => {
       const row={id:dmMessages.length+1,conversationId:1,senderId:user.id,body:body.body,createdAt:new Date().toISOString(),readAt:null};
       dmMessages.push(row);return send(201,row);
     }
+    if (path === '/api/admin/reports' && req.method === 'GET') return send(200, []);
+    if (path === '/api/mentors' && req.method === 'GET') return send(200, Object.values(accounts).filter(a=>a.id!==user.id&&a.isVerified&&['mentor','both'].includes(a.role)).map(({id,name,role,subjects,districtId,districtName,bio})=>({id,name,role,subjects,districtId,districtName,bio})));
     if (path === '/api/blocks' && req.method === 'GET') return send(200, []);
-    if (path === '/api/matches/1' && req.method === 'GET') return send(200, fixtures['/api/practice/matching/1']);
+    if (/^\/api\/matches\/[15]$/.test(path) && req.method === 'GET') return send(200, fixtures['/api/practice/matching/1']);
+    if (path === '/api/practice/matching/5' && req.method === 'GET') return send(200, {...fixtures['/api/practice/matching/1'],student_id:5});
     if (req.method === 'GET' && Object.hasOwn(fixtures, path)) return send(200, fixtures[path]);
     return send(404, { detail: 'No fixture for this route' });
   } catch { if (!res.headersSent) send(400, { detail: 'Invalid fixture request' }); else res.end(); }

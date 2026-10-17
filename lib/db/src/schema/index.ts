@@ -8,3 +8,5 @@ export * from "./chat";
 
 export * from "./request-events";
 export * from "./request-interactions";
+
+export * from "./account-trust";

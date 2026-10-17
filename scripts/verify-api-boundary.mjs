@@ -198,6 +198,8 @@ check(
 const expectedSpaRewrites = [
   "/login",
   "/register",
+  "/verify-email",
+  "/mentors",
   "/dashboard",
   "/dashboard/practice-lab",
   "/districts",
