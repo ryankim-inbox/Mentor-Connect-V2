@@ -18,7 +18,11 @@ export const HealthCheckResponse = zod.object({
  * @summary Register with school email
  */
 export const RegisterBody = zod.object({
-  email: zod.string().describe("Must be a .edu email address"),
+  email: zod
+    .string()
+    .describe(
+      "Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access.",
+    ),
   name: zod.string(),
   password: zod.string(),
   role: zod.enum(["mentor", "mentee", "both"]),

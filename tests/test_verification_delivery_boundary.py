@@ -177,7 +177,7 @@ def test_accepted_delivery_commits_digest_before_202(verification):
     result = asyncio.run(call(app, boundary))
 
     assert result.status == 202
-    assert json.loads(result.body) == {'message': 'Verification email sent'}
+    assert json.loads(result.body) == {'message': 'Verification email accepted for delivery'}
     assert result.error_type is None
     assert boundary.locked_user_id == 7
     assert boundary.deliveries == [('owner@tests.edu', boundary.token_hash)]
