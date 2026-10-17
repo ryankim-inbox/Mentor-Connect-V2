@@ -60,7 +60,7 @@ const userFixture = {
   districtName: "School",
   bio: null,
   subjects: [],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: true,
   createdAt: "2026-01-01T00:00:00",
 };

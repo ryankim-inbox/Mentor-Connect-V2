@@ -20,7 +20,7 @@ export const userFixture = {
   districtName: "School",
   bio: null,
   subjects: ["Math"],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: false,
   createdAt: "2026-01-01T00:00:00",
 } satisfies User;

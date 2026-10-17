@@ -67,6 +67,7 @@ import type {
   MessageResponse,
   ModerateReportBody,
   ModerationReport,
+  NotificationsResponse,
   PopularSubjectsEnvelope,
   PracticeStatus,
   ProfileSummary,
@@ -111,6 +112,219 @@ const withQueryKey = <T extends object, K>(
     });
   }
   return result;
+};
+
+export const getListNotificationsUrl = () => {
+  return `/api/notifications`;
+};
+
+/**
+ * @summary List the latest 50 notifications and total unread count for the signed-in member
+ */
+export const listNotifications = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<NotificationsResponse> => {
+  return customFetch<NotificationsResponse>(getListNotificationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListNotificationsQueryKey = () => {
+  return [`/api/notifications`] as const;
+};
+
+export const getListNotificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listNotifications>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListNotificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listNotifications>>
+  > = ({ signal }) => listNotifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listNotifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListNotificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listNotifications>>
+>;
+export type ListNotificationsQueryError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary List the latest 50 notifications and total unread count for the signed-in member
+ */
+
+export function useListNotifications<
+  TData = Awaited<ReturnType<typeof listNotifications>>,
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListNotificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getMarkNotificationsReadUrl = () => {
+  return `/api/notifications/read`;
+};
+
+/**
+ * @summary Mark all notifications belonging to the signed-in member as read
+ */
+export const markNotificationsRead = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<void> => {
+  return customFetch<void>(getMarkNotificationsReadUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getMarkNotificationsReadMutationKey = () =>
+  ["markNotificationsRead"] as const;
+
+export const getMarkNotificationsReadMutationOptions = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = getMarkNotificationsReadMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    void
+  > = () => {
+    return markNotificationsRead(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkNotificationsReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markNotificationsRead>>
+>;
+
+export type MarkNotificationsReadMutationError = ErrorType<
+  | Error400Response
+  | Error401Response
+  | Error403Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary Mark all notifications belonging to the signed-in member as read
+ */
+export const useMarkNotificationsRead = <
+  TError = ErrorType<
+    | Error400Response
+    | Error401Response
+    | Error403Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getMarkNotificationsReadMutationOptions(options));
 };
 
 export const getHealthCheckUrl = () => {
@@ -651,8 +865,8 @@ export const getGetUserUrl = (id: number) => {
 };
 
 /**
- * Own profile is available to the authenticated account before verification and returns full User. Other profiles require verified membership and expose only id, name, subjects, and createdAt.
- * @summary Get own account or a verified member profile summary
+ * Own profile is available to the authenticated account before verification and returns full User. Other profiles require server-computed member access and expose only id, name, subjects, and createdAt.
+ * @summary Get own account or a member profile summary
  */
 export const getUser = async (
   id: number,
@@ -718,7 +932,7 @@ export type GetUserQueryError = ErrorType<
 >;
 
 /**
- * @summary Get own account or a verified member profile summary
+ * @summary Get own account or a member profile summary
  */
 
 export function useGetUser<
@@ -6910,7 +7124,7 @@ export const getListMentorsUrl = (params?: ListMentorsParams) => {
 };
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 export const listMentors = async (
   params?: ListMentorsParams,
@@ -6983,7 +7197,7 @@ export type ListMentorsQueryError = ErrorType<
 >;
 
 /**
- * @summary List verified mentors in the current district
+ * @summary List mentors with member access in the current district
  */
 
 export function useListMentors<

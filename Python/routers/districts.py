@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from security import require_verified_user
+from security import require_member_user
 from typing import Optional
 from db import db
 
@@ -44,7 +44,7 @@ def list_districts(type: Optional[str] = None, search: Optional[str] = None):
         districts = cur.fetchall()
         return [build_district_response(cur, d) for d in districts]
 
-@router.get("/districts/{district_id}", dependencies=[Depends(require_verified_user)])
+@router.get("/districts/{district_id}", dependencies=[Depends(require_member_user)])
 def get_district(district_id: int):
     with db() as conn:
         cur = conn.cursor()

@@ -50,8 +50,8 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
     fetch(base + path, { headers: { cookie: "session=synthetic" } });
   for (const flags of [
     {},
-    { isVerified: false, isAdmin: true },
-    { isVerified: "true", isAdmin: true },
+    { isVerified: false, hasMemberAccess: false, isAdmin: true },
+    { isVerified: "true", hasMemberAccess: "true", isAdmin: true },
   ]) {
     identity = { id: 1, ...flags };
     for (const path of [
@@ -65,7 +65,7 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
       assert.equal((await get(path)).status, 403, JSON.stringify(flags) + path);
     assert.equal((await get("/api/users/1")).status, 200);
   }
-  identity = { id: 1, isVerified: true, isAdmin: false };
+  identity = { id: 1, isVerified: true, hasMemberAccess: true, isAdmin: false };
   assert.equal((await get("/api/mentors")).status, 200);
   assert.equal((await get("/api/users/2")).status, 200);
   for (const path of [
@@ -79,10 +79,21 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
     "/api/analysis/status",
   ])
     assert.equal((await get(path)).status, 403, path);
-  identity = { id: 1, isVerified: true, isAdmin: true };
+  identity = { id: 1, isVerified: true, hasMemberAccess: true, isAdmin: true };
   assert.equal((await get("/api/admin/reports")).status, 200);
-  identity = { id: 1, isVerified: false, isAdmin: false };
+  identity = { id: 1, isVerified: false, hasMemberAccess: false, isAdmin: false };
   assert.equal((await get("/api/admin/reports")).status, 403);
+  // Member access is explicit server authority, not claimed email ownership.
+  identity = { id: 1, isVerified: false, hasMemberAccess: true, isAdmin: false };
+  assert.equal((await get("/api/mentors")).status, 200);
+  assert.equal((await get("/api/users/2")).status, 200);
+  assert.equal((await get("/api/admin/reports")).status, 403);
+  identity = { id: 1, isVerified: false, hasMemberAccess: true, isAdmin: true };
+  assert.equal((await get("/api/admin/reports")).status, 403);
+  for (const hasMemberAccess of [false, "true", 1, null]) {
+    identity = { id: 1, isVerified: false, hasMemberAccess, isAdmin: false };
+    assert.equal((await get("/api/mentors")).status, 403);
+  }
 });
 
 test("sensitive bodies reject forged claims before upstream and never expose tokens", async (t) => {
@@ -94,7 +105,7 @@ test("sensitive bodies reject forged claims before upstream and never expose tok
     res.end(
       JSON.stringify(
         req.url === "/api/auth/me"
-          ? { id: 1, isVerified: true, isAdmin: true }
+          ? { id: 1, isVerified: true, hasMemberAccess: true, isAdmin: true }
           : { message: "sent" },
       ),
     );
@@ -209,7 +220,7 @@ test("new projections retain trust, moderation and tombstones while stripping se
 
 test("generated trust schemas match gateway public models and enforce bounded fields", async () => {
   const api = await import("../../../lib/api-zod/src/generated/api.ts");
-  const user = { ...userFixture, isVerified: false, isAdmin: false };
+  const user = { ...userFixture, isVerified: false, hasMemberAccess: false, isAdmin: false };
   assert.equal(
     api.ConfirmEmailVerificationResponse.safeParse(user).success,
     true,

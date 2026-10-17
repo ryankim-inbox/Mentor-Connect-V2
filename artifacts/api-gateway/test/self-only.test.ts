@@ -21,7 +21,7 @@ const authenticatedUser = {
   districtName: "Example District",
   bio: "Private free-form bio",
   subjects: ["Math", "Science"],
-  isVerified: true,
+  isVerified: true, hasMemberAccess: true,
   isAdmin: false,
   createdAt: "2026-08-26T00:00:00+00:00",
 };

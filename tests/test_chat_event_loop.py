@@ -63,7 +63,7 @@ def test_socket_database_wait_allows_health_response(monkeypatch, phase, boundar
         assert len(committed) == 2
         published.append(message)
 
-    monkeypatch.setattr(chat, 'require_verified_user', authority)
+    monkeypatch.setattr(chat, 'require_member_user', authority)
     monkeypatch.setattr(chat, 'db', transaction)
     monkeypatch.setattr(chat, '_load_room_for_user', lambda *args: None)
     monkeypatch.setattr(chat, '_load_conversation_membership', lambda *args: {'user_a_id': 1, 'user_b_id': 2})

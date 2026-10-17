@@ -1,8 +1,7 @@
 import { Link } from "wouter";
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { fetchNotifications, notificationsQueryKey } from "@/pages/Notifications";
+import { useNotifications } from "@/lib/notifications";
 import { releaseSurface } from "@/lib/release-flags";
 
 const memberLinks = [
@@ -24,20 +23,16 @@ const memberLinks = [
 
 function MemberLinks({ className }: { className: string }) {
   const { user, status } = useAuth();
-  const { data: notifications } = useQuery({
-    queryKey: notificationsQueryKey,
-    queryFn: fetchNotifications,
-    enabled: status === "authenticated" && Boolean(user?.isVerified),
-    refetchInterval: 30_000,
-  });
-  const unread = notifications?.unreadCount ?? 0;
+  const notifications = useNotifications();
+  const unread = notifications.isSuccess ? notifications.data.unreadCount : 0;
   const links = memberLinks.filter(([label]) => {
     if (["Profile", "Settings"].includes(label)) return true;
-    if (status !== "authenticated" || !user?.isVerified) return false;
+    if (status !== "authenticated" || !user?.hasMemberAccess) return false;
     return (
       !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
         label,
-      ) || user.isAdmin
+      ) ||
+      (user.isVerified && user.isAdmin)
     );
   });
   return (
@@ -90,7 +85,9 @@ export function Navbar() {
       )}
       {user && !user.isVerified && (
         <p className="px-4 py-2 text-sm">
-          Email ownership pending.{" "}
+          {user.hasMemberAccess
+            ? "Test member access · Email ownership unverified"
+            : "Email ownership pending."}{" "}
           <Link href="/verify-email" className="underline">
             Verify email
           </Link>

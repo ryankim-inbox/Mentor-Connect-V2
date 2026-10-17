@@ -1,6 +1,8 @@
 """Database-backed authority: signed session attributes are never privilege grants."""
 from fastapi import HTTPException, Request
 from db import db
+from member_access import has_member_access, has_admin_access
+from account_policy import is_synthetic_locked
 
 
 def current_user(request):
@@ -11,7 +13,7 @@ def current_user(request):
         cur = conn.cursor()
         cur.execute('SELECT u.*, d.name AS district_name FROM users u LEFT JOIN districts d ON d.id=u.district_id WHERE u.id=%s', (user_id,))
         user = cur.fetchone()
-    if not user:
+    if not user or is_synthetic_locked(user):
         raise HTTPException(401, 'Not authenticated')
     return user
 
@@ -30,9 +32,19 @@ def require_verified_user(request: Request):
     return verified(current_user(request))
 
 
+def member(user):
+    if not has_member_access(user):
+        raise HTTPException(403, 'Email verification required')
+    return user
+
+
+def require_member_user(request: Request):
+    return member(current_user(request))
+
+
 def require_admin(request: Request):
     user = require_verified_user(request)
-    if not user['is_admin']:
+    if not has_admin_access(user):
         raise HTTPException(403, 'Administrator access required')
     return user
 

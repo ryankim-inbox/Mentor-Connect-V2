@@ -1,5 +1,5 @@
 from fastapi import Depends
-from security import require_verified_user
+from security import require_member_user
 from fastapi import APIRouter, Request, HTTPException, Response, Query
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from psycopg2.errors import ForeignKeyViolation
@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Optional
 from security import require_admin
 from db import db
 
-router = APIRouter(dependencies=[Depends(require_verified_user)])
+router = APIRouter(dependencies=[Depends(require_member_user)])
 
 class CreateReportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")

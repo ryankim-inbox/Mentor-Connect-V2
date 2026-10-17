@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List
 from db import db
 from routers.auth import normalize_display_name, format_user
-from security import require_user, verified
+from security import require_user, member
 from routers.chat import _require_unblocked_pair
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -31,7 +31,7 @@ class UpdateUserBody(BaseModel):
 def get_user(user_id: int, request: Request):
     viewer = require_user(request)
     if viewer["id"] != user_id:
-        verified(viewer)
+        member(viewer)
     with db() as conn:
         cur = conn.cursor()
         cur.execute(
