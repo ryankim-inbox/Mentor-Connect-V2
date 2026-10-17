@@ -8,6 +8,7 @@ import hashlib
 import secrets
 from security import require_user
 from email_delivery import deliver_verification, DeliveryUnavailable
+from email_policy import configured_test_recipient, normalize_mailbox
 
 router = APIRouter()
 
@@ -35,10 +36,11 @@ class RegisterBody(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def email_must_be_edu(cls, v):
-        if not v.lower().endswith(".edu"):
-            raise ValueError("Only .edu school email addresses are allowed")
-        return v.lower()
+    def email_must_be_eligible(cls, v):
+        email = normalize_mailbox(v)
+        if email is None or (not email.endswith('.edu') and email != configured_test_recipient()):
+            raise ValueError("Use a valid .edu school email or an approved test email address")
+        return email
 
     @field_validator("role")
     @classmethod
@@ -164,7 +166,7 @@ def _request_verification(user_id):
             cur.execute("INSERT INTO email_verification_tokens(user_id,email,token_hash,expires_at) VALUES (%s,%s,%s,now()+interval '30 minutes')",(user['id'],user['email'],hashlib.sha256(token.encode()).hexdigest()))
     if delivery_failed:
         raise HTTPException(503, 'Email delivery unavailable')
-    return {'message':'Verification email sent'}
+    return {'message':'Verification email accepted for delivery'}
 
 
 @router.post('/auth/verification/confirm', dependencies=[Depends(require_user)])

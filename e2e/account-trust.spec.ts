@@ -268,8 +268,15 @@ test("own comments edit and delete with retained replies and no controls on othe
   await page.getByRole("button", { name: "Edit comment" }).click();
   await page.getByLabel("Edit comment text").fill("Edited own comment");
   await page.getByRole("button", { name: "Save comment" }).click();
+  const editedComment = page
+    .getByRole("region", { name: "Discussion", exact: true })
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("button", { name: "Edit comment", exact: true }) })
+    .getByRole("paragraph")
+    .filter({ has: page.getByText("(edited)", { exact: true }) });
+  await expect(editedComment).toHaveText("Edited own comment(edited)");
   await expect(
-    page.getByText("Edited own comment", { exact: true }),
+    editedComment.getByText("(edited)", { exact: true }),
   ).toBeVisible();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete comment" }).click();
@@ -278,7 +285,7 @@ test("own comments edit and delete with retained replies and no controls on othe
   ).toBeVisible();
   await expect(page.getByText("Retained reply", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Edited own comment", { exact: true }),
+    page.getByText("Edited own comment(edited)", { exact: true }),
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Edit comment" })).toHaveCount(
     0,
@@ -317,7 +324,7 @@ test("failed delivery and wrong-account confirmation never claim success or retr
   await expect(page.getByRole("alert")).toBeVisible();
   expect(confirmations).toBe(1);
   expect(sends).toBe(1);
-  await expect(page.getByText(/Verification email sent\./)).toHaveCount(0);
+  await expect(page.getByText(/Verification email accepted for delivery\./)).toHaveCount(0);
 });
 test("current session error hides cached administrator content before any protected refresh", async ({
   page,
