@@ -1,6 +1,6 @@
 # Mentorship Journey Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Complete the new-account mentorship journey and make chat retries safe.
 
@@ -31,10 +31,10 @@
 
 **Interfaces:** `SendMessageBody.clientMessageId?: UUID`; persisted uniqueness `(sender_id, room_id/conversation_id, client_message_id)`; same key/body returns same id, changed body 409. Composer sends `{body, clientMessageId}`.
 
-- [ ] Add real PostgreSQL tests for sequential/concurrent replay, scope isolation, conflicts, permission rechecks and committed broadcast. Run RED against current behavior.
-- [ ] Add additive migration and atomic insert/replay logic; refresh canonical schema/catalog and migration hashes.
-- [ ] Add composer sync lock and reusable uncertain-attempt identity; browser regression for double-click and retry. Run RED then GREEN.
-- [ ] Run focused backend/UI tests and record evidence; local commit after green.
+- [x] Add real PostgreSQL tests for sequential/concurrent replay, scope isolation, conflicts, permission rechecks and committed broadcast. Run RED against current behavior.
+- [x] Add additive migration and atomic insert/replay logic; refresh canonical schema/catalog and migration hashes.
+- [x] Add composer sync lock and reusable uncertain-attempt identity; browser regression for double-click and retry. Run RED then GREEN.
+- [x] Run focused backend/UI tests and record evidence; local commit after green.
 
 ### Task 2: Comments and consent-based applications
 
@@ -42,10 +42,10 @@
 
 **Interfaces:** `GET/POST /requests/{id}/comments` (`body`, `parentId?`, `clientCommentId`); `GET/POST /requests/{id}/applications`; `PATCH /requests/{id}/applications/{applicationId}` (`action: accept|reject|cancel`); `GET /connections`; `GET /request-activity`. Existing `/match` becomes application alias. Return only own applications or author-visible applicant rows. Connection entries contain userId/name/requestId/requestTitle; request activity contains existing request response objects.
 
-- [ ] Write RED tests for comments/replies, wrong-post parents, blocks/auth, pending-only application, owner-only accept/reject, applicant cancel/reapply, transition retries and competing accepts.
-- [ ] Implement tables, transactional state transitions, legacy match preservation and matching alias. Keep match events attached to acceptance only.
-- [ ] Add authenticated contacts/activity APIs, route allowlists, body limits and API contracts. Test unauthorized access and response bounds.
-- [ ] Verify upgrade from 0003 preserves representative matched requests/chat rows and least-privilege grants; run focused integration tests and local commit.
+- [x] Write RED tests for comments/replies, wrong-post parents, blocks/auth, pending-only application, owner-only accept/reject, applicant cancel/reapply, transition retries and competing accepts.
+- [x] Implement tables, transactional state transitions, legacy match preservation and matching alias. Keep match events attached to acceptance only.
+- [x] Add authenticated contacts/activity APIs, route allowlists, body limits and API contracts. Test unauthorized access and response bounds.
+- [x] Verify upgrade from 0003 preserves representative matched requests/chat rows and least-privilege grants; run focused integration tests and local commit.
 
 ### Task 3: Complete UI and verify release
 
@@ -53,8 +53,8 @@
 
 **Interfaces:** Render application state/actions and comments on request detail. Message by named contact opens existing DM widget/thread. My connections links owned/applied requests and accepted contacts. Query keys are scoped to account; mutation errors are visible.
 
-- [ ] Add RED browser tests for comments/replies, apply/pending/accept, reject/cancel, name-based DM and legacy matched contact. Include refresh/account switching and click repetition.
-- [ ] Implement UI against Task 2 contracts and preserve existing DM conversations. Replace the numeric-ID starter.
-- [ ] Update obsolete immediate-Connect tests to assert application then owner acceptance; do not weaken access/race tests.
-- [ ] Run full Python, gateway, DB/migrations, API generation/contracts, unit, Playwright, typecheck/build and secrets/diff checks. Record failures/skips distinctly.
-- [ ] Document additive migration order, required grants, rollback/compatibility and pending remote approval. Obtain fresh whole-branch review, fix material findings, commit local results. No push/deploy.
+- [x] Add RED browser tests for comments/replies, apply/pending/accept, reject/cancel, name-based DM and legacy matched contact. Include refresh/account switching and click repetition.
+- [x] Implement UI against Task 2 contracts and preserve existing DM conversations. Replace the numeric-ID starter.
+- [x] Update obsolete immediate-Connect tests to assert application then owner acceptance; do not weaken access/race tests.
+- [x] Run full Python, gateway, DB/migrations, API generation/contracts, unit, Playwright, typecheck/build and secrets/diff checks. Record failures/skips distinctly.
+- [x] Document additive migration order, required grants, rollback/compatibility and pending remote approval. Obtain fresh whole-branch review, fix material findings, commit local results. No push/deploy.
