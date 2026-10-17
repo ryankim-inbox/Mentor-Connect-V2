@@ -10,6 +10,7 @@ import type { ModerateReportBodyStatus } from "./moderateReportBodyStatus";
 export interface ModerateReportBody {
   status: ModerateReportBodyStatus;
   /**
+   * Omit to preserve the saved note; null clears it; a string replaces it.
    * @nullable
    * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */

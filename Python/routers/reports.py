@@ -112,7 +112,10 @@ def unblock_user(blocked_user_id: PositiveInt, request: Request):
 class ModerateReportBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     status: Literal['open','reviewing','resolved','dismissed']
-    note: str | None = Field(default=None,max_length=2000)
+    note: str | None = Field(
+        default=None, max_length=2000,
+        description='Omit to preserve the saved note; null clears it; a string replaces it.',
+    )
 
 
 def _report(cur, report_id):
@@ -144,5 +147,9 @@ def list_admin_reports(status: Literal['open','reviewing','resolved','dismissed'
 def moderate_report(report_id: PositiveInt,body: ModerateReportBody,user=Depends(require_admin)):
     with db() as conn:
         cur=conn.cursor()
-        cur.execute('UPDATE reports SET status=%s,note=%s,reviewed_by=%s,reviewed_at=now() WHERE id=%s',(body.status,body.note,user['id'],report_id))
+        cur.execute('''UPDATE reports
+                       SET status=%s,note=CASE WHEN %s THEN %s ELSE note END,
+                           reviewed_by=%s,reviewed_at=now()
+                       WHERE id=%s''',
+                    (body.status,'note' in body.model_fields_set,body.note,user['id'],report_id))
         return _report(cur,report_id)
