@@ -10,6 +10,33 @@ This branch implements local account-trust behavior. It is not ready for deploym
 4. Define and independently review the remote migration/grant procedure. The current `ops/upgrade-account-trust.mjs` intentionally accepts only disposable loopback databases named `account_trust_upgrade_*`. It is a rehearsal tool and must not be repurposed into a remote migration by changing its safeguards. A separately authorized, reviewed remote path is a deployment prerequisite.
 5. Apply the coordinated release during maintenance and verify migration ledger/catalog, ownership consistency, readiness and rollback readiness before reopening registration. The application role needs the reviewed token/attempt and comment/report grants; it must not receive blanket privileges or the ability to self-grant administration.
 
+## Effect of migration 0006 on existing accounts
+
+Every existing user starts with `email_verified_at=NULL`, `is_verified=false` and `is_admin=false`. Passwords, requests, connections, comments and chat history are preserved. A stable session secret can preserve existing signed-in sessions, but current database authority denies member/chat/admin operations until ownership is verified; own account/settings, verification and logout remain available. This is an intentional access reset, not an automatic sign-out or content deletion.
+
+No existing account is automatically an administrator. An administrator needs both verified mailbox ownership and an explicitly approved, audited `is_admin` grant to the named account. Setting the administrator flag alone does not bypass ownership. Current student roles (`mentor`, `mentee`, `both`) and previous suffix-based verification are not administrator evidence.
+
+The exact upgrade is an approved 0001–0005 ledger to 0006. Stop old writers first: the previous registration implementation writes `is_verified=true` without `email_verified_at` and is incompatible with the new constraint. Back up and rehearse restore, obtain explicit approval for the ownership reset, then use the separately reviewed remote procedure during maintenance. Runtime restarts never apply migrations. The local rehearsal helper's new grants are SELECT/INSERT/DELETE on the verification token/attempt tables, USAGE on the attempt ID sequence, and UPDATE on request comments/reports; review those additions against the existing restricted role rather than granting blanket privileges.
+
+## Required deployment configuration
+
+These are prerequisites to a later authorized deployment. None has been applied externally by this task.
+
+| Setting | Required value or handling |
+| --- | --- |
+| `NODE_ENV` | `production`; one gateway and one Python worker per single service instance. |
+| `PORT` | Render-provided public gateway port; image default 10000. Python remains internal on loopback 8181. |
+| `GATEWAY_PUBLIC_ORIGIN` | Exact canonical trusted HTTPS origin for HTTP/WS authorization. |
+| `APP_ORIGIN` | The same trusted HTTPS origin for ownership links; no path, query or fragment. The future provider adapter must retain trusted-origin validation. |
+| `DATABASE_URL`, `READINESS_DATABASE_URL` | The explicitly approved target with schema 0006, reviewed restricted credentials/grants and required TLS. Never point rehearsal tooling at an existing remote database. |
+| `SESSION_SECRET` | Stable protected value, at least 32 characters in production. Preserve the existing value for session continuity; intentional rotation invalidates existing signed cookies. |
+| `RELEASE_SHA` / `RENDER_GIT_COMMIT` | Build-time source commit identifier for the reviewed release and embedded `release.json`; not a substitute for schema validation. |
+| Mail delivery | A production provider adapter is still missing. Current `EMAIL_DELIVERY_MODE` supports disabled delivery or a local `development-file` test path, which production refuses. Provider/domain/credentials alone cannot enable production mail. |
+
+Before ownership reset, select and implement the provider in a separately reviewed change, complete its required sender/domain verification, store credentials through the approved protected configuration, and verify actual delivery and failure handling. Provider-specific credential variable names depend on that unimplemented adapter and are not defined here. No signup, paid feature, real email or persistent credential operation is included in the local task.
+
+Production sessions use Secure, HttpOnly and SameSite=Lax cookies. After the coordinated rollout, verify ownership, administrator access, student matching/chat and unauthorized access using the actual HTTPS origin. Local checks do not replace this acceptance step. See the [container record](superpowers/reviews/2026-10-17-account-trust-container.md) for the unresolved ARM64 timeout and failed emulated AMD64 post-restart assertion; native deployment behavior remains unverified.
+
 ## Ownership verification and administration
 
 - Registration creates an unverified, non-admin account. A `.edu` suffix is an eligibility rule, never proof of mailbox ownership. The owner explicitly requests delivery at `/verify-email`, opens the newest link and explicitly confirms it while signed in to the same account. Links expire after 30 minutes and work once. Resend limits are 60 seconds between attempts and five per hour per account.
