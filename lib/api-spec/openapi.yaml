@@ -2546,6 +2546,10 @@ paths:
       tags:
         - admin
       summary: Review a moderation report
+      description: >-
+        Update status and record the current administrator and review time. An
+        omitted note preserves the saved note atomically; an explicit null clears
+        it, and a supplied string replaces it.
       security:
         - cookieAuth: []
       parameters:
@@ -3725,6 +3729,7 @@ components:
             - resolved
             - dismissed
         note:
+          description: Omit to preserve the saved note; null clears it; a string replaces it.
           type:
             - string
             - "null"

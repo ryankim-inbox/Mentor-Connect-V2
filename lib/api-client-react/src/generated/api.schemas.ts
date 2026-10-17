@@ -832,6 +832,7 @@ export const ModerateReportBodyStatus = {
 export interface ModerateReportBody {
   status: ModerateReportBodyStatus;
   /**
+   * Omit to preserve the saved note; null clears it; a string replaces it.
    * @maxLength 2000
    * @nullable
    */

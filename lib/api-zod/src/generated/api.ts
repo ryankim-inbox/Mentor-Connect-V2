@@ -2522,6 +2522,7 @@ export const ListAdminReportsResponse = zod
   .max(50);
 
 /**
+ * Update status and record the current administrator and review time. An omitted note preserves the saved note atomically; an explicit null clears it, and a supplied string replaces it.
  * @summary Review a moderation report
  */
 export const moderateReportPathIdMax = 2147483647;
@@ -2537,7 +2538,13 @@ export const moderateReportBodyNoteRegExp = new RegExp(
 
 export const ModerateReportBody = zod.object({
   status: zod.enum(["open", "reviewing", "resolved", "dismissed"]),
-  note: zod.string().regex(moderateReportBodyNoteRegExp).nullish(),
+  note: zod
+    .string()
+    .regex(moderateReportBodyNoteRegExp)
+    .nullish()
+    .describe(
+      "Omit to preserve the saved note; null clears it; a string replaces it.",
+    ),
 });
 
 export const moderateReportResponseIdMax = 2147483647;

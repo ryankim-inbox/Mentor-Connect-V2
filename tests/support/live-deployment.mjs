@@ -13,6 +13,7 @@ import { bootstrapClassroom } from "../../ops/bootstrap-classroom.mjs";
 import { verifySchemaAssets } from "../../lib/db/tools/schema-assets.mjs";
 import { runMentorshipJourney } from "./mentorship-journey.mjs";
 import { runAccountTrustJourney } from "./account-trust-journey.mjs";
+import { runReportModerationJourney } from "./report-moderation-journey.mjs";
 import { runLiveChat } from "../../scripts/smoke-live-chat.mjs";
 const { Client } = createRequire(
   new URL("../../lib/db/package.json", import.meta.url),
@@ -254,6 +255,13 @@ try {
     newContext: (options) =>
       browser.newContext({ ...options, ignoreHTTPSErrors: true }),
   };
+  const moderationDb = new Client({ connectionString: dsn });
+  await moderationDb.connect();
+  try {
+    await runReportModerationJourney({ origin, db: moderationDb }, localBrowser);
+  } finally {
+    await moderationDb.end();
+  }
   if (developmentDelivery) {
     await runAccountTrustJourney({origin, outbox:ownershipOutbox},localBrowser);
     await stopStack();

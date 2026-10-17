@@ -1,5 +1,6 @@
 """Account trust contracts composed through the real gateway and disposable DB."""
 import json
+from datetime import datetime
 from uuid import uuid4
 from urllib.request import build_opener
 
@@ -54,6 +55,44 @@ def test_gateway_report_moderation_and_admin_revocation(gateway_server, backend_
     assert api(admin, base, 'PATCH', path, {'status': 'resolved', 'reviewedBy': 1}) == (422, {'error': 'invalid_input'})
     execute(backend_database, 'UPDATE users SET is_admin=false WHERE id=501')
     assert api(admin, base, 'GET', '/api/admin/reports')[0] == 403
+
+
+@pytest.mark.parametrize(('note_patch', 'expected_note'), [
+    ({}, 'Retain this synthetic moderation rationale'),
+    ({'note': None}, None),
+    ({'note': 'Replacement rationale'}, 'Replacement rationale'),
+], ids=['omitted-preserves', 'null-clears', 'string-replaces'])
+def test_gateway_moderation_note_patch_semantics_persist_with_audit(
+        gateway_server, backend_database, note_patch, expected_note):
+    base = gateway_server
+    student, _ = login(base, 'student001@test.edu')
+    assert api(student, base, 'POST', '/api/reports', {
+        'reportedUserId': 501, 'reason': 'other', 'description': 'Synthetic moderation evidence',
+    })[0] == 201
+    execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=501')
+    admin, _ = login(base, 'mentor501@test.edu')
+    report_id = api(admin, base, 'GET', '/api/admin/reports')[1][0]['id']
+    path = f'/api/admin/reports/{report_id}'
+    status, report = api(admin, base, 'PATCH', path, {
+        'status': 'reviewing', 'note': 'Retain this synthetic moderation rationale',
+    })
+    assert status == 200 and report['note'] == 'Retain this synthetic moderation rationale'
+    # Every moderation operation must refresh its actor/time, including status-only saves.
+    execute(backend_database,
+            "UPDATE reports SET reviewed_by=1,reviewed_at='2000-01-01T00:00:00Z' WHERE id=%s",
+            (report_id,))
+    status, report = api(admin, base, 'PATCH', path, {'status': 'resolved', **note_patch})
+    assert status == 200
+    stored = execute(backend_database,
+                     'SELECT status,note,reviewed_by,reviewed_at FROM reports WHERE id=%s',
+                     (report_id,))[0]
+    assert report['note'] == expected_note
+    assert stored[:3] == ('resolved', expected_note, 501)
+    assert report['status'] == 'resolved' and report['reviewedBy'] == 501
+    assert datetime.fromisoformat(report['reviewedAt']) == stored[3]
+    assert stored[3].year > 2000
+    assert api(admin, base, 'GET', '/api/admin/reports')[1][0] == report
+    assert api(student, base, 'GET', '/api/admin/reports')[0] == 403
 
 
 def test_gateway_comment_edit_delete_tombstone_and_replay(gateway_server):

@@ -7155,6 +7155,7 @@ export const getModerateReportUrl = (id: number) => {
 };
 
 /**
+ * Update status and record the current administrator and review time. An omitted note preserves the saved note atomically; an explicit null clears it, and a supplied string replaces it.
  * @summary Review a moderation report
  */
 export const moderateReport = async (
