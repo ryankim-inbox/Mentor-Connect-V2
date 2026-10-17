@@ -15,6 +15,7 @@ def matching_database(backend_database, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", backend_database)
     monkeypatch.setattr(db, "DATABASE_URL", backend_database)
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=1")
         cur.execute("UPDATE users SET location = 'Test district' WHERE id IN (1, 501, 502)")
         cur.execute("UPDATE users SET subjects = ARRAY['Math'] WHERE id IN (501, 502)")
         cur.execute("UPDATE users SET languages = ARRAY['English'] WHERE id = 502")

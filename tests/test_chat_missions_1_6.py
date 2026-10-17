@@ -5,10 +5,12 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException, Request
 
+import security
 from routers import chat
 
 
@@ -715,3 +717,15 @@ def test_mission_8_persists_broadcasts_and_cleans_up(monkeypatch):
     assert outsider.sent_json == []
     assert chat.dm_connections == {7: [peer], 8: [outsider]}
     assert not cursor.steps
+
+
+@pytest.fixture(autouse=True)
+def synthetic_unit_identity(monkeypatch):
+    """Only this unit module: model a persisted verified account for SQL fakes."""
+    @contextmanager
+    def identity_db():
+        state={'id':1}
+        def query(sql,params): state['id']=params[0]
+        cursor=SimpleNamespace(execute=query,fetchone=lambda:{'id':state['id'],'email_verified_at':datetime(2026,1,1,tzinfo=timezone.utc)})
+        yield SimpleNamespace(cursor=lambda:cursor)
+    monkeypatch.setattr(security,'db',identity_db)

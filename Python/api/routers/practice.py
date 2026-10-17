@@ -6,11 +6,12 @@ integration_api.py (unmodified).
 
 from typing import Any
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends
+from security import require_admin
 
 import integration_api
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/practice/status")

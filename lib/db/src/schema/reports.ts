@@ -25,6 +25,10 @@ export const reportsTable = pgTable(
       .references(() => usersTable.id),
     reason: text("reason").notNull(),
     description: text("description"),
+    status: text("status").notNull().default("open"),
+    note: text("note"),
+    reviewedBy: integer("reviewed_by").references(() => usersTable.id),
+    reviewedAt: timestamp("reviewed_at", {withTimezone:true}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -34,6 +38,9 @@ export const reportsTable = pgTable(
       "reports_no_self_check",
       sql`${table.reporterId} <> ${table.reportedUserId}`,
     ),
+    check("reports_status_check", sql`${table.status} IN ('open', 'reviewing', 'resolved', 'dismissed')`),
+    check("reports_note_check", sql`length(${table.note}) <= 2000`),
+    index("idx_reports_status_id").on(table.status,table.id),
     index("idx_reports_reported").on(table.reportedUserId),
   ],
 );

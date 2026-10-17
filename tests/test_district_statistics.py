@@ -1,9 +1,8 @@
 from contextlib import closing
-from urllib.request import build_opener
 
 import psycopg2
 
-from backend_support import api
+from backend_support import api, login
 
 
 def test_district_top_tags_exclude_other_districts(chat_server, chat_database):
@@ -19,7 +18,7 @@ def test_district_top_tags_exclude_other_districts(chat_server, chat_database):
         conn.commit()
 
     with chat_server() as base:
-        client = build_opener()
+        client, _ = login(base, "student001@test.edu")
 
         status, empty_district = api(client, base, "GET", "/api/stats/district/2")
         assert status == 200

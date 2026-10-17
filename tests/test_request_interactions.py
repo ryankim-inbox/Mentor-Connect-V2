@@ -133,11 +133,13 @@ def test_interaction_gateway_auth_bounds_and_sender_identity(gateway_server):
         assert api(anon, base, "GET", endpoint)[0] == 401
         for query in ["?limit=51", "?limit=0", "?beforeId=-1", "?beforeId=2147483648"]:
             assert api(owner, base, "GET", endpoint + query)[0] == 400
-    status, comment = api(mentor, base, "POST", path + "/comments", {"body": "actual sender", "authorId": 1, "clientCommentId": str(uuid4())})
+    assert api(mentor, base, "POST", path + "/comments", {"body": "actual sender", "authorId": 1, "clientCommentId": str(uuid4())})[0] == 422
+    status, comment = api(mentor, base, "POST", path + "/comments", {"body": "actual sender", "clientCommentId": str(uuid4())})
     assert status == 201 and comment["authorId"] == 501
     status, app = api(mentor, base, "POST", path + "/applications")
     assert status == 200 and app["applicantId"] == 501
-    assert api(mentor, base, "PATCH", path + f'/applications/{app["id"]}', {"action": "accept", "authorId": 1})[0] == 403
+    assert api(mentor, base, "PATCH", path + f'/applications/{app["id"]}', {"action": "accept", "authorId": 1})[0] == 422
+    assert api(mentor, base, "PATCH", path + f'/applications/{app["id"]}', {"action": "accept"})[0] == 403
 
 
 def test_pagination_reopen_and_legacy_connections(backend_server, backend_database):

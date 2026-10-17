@@ -64,6 +64,9 @@ def test_signup_utc_boundaries_and_real_sources(backend_database, monkeypatch, n
 
 
 def test_real_gateway_signup_summary_current_relative(gateway_server, backend_database):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(1,))
+        conn.commit()
     client, _ = login(gateway_server, "student001@test.edu")
     execute(backend_database, """UPDATE users SET created_at = CASE id
         WHEN 1 THEN date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
@@ -81,6 +84,9 @@ def test_count_blocks_counts_distinct_blockers_per_recipient():
 
 
 def test_flagged_users_real_module_and_redaction(backend_database, gateway_server, monkeypatch):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(1,))
+        conn.commit()
     monkeypatch.setattr(db, "DATABASE_URL", backend_database)
     execute(backend_database, "DELETE FROM blocks")
     execute(backend_database, """INSERT INTO blocks (blocker_id, blocked_user_id)

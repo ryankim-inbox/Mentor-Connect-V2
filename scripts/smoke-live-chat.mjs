@@ -170,8 +170,8 @@ export async function runLiveChat(
       body: token + "-forged",
       senderId: credentials.accounts.mentee.id,
     });
-    assert.equal(forged.status, 201);
-    assert.equal(forged.body.senderId, credentials.accounts.mentor.id);
+    assert.equal(forged.status, 422);
+    assert.equal((await api(a, dmRoute)).body.some(message => message.body === token + "-forged"), false);
     const csrf = await a.request.post(origin + dmRoute, {
       headers: { origin: "https://untrusted.invalid" },
       data: { body: token + "-csrf" },

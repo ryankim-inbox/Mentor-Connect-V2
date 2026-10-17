@@ -11,7 +11,7 @@ from routers.users import UpdateUserBody
     "\u001c\ufeff\u001c", "x" * 121, "界" * 41, " " + "x" * 120,
 ])
 def test_display_name_rejects_invalid_input(model, name):
-    fields = dict(email="ada@example.edu", password="secret", role="mentee", districtId=1)
+    fields = dict(email="ada@example.edu", password="secret", role="mentee", districtId=1) if model is RegisterBody else {}
     with pytest.raises(ValidationError):
         model(name=name, **fields)
 
@@ -31,7 +31,7 @@ def test_display_name_rejects_invalid_input(model, name):
      ("\u001c\ufeff\u001cAda\u001c\ufeff\u001c", "Ada")],
 )
 def test_display_name_boundaries(model, name, expected):
-    fields = dict(email="ada@example.edu", password="secret", role="mentee", districtId=1)
+    fields = dict(email="ada@example.edu", password="secret", role="mentee", districtId=1) if model is RegisterBody else {}
     assert model(name=name, **fields).name == expected
 
 

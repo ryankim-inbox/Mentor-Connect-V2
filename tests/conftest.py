@@ -43,6 +43,7 @@ def backend_database():
             with closing(psycopg2.connect(dsn)) as conn, conn.cursor() as cur:
                 cur.execute((ROOT / "database/schema/canonical.sql").read_text())
                 cur.execute((ROOT / "tests/fixtures/chat-canonical.sql").read_text())
+                cur.execute((ROOT / "tests/fixtures/account-trust-verified.sql").read_text())
                 conn.commit()
             yield dsn
         finally:
@@ -53,7 +54,7 @@ def backend_database():
 @pytest.fixture
 def backend_server(backend_database, tmp_path_factory):
     @contextmanager
-    def running(app="main:app", *, factory=False, database_url=None):
+    def running(app="main:app", *, factory=False, database_url=None, environment=None):
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
@@ -65,7 +66,7 @@ def backend_server(backend_database, tmp_path_factory):
                  "--port", str(port)] + (["--factory"] if factory else []),
                 cwd=ROOT / "Python", stdout=log, stderr=log,
                 env={**os.environ, "DATABASE_URL": database_url or backend_database,
-                     "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test"},
+                     "SESSION_SECRET": "chat-integration-test", "NODE_ENV": "test", **(environment or {})},
             )
             try:
                 deadline = time.monotonic() + 10

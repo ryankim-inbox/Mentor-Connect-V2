@@ -63,6 +63,10 @@ def test_invalid_product_writes_are_4xx(backend_server, backend_database,
     # Removing boundary validation must either accept the write or expose a DB 500.
     with backend_server() as base:
         author, _ = login(base, "student001@test.edu")
+        if path.startswith('/api/matches'):
+            with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+                cur.execute('UPDATE users SET is_admin=true WHERE id=1')
+                conn.commit()
         status, created = api(author, base, "POST", "/api/requests", REQUEST)
         assert status == 201, created
         before = stored_product_rows(backend_database)

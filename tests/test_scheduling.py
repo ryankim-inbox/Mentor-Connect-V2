@@ -65,6 +65,9 @@ def test_scheduling_counts_order_by_weekday_and_hour(scheduling_db):
 
 
 def test_real_gateway_scheduling_and_popular_slots(scheduling_db, gateway_server):
+    with closing(psycopg2.connect(scheduling_db)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(1,))
+        conn.commit()
     client, _ = login(gateway_server, "student001@test.edu")
     slots = [{"slot": "Mon 17:00", "count": 2}, {"slot": "Wed 19:00", "count": 2}]
     for path, expected in [("/api/scheduling/overview", {"topSlots": slots}),
