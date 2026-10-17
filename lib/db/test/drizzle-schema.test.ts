@@ -7,6 +7,8 @@ import { getTableName } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import {
+  emailVerificationTokensTable,
+  emailVerificationRequestsTable,
   blocksTable,
   chatMessagesTable,
   chatRoomsTable,
@@ -26,6 +28,8 @@ import {
 } from "../src/schema/index";
 
 const tables = [
+  emailVerificationTokensTable,
+  emailVerificationRequestsTable,
   blocksTable,
   chatMessagesTable,
   chatRoomsTable,
@@ -71,15 +75,17 @@ const expectedColumnCounts = new Map([
   ["dm_conversations", 4],
   ["dm_messages", 8],
   ["questions", 10],
-  ["reports", 6],
+  ["reports", 10],
   ["request_tags", 3],
   ["requests", 12],
   ["request_events", 6],
   ["request_applications", 6],
-  ["request_comments", 7],
+  ["request_comments", 9],
   ["schedules", 4],
   ["tags", 4],
-  ["users", 16],
+  ["users", 18],
+  ["email_verification_tokens",5],
+  ["email_verification_requests",4],
 ]);
 
 test("Drizzle represents every canonical table and column", () => {
@@ -113,6 +119,8 @@ test("Drizzle represents every canonical table and column", () => {
       "languages",
       "grade_level",
       "teaching_style",
+      "email_verified_at",
+      "is_admin",
     ],
   );
   assert.deepEqual(
@@ -240,7 +248,7 @@ test("Drizzle exposes the new integrity checks and matching indexes", () => {
     getTableConfig(reportsTable)
       .checks.map((check) => check.name)
       .sort(),
-    ["reports_no_self_check"],
+    ["reports_no_self_check", "reports_note_check", "reports_status_check"],
   );
   assert.deepEqual(
     getTableConfig(dmConversationsTable)

@@ -26,6 +26,7 @@ await db.connect();
 const { ledger } = await verifySchemaAssets({ rootDir: root });
 await bootstrapClassroom({ client: db, ledger, appSha: "448e39ff" });
 await db.query(readFileSync("tests/fixtures/chat-canonical.sql", "utf8"));
+await db.query(readFileSync("tests/fixtures/account-trust-verified.sql", "utf8"));
 await db.end();
 const key = path.join(temp, "key.pem"),
   cert = path.join(temp, "cert.pem");

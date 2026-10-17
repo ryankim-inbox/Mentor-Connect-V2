@@ -17,13 +17,23 @@ if not os.environ.get("DATABASE_URL"):
     sys.exit(1)
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from routers import auth, users, districts, tags, requests, reports, stats, matches, chat, request_interactions
+from routers import auth, users, districts, tags, requests, reports, stats, matches, chat, request_interactions, mentors
 from api.routers import admin, analytics, practice, python_reports, scheduling
 
 app = FastAPI(title="PeerBridge Python API")
+
+@app.exception_handler(RequestValidationError)
+async def invalid_body(request, error):
+    # Pydantic includes raw input by default, which can echo passwords/tokens.
+    return JSONResponse(status_code=422,content={'detail':[
+        {key:value for key,value in item.items() if key not in ('input','ctx')}
+        for item in error.errors()]})
+
 
 app.add_middleware(
     SessionMiddleware,
@@ -47,6 +57,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(mentors.router, prefix="/api")
 app.include_router(districts.router, prefix="/api")
 app.include_router(tags.router, prefix="/api")
 app.include_router(requests.router, prefix="/api")

@@ -1,13 +1,15 @@
+from fastapi import Depends
+from security import require_verified_user
 import re
 from datetime import datetime
 
 from fastapi import APIRouter, Request, HTTPException, Response, Query
-from pydantic import BaseModel, Field, PositiveInt, field_validator
+from pydantic import ConfigDict, BaseModel, Field, PositiveInt, field_validator
 from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional, List
 from db import db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_verified_user)])
 
 # Weekly slot format shared with the frontend selector and the DB seed:
 # 'Ddd HH:00' on a 24-hour clock, e.g. 'Mon 17:00' .. 'Sun 23:00'.
@@ -38,6 +40,7 @@ def validate_request_text(value, max_bytes):
 
 
 class RequestTextBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     @field_validator("title", check_fields=False)
     @classmethod
     def check_title(cls, value):
@@ -143,6 +146,7 @@ def build_request_response(cur, req, *, preview=False):
 
 @router.get("/requests")
 def list_requests(
+    request: Request,
     districtId: Optional[int] = None,
     role: Optional[str] = None,
     status: Optional[str] = None,
@@ -150,8 +154,9 @@ def list_requests(
     limit: Annotated[int, Query(ge=1, le=50)] = 50,
     before: Optional[str] = None,
 ):
-    conditions = []
-    params = []
+    viewer = require_verified_user(request)
+    conditions = ["NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id=%s AND b.blocked_user_id=r.author_id) OR (b.blocker_id=r.author_id AND b.blocked_user_id=%s))"]
+    params = [viewer["id"],viewer["id"]]
     effective_status = status or "open"
     conditions.append("r.status = %s")
     params.append(effective_status)
@@ -214,13 +219,16 @@ def create_request(body: CreateRequestBody, request: Request):
         raise
 
 @router.get("/requests/{request_id}")
-def get_request(request_id: PositiveInt):
+def get_request(request_id: PositiveInt, request: Request):
+    viewer = require_verified_user(request)
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM requests WHERE id = %s", (request_id,))
         req = cur.fetchone()
         if not req:
             raise HTTPException(status_code=404, detail="Request not found")
+        from routers.chat import _require_unblocked_pair
+        _require_unblocked_pair(cur,req["author_id"],viewer["id"])
         return build_request_response(cur, req)
 
 @router.patch("/requests/{request_id}")

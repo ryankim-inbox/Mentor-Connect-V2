@@ -385,7 +385,7 @@ def test_existing_dm_enforces_new_blocks(chat_server, chat_database, blocker_id)
             assert message_count() == persisted_message_count_before + 2
 
 
-def test_registration_names_cannot_poison_room_history(chat_server, chat_database):
+def test_registration_names_cannot_poison_room_history(chat_server, chat_database, backend_database):
     with chat_server() as base:
         client = build_opener(HTTPCookieProcessor(CookieJar()))
         registration = {"email": "new-student@test.edu", "password": "Password123!",
@@ -401,6 +401,9 @@ def test_registration_names_cannot_poison_room_history(chat_server, chat_databas
         status, registered = api(client, base, "POST", "/api/auth/register",
                                  {**registration, "name": "  New Student  "})
         assert status == 201 and registered["user"]["name"] == "New Student"
+        with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+            cur.execute("UPDATE users SET email_verified_at=now(),is_verified=true WHERE id=%s",(registered["user"]["id"],))
+            conn.commit()
         status, sent = api(client, base, "POST", "/api/chat/rooms/1/messages", {"body": "registered sender"})
         assert status == 201 and sent["senderName"] == "New Student"
         status, history = api(client, base, "GET", "/api/chat/rooms/1/messages")
@@ -420,7 +423,8 @@ def test_rest_commit_is_broadcast_to_both_peers(chat_server, socket_path, rest_p
         with connect(url, additional_headers={"Cookie": cookie}) as first, \
              connect(url, additional_headers={"Cookie": other_cookie}) as second:
             for client, author in [(student, 1), (mentor, 501)]:
-                status, saved = api(client, base, "POST", rest_path, {"body": "REST live", "senderId": 999})
+                assert api(client, base, "POST", rest_path, {"body": "REST live", "senderId": 999})[0] == 422
+                status, saved = api(client, base, "POST", rest_path, {"body": "REST live"})
                 assert status == 201 and saved["senderId"] == author
                 assert json.loads(first.recv(timeout=2)) == saved
                 assert json.loads(second.recv(timeout=2)) == saved

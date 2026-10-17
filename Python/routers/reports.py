@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Request, HTTPException, Response
-from pydantic import BaseModel, PositiveInt
+from fastapi import Depends
+from security import require_verified_user
+from fastapi import APIRouter, Request, HTTPException, Response, Query
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from psycopg2.errors import ForeignKeyViolation
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
+from security import require_admin
 from db import db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_verified_user)])
 
 class CreateReportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     reportedUserId: PositiveInt
     reason: Literal["spam", "harassment", "inappropriate", "fake_account", "other"]
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=2000)
 
 class BlockUserBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     blockedUserId: PositiveInt
 
 @router.post("/reports", status_code=201)
@@ -102,3 +107,42 @@ def unblock_user(blocked_user_id: PositiveInt, request: Request):
             "DELETE FROM blocks WHERE blocker_id = %s AND blocked_user_id = %s",
             (user_id, blocked_user_id),
         )
+
+
+class ModerateReportBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    status: Literal['open','reviewing','resolved','dismissed']
+    note: str | None = Field(default=None,max_length=2000)
+
+
+def _report(cur, report_id):
+    cur.execute('''SELECT r.*, a.name AS reporter_name,b.name AS reported_user_name
+                   FROM reports r JOIN users a ON a.id=r.reporter_id JOIN users b ON b.id=r.reported_user_id
+                   WHERE r.id=%s''',(report_id,))
+    row=cur.fetchone()
+    if not row:
+        raise HTTPException(404,'Report not found')
+    return {'id':row['id'],'reporterId':row['reporter_id'],'reporterName':row['reporter_name'],
+            'reportedUserId':row['reported_user_id'],'reportedUserName':row['reported_user_name'],
+            'reason':row['reason'],'description':row['description'],'status':row['status'],
+            'note':row['note'],'reviewedBy':row['reviewed_by'],
+            'reviewedAt':row['reviewed_at'].isoformat() if row['reviewed_at'] else None,
+            'createdAt':row['created_at'].isoformat()}
+
+
+@router.get('/admin/reports',dependencies=[Depends(require_admin)])
+def list_admin_reports(status: Literal['open','reviewing','resolved','dismissed'] | None = None,
+                       limit: Annotated[int,Query(ge=1,le=50)] = 50,
+                       beforeId: Annotated[int | None,Query(ge=1,le=2147483647)] = None):
+    with db() as conn:
+        cur=conn.cursor()
+        cur.execute('SELECT id FROM reports WHERE (%s IS NULL OR status=%s) AND (%s IS NULL OR id<%s) ORDER BY id DESC LIMIT %s',(status,status,beforeId,beforeId,limit))
+        return [_report(cur,row['id']) for row in cur.fetchall()]
+
+
+@router.patch('/admin/reports/{report_id}')
+def moderate_report(report_id: PositiveInt,body: ModerateReportBody,user=Depends(require_admin)):
+    with db() as conn:
+        cur=conn.cursor()
+        cur.execute('UPDATE reports SET status=%s,note=%s,reviewed_by=%s,reviewed_at=now() WHERE id=%s',(body.status,body.note,user['id'],report_id))
+        return _report(cur,report_id)
