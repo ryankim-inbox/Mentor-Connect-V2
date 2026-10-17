@@ -1,0 +1,10 @@
+# Native AMD64 comparison and mail preparation
+
+The user authorized a new PR, standard free Linux AMD64 CI, and subsequent mail/DB/redeployment work. Do not merge main. Existing external targets are limited to Neon `purple-pond-78194407/neondb` and Free Render `mentor-connect-test`; no remote change is needed for CI.
+
+1. Extend the disposable container harness for native Linux without exposing PostgreSQL beyond loopback. Run the same complete browser journey at 512 MiB/no extra swap, with 0.1 CPU as the constrained acceptance case and 1 CPU as a separate diagnostic control. Retain the existing HTTP and browser assertion budgets, exact source SHA and architecture checks. Use a standard free runner in this public repository, no external service secrets, no paid runners or deployment step.
+2. Verify locally, publish a draft PR from the existing isolated branch, inspect all CI outcomes, and diagnose failures without relabelling a passing control as constrained acceptance.
+3. Prepare provider-independent mail safety: keep authenticated bodyless requests, persisted rate limits and token transaction ordering; move blocking authority/transaction/delivery work off the event loop; return fixed errors even for empty/provider-sensitive exceptions. Select transport only after the provider/domain decision. Real provider acceptance does not prove mailbox delivery.
+4. Before actual mail, obtain provider/domain, explicit credential scope/persistence approval and secure secret entry, plus exact test recipient/content authorization. No inferred existing credentials. Before 0006, prove real receipt and verification, rehearse backup restoration, review the exact migration/grants and maintenance procedure. Admin identity and minimal grant need separate explicit approval.
+
+Validation: targeted red/green regressions, full release suite, native AMD64 container matrix, independent final diff review. Record failed, passing and unexecuted work separately. Do not apply 0006 while mail delivery or rollback prerequisites remain unresolved.

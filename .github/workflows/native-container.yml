@@ -1,0 +1,70 @@
+name: Native AMD64 container comparison
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-container:
+    name: native-amd64-${{ matrix.cpus }}-cpu
+    # Standard public-repository runner; no larger/paid runner or external secrets.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        cpus: ["0.1", "1"]
+    env:
+      DEPLOYMENT_TEST_IMAGE: mentor-connect:native-ci
+      DEPLOYMENT_TEST_CPUS: ${{ matrix.cpus }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Install locked dependencies and test tools
+        run: |
+          test "$(uname -m)" = x86_64
+          test "$(node --version)" = "v$(cat .node-version)"
+          corepack enable
+          corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
+          pnpm install --frozen-lockfile
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl stop postgresql || true
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          python3 -m venv "$RUNNER_TEMP/mentor-uv-tools"
+          "$RUNNER_TEMP/mentor-uv-tools/bin/python" -m pip install uv==0.11.16
+          UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/mentor-python" "$RUNNER_TEMP/mentor-uv-tools/bin/uv" sync --frozen --python 3.12 --group dev
+          echo "PYTHON_BIN=$RUNNER_TEMP/mentor-python/bin/python" >> "$GITHUB_ENV"
+          pnpm exec playwright install --with-deps chromium
+      - name: Build the checked-out release for native AMD64
+        run: |
+          pnpm build:release
+          docker build --platform linux/amd64 --build-arg RELEASE_SHA="$(git rev-parse HEAD)" -t "$DEPLOYMENT_TEST_IMAGE" .
+          test "$(docker image inspect --format '{{.Architecture}}' "$DEPLOYMENT_TEST_IMAGE")" = amd64
+          docker run --rm --entrypoint node "$DEPLOYMENT_TEST_IMAGE" -e \
+            'const r=require("/app/artifacts/api-gateway/dist/release.json"); if(r.releaseSha!==process.argv[1]) process.exit(1)' "$(git rev-parse HEAD)"
+      - name: Run unchanged browser journeys with a disposable loopback database
+        run: |
+          node --test tests/support/container-runtime.test.mjs
+          sh scripts/test-python.sh tests/test_deployment_live.py -q -s --tb=short
+      - name: Record comparison scope
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "Native Linux AMD64: $JOB_STATUS"
+            echo "CPU: $DEPLOYMENT_TEST_CPUS; memory: 512 MiB; no extra swap."
+            echo "Source: $(git rev-parse HEAD)"
+            echo "0.1 CPU is constrained acceptance; 1 CPU is a diagnostic control."
+            echo "Disposable synthetic local DB only. No Render/Neon deployment or real email."
+          } >> "$GITHUB_STEP_SUMMARY"
