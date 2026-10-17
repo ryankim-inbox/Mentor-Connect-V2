@@ -7,7 +7,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { createGatewayServer } from "../src/gateway.js";
 import {
@@ -19,6 +19,118 @@ import {
 import { requestFixture, userFixture } from "./contract-fixtures.js";
 
 const DEV_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
+
+const TEST_RECIPIENT = "owner+test@example.com";
+
+function registration(email = TEST_RECIPIENT, extra = {}) {
+  return Buffer.from(JSON.stringify({
+    email, name: "Test owner", password: "secret", role: "both", districtId: 1, ...extra,
+  }));
+}
+
+function testSignupEnvironment(
+  context: TestContext,
+  enabled: string | undefined,
+  recipient: string | undefined,
+) {
+  const previous = {
+    enabled: process.env.EMAIL_TEST_ALLOWLIST_ENABLED,
+    recipient: process.env.EMAIL_TEST_RECIPIENT,
+  };
+  const set = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+  set("EMAIL_TEST_ALLOWLIST_ENABLED", enabled);
+  set("EMAIL_TEST_RECIPIENT", recipient);
+  context.after(() => {
+    set("EMAIL_TEST_ALLOWLIST_ENABLED", previous.enabled);
+    set("EMAIL_TEST_RECIPIENT", previous.recipient);
+  });
+}
+
+test("test signup accepts only the exact normalized server-configured mailbox", (context) => {
+  testSignupEnvironment(context, "true", "Owner+Test@Example.COM");
+  const result = validateAuthBody("register", registration("OWNER+TEST@example.COM"));
+  assert.equal(JSON.parse(result.body.toString()).email, TEST_RECIPIENT);
+  assert.equal(result.accountKey, validateAuthBody("register", registration()).accountKey);
+  for (const email of [
+    "other@example.com", "owner@example.com", "owner+other@example.com",
+    "owner.test@example.com", "o.wner+test@example.com", "owner+test@sub.example.com",
+    "owner+test@example.com.evil.test",
+  ]) {
+    assert.throws(() => validateAuthBody("register", registration(email)), { message: "invalid_auth_body" });
+  }
+});
+
+for (const [enabled, recipient] of [
+  [undefined, undefined], [undefined, TEST_RECIPIENT], ["false", TEST_RECIPIENT],
+  ["TRUE", TEST_RECIPIENT], ["1", TEST_RECIPIENT], ["true ", TEST_RECIPIENT],
+  ["true", undefined], ["true", ""], ["true", "*@example.com"], ["true", "example.com"],
+  ["true", "owner@example.com,other@example.com"], ["true", "Owner <owner@example.com>"],
+  ["true", " owner@example.com"], ["true", "owner@example.com\n"],
+] as const) {
+  test(`test signup fails closed for configuration ${JSON.stringify([enabled, recipient])}`, (context) => {
+    testSignupEnvironment(context, enabled, recipient);
+    assert.throws(() => validateAuthBody("register", registration()), { message: "invalid_auth_body" });
+    if (recipient) {
+      assert.throws(() => validateAuthBody("register", registration(recipient)), { message: "invalid_auth_body" });
+    }
+    assert.equal(JSON.parse(validateAuthBody("register", registration("Student@School.EDU")).body.toString()).email, "student@school.edu");
+  });
+}
+
+test("test signup cannot widen eligibility or set authority through request fields", (context) => {
+  testSignupEnvironment(context, "true", TEST_RECIPIENT);
+  for (const extra of [
+    { role: "admin" }, { isAdmin: true }, { isVerified: true },
+    { email_verified_at: "2026-01-01" }, { EMAIL_TEST_ALLOWLIST_ENABLED: "true" },
+    { EMAIL_TEST_RECIPIENT: "attacker@example.com" }, { allowlist: ["attacker@example.com"] },
+    { testRecipient: "attacker@example.com" },
+  ]) {
+    assert.throws(() => validateAuthBody("register", registration(TEST_RECIPIENT, extra)), { message: "invalid_auth_body" });
+  }
+});
+
+test("registration rejects malformed mailbox syntax even with a school suffix", (context) => {
+  testSignupEnvironment(context, "true", TEST_RECIPIENT);
+  for (const email of [
+    "missing-at.edu", "@example.edu", "owner@@example.edu", "owner@example.edu@evil.com",
+    " owner@example.edu", "owner@example.edu ", "own er@example.edu", "owner@example.edu\n",
+    "owner\r\n@example.edu", "owner\x00@example.edu", "owner\t@example.edu", "owner\x7f@example.edu",
+    "owner\u00a0@example.edu", "Owner <owner@example.edu>", "owner@example.edu,other@example.edu",
+    "owner@example.edu;other@example.edu", '"owner"@example.edu', ".owner@example.edu",
+    "owner.@example.edu", "own..er@example.edu", "owner@-example.edu", "owner@example-.edu",
+    "owner@exam_ple.edu", "owner@example..edu", "owner@example.edu.", "owner@localhost",
+    "owner@[127.0.0.1]", "ownér@example.edu", "owner@exämple.edu", "*@example.edu",
+    "owner@*.edu", "a".repeat(65) + "@example.edu", "owner@" + "a".repeat(64) + ".edu",
+    "a".repeat(64) + "@" + ["b".repeat(63), "b".repeat(63), "b".repeat(63), "com"].join("."),
+  ]) {
+    assert.throws(() => validateAuthBody("register", registration(email)), { message: "invalid_auth_body" }, email);
+  }
+});
+
+test("test signup configuration cannot be enabled through request headers", async (context) => {
+  testSignupEnvironment(context, undefined, undefined);
+  const fixture = await startControlFixture();
+  try {
+    const response = await fetch(fixture.gatewayOrigin + "/api/auth/register", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json", origin: DEV_PUBLIC_ORIGIN,
+        "x-email-test-allowlist-enabled": "true", "x-email-test-recipient": TEST_RECIPIENT,
+        "EMAIL_TEST_ALLOWLIST_ENABLED": "true", "EMAIL_TEST_RECIPIENT": TEST_RECIPIENT,
+      },
+      body: registration(),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "invalid_input" });
+    assert.equal(fixture.calls.length, 0);
+  } finally {
+    await close(fixture.gateway);
+    await close(fixture.upstream);
+  }
+});
 
 interface UpstreamCall {
   readonly body: string;

@@ -2737,7 +2737,7 @@ components:
       properties:
         email:
           type: string
-          description: Must be a .edu email address
+          description: Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access.
         name:
           type: string
         password:
