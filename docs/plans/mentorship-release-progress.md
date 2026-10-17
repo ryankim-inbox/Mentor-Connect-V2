@@ -1,0 +1,13 @@
+# Approved mentorship test release — 2026-10-17
+
+Scope: push `codex/e2e-journey-fixes`, create PR (no main merge), upgrade only Neon `Mentor_Connect` / `purple-pond-78194407` / `neondb`, deploy the reviewed SHA to existing Free Render `mentor-connect-test` / `srv-db96aglg1s2s739tbtd0`, then actual HTTPS two-account E2E. No paid resources, credential changes or other service changes.
+
+Starting application commit: `53a82cdd80b65a4a05f26b2c80cffac098642df9`; prior verified public release `a9729c02355a15ff715cfc00641c85c977c1919a`.
+
+Operator: seven real disposable PostgreSQL cases cover dry-run, successful preserving upgrade/minimum grants, wrong target, duplicate/baseline rejection, DDL rollback, lock deadline and malformed local/TLS flag. Initial CLI tests failed before implementation. Independent Astra review found one Important input validation issue (`local: "false"` bypassing remote TLS enforcement); a failing regression reproduced it, and strict boolean validation made it pass. Whole release suite passed after the fix: Python 380, browser 75, gateway 120 plus 8 shield tests, operator 7 and all existing DB/contract/build/security checks. The full script exited 0.
+
+Provider read-only verification: Neon Console shows the authorized project and endpoint `ep-crimson-night-b552ar17`; database PostgreSQL 18.6, ledger exactly 0001–0003 with expected checksums, 6 users, 2 requests, 109 room messages and 108 DM messages. App/readiness roles have no elevated flags or memberships. Render remains Free with `/readyz`; its UI supports a specific commit from any branch, so no main merge or permanent source-branch change is necessary.
+
+Review rulings: provider ownership/baseline/privileges are checked during execution; recovery-dump hash and restore must be verified before apply; Git SHA provenance must be checked against pushed commit and final `/release.json`; Render Free/health/rollback are execution gates; prior application behavior retains its earlier independent review. Network-loss, ambiguous-commit, filesystem-failure and overall-deadline fault-injection tests are not performed; fail-closed behavior is reviewed, and any uncertain outcome requires ledger inspection rather than a blind retry.
+
+Status: no remote mutation yet. Existing credentials are read only by local operator code and never printed. Original checkout and earlier deployment worktree edits remain preserved.
