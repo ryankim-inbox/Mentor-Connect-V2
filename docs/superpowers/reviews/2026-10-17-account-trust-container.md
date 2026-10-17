@@ -1,6 +1,6 @@
 # Account trust — local container follow-up
 
-The local checks are complete, with a qualified result: both images built; the instrumented ARM64 full journey passed; AMD64 under ARM emulation failed its post-restart UI assertion. An earlier ARM64 REST send also returned 504 and its cause remains unresolved. These results do not approve deployment or establish reliability at the tested CPU limit.
+This is the initial container record. The [subsequent diagnosis and socket fix](2026-10-17-socket-responsiveness.md) records fresh host/ARM64 passes, completed AMD64 chat coverage, controlled CPU comparisons and the remaining failed/qualified combined AMD64 result. The initial result below remains historical: both images built; the instrumented ARM64 full journey passed; AMD64 under ARM emulation failed its post-restart UI assertion. An earlier ARM64 REST send also returned 504 and its cause remains unresolved. These results do not approve deployment or establish reliability at the tested CPU limit.
 
 Date: 2026-10-17 UTC. Branch: `codex/account-trust-admin`. Runtime source and embedded release SHA: `bea93d300d7c7a6721a15e9e4f95a9e50dea6704` (documentation successor to implementation `b3344a836e99618981c4430c85f5b3996e15a964`). The follow-up changes only the local test launcher and documentation; the product images, request timeouts, assertions and mutation retry behavior are unchanged.
 
