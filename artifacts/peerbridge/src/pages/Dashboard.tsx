@@ -26,7 +26,7 @@ function getDashboardTabFromUrl(practiceAvailable: boolean): DashboardTab {
 
 export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = {}) {
   const { user } = useAuth();
-  const practiceAvailable = PracticeLab !== undefined;
+  const practiceAvailable = user?.isAdmin === true && PracticeLab !== undefined;
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
     practiceAvailable ? initialTab ?? getDashboardTabFromUrl(practiceAvailable) : "overview",
   );

@@ -97,6 +97,9 @@ def test_popular_subjects_count_current_requests_and_break_ties_by_tag_id(analyt
 
 
 def test_real_gateway_analytics_counts_both_directions_and_deleted_requests(gateway_server, backend_database):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(501,))
+        conn.commit()
     mentor, _ = login(gateway_server, "mentor501@test.edu")
     both, _ = login(gateway_server, "both951@test.edu")
     mentee, _ = login(gateway_server, "student001@test.edu")

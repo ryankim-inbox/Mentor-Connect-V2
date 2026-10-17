@@ -2,20 +2,22 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field, PositiveInt, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from security import require_verified_user
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 from db import db
 from request_events import record_match_event
 from routers.chat import _require_user, _require_unblocked_pair
 from routers.requests import build_request_response
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_verified_user)])
 PageLimit = Annotated[int, Query(ge=1, le=50)]
 BeforeId = Annotated[int | None, Query(ge=1, le=2147483647)]
 
 
 class CommentBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     body: str = Field(min_length=1, max_length=2000)
     parentId: PositiveInt | None = None
     clientCommentId: UUID
@@ -29,6 +31,7 @@ class CommentBody(BaseModel):
 
 
 class ApplicationAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     action: Literal["accept", "reject", "cancel"]
 
 
@@ -126,7 +129,9 @@ def _comment(cur, comment_id):
     c = cur.fetchone()
     return {"id": c["id"], "requestId": c["request_id"], "authorId": c["author_id"], "authorName": c["name"],
             "parentId": c["parent_id"], "parentAuthorName": c["parent_author_name"],
-            "body": c["body"], "createdAt": c["created_at"].isoformat()}
+            "body": "" if c["deleted_at"] else c["body"], "createdAt": c["created_at"].isoformat(),
+            "updatedAt": c["updated_at"].isoformat() if c["updated_at"] else None,
+            "deletedAt": c["deleted_at"].isoformat() if c["deleted_at"] else None}
 
 
 @router.get("/requests/{request_id}/comments")
@@ -161,6 +166,8 @@ def create_comment(request_id: PositiveInt, body: CommentBody, request: Request)
         cur.execute("SELECT * FROM request_comments WHERE author_id=%s AND request_id=%s AND client_comment_id=%s", (user_id, request_id, str(body.clientCommentId)))
         existing = cur.fetchone()
         if existing:
+            if existing["deleted_at"]:
+                return _comment(cur, existing["id"])
             if existing["body"] != body.body or existing["parent_id"] != body.parentId:
                 raise HTTPException(409, "Comment operation already used for different content")
             return _comment(cur, existing["id"])
@@ -195,3 +202,53 @@ def request_activity(request: Request, limit: PageLimit = 50, beforeId: BeforeId
                        AND (%s IS NULL OR r.id < %s) ORDER BY r.id DESC LIMIT %s""", (user_id, user_id, user_id, beforeId, beforeId, limit))
         rows = cur.fetchall()
         return [build_request_response(cur, r, preview=True) for r in rows]
+
+
+class EditCommentBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    body: str = Field(min_length=1,max_length=2000)
+
+    @field_validator('body')
+    @classmethod
+    def clean_body(cls,value):
+        if not value.strip():
+            raise ValueError('Comment must contain text')
+        return value.strip()
+
+
+def _own_comment(cur,request_id,comment_id,user_id):
+    req = _request(cur,request_id,lock=True)
+    _require_unblocked_pair(cur,req['author_id'],user_id)
+    cur.execute('SELECT * FROM request_comments WHERE id=%s AND request_id=%s FOR UPDATE',(comment_id,request_id))
+    row=cur.fetchone()
+    if not row:
+        raise HTTPException(404,'Comment not found')
+    if row['author_id'] != user_id:
+        raise HTTPException(403,'Forbidden')
+    if row['parent_id']:
+        cur.execute('SELECT author_id FROM request_comments WHERE id=%s',(row['parent_id'],))
+        _require_unblocked_pair(cur,cur.fetchone()['author_id'],user_id)
+    return row
+
+
+@router.patch('/requests/{request_id}/comments/{comment_id}')
+def edit_comment(request_id: PositiveInt,comment_id: PositiveInt,body: EditCommentBody,request: Request):
+    user_id=_require_user(request)
+    with db() as conn:
+        cur=conn.cursor()
+        row=_own_comment(cur,request_id,comment_id,user_id)
+        if row['deleted_at']:
+            raise HTTPException(409,'Deleted comments cannot be edited')
+        cur.execute('UPDATE request_comments SET body=%s,updated_at=now() WHERE id=%s',(body.body,comment_id))
+        return _comment(cur,comment_id)
+
+
+@router.delete('/requests/{request_id}/comments/{comment_id}')
+def delete_comment(request_id: PositiveInt,comment_id: PositiveInt,request: Request):
+    user_id=_require_user(request)
+    with db() as conn:
+        cur=conn.cursor()
+        row=_own_comment(cur,request_id,comment_id,user_id)
+        if not row['deleted_at']:
+            cur.execute("UPDATE request_comments SET body='',deleted_at=now() WHERE id=%s",(comment_id,))
+        return _comment(cur,comment_id)

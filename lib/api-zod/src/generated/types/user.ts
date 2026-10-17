@@ -20,4 +20,5 @@ export interface User {
   subjects: string[];
   isVerified: boolean;
   createdAt: string;
+  isAdmin: boolean;
 }

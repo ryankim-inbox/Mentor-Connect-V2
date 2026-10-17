@@ -1,4 +1,7 @@
 """Location compatibility is label matching through the real practice API."""
+from contextlib import closing
+
+import psycopg2
 import pytest
 
 from backend_support import api, login
@@ -49,7 +52,10 @@ def test_location_requires_question_object(question):
         location_data({}, {}, question)
 
 
-def test_real_gateway_location_status_and_invocation(gateway_server):
+def test_real_gateway_location_status_and_invocation(gateway_server, backend_database):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET is_admin=true WHERE id=%s",(1,))
+        conn.commit()
     client, _ = login(gateway_server, "student001@test.edu")
     status, result = api(client, gateway_server, "GET", "/api/practice/locations/status")
     assert status == 200 and result["success"] and result["is_real"], result

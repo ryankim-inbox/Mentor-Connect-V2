@@ -57,6 +57,8 @@ export const requestCommentsTable = pgTable(
       .notNull()
       .references(() => usersTable.id),
     parentId: integer("parent_id"),
+    updatedAt: timestamp("updated_at",{withTimezone:true}),
+    deletedAt: timestamp("deleted_at",{withTimezone:true}),
     body: text("body").notNull(),
     clientCommentId: uuid("client_comment_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })

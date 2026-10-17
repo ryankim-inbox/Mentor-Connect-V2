@@ -10,6 +10,7 @@ import { createWebSocketUpgradeHandler } from "./websocket.js";
 
 import {
   resolvePublicRoute,
+  requiredAuthority,
   type PublicRoute,
   type PublicRouteMatch,
 } from "./route-policy.js";
@@ -26,6 +27,7 @@ import {
   validateAuthBody,
   readBoundedString,
   readDisplayName,
+  validateSensitiveBody,
 } from "./request-controls.js";
 
 const DEFAULT_UPSTREAM_ORIGIN = "http://127.0.0.1:8181";
@@ -122,6 +124,8 @@ interface UpstreamResponse {
 
 interface SessionVerification {
   readonly userId: number;
+  readonly isVerified: boolean;
+  readonly isAdmin: boolean;
   readonly setCookies: readonly string[];
 }
 
@@ -166,8 +170,11 @@ export function createGatewayServer(
 
   const upgrade = createWebSocketUpgradeHandler({
     upstreamOrigin: config.upstreamOrigin,
-    verifySession: (request, signal, requestId) =>
-      verifySession(request, config, requestId, signal),
+    verifySession: async (request, signal, requestId) => {
+      const session = await verifySession(request, config, requestId, signal);
+      assertSessionAuthority(session, "verified");
+      return session;
+    },
     assertOrigin: (request) =>
       assertAllowedOrigin(request.headers.origin, config.publicOrigin),
     maintenanceMode: config.maintenanceMode,
@@ -390,6 +397,25 @@ async function handleRequest(
     }
 
     if (sessionVerification) {
+      assertSessionAuthority(sessionVerification, requiredAuthority(policy));
+      if (policy.template === "/api/auth/verification/request") {
+        takeRateLimit(
+          config,
+          "session:" +
+            String(sessionVerification.userId) +
+            ":verification-request",
+          1,
+        );
+      }
+      if (policy.template === "/api/auth/verification/confirm") {
+        takeRateLimit(
+          config,
+          "session:" +
+            String(sessionVerification.userId) +
+            ":verification-confirm",
+          10,
+        );
+      }
       if (method !== "GET") {
         takeRateLimit(
           config,
@@ -434,6 +460,17 @@ async function handleRequest(
       } else {
         takeRateLimit(config, "register:global", 30);
       }
+    }
+
+    try {
+      body = validateSensitiveBody(policy.template, method, body);
+    } catch (error) {
+      throw new GatewayHttpError(
+        error instanceof Error && error.message === "invalid_message_content"
+          ? 400
+          : 422,
+        "invalid_input",
+      );
     }
 
     const upstream = await fetchUpstream(
@@ -786,42 +823,7 @@ async function handleSelfProfileRequest(
 
   validateRouteHeaders(request, policy, config.requestBodyLimitBytes);
 
-  let body: Buffer | undefined;
-  if (method === "PATCH") {
-    body = await readRequestBody(
-      request,
-      Math.min(
-        config.requestBodyLimitBytes,
-        SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES,
-      ),
-      true,
-      config.requestBodyTimeoutMs,
-      clientSignal,
-    );
-    body = validateSelfProfilePatch(body);
-  } else {
-    if (!hasCookie(request)) {
-      drainRequest(request);
-      sendGatewayError(response, 401, "unauthorized", requestId);
-      logRequest(config, trace, requestId, "unauthorized", 401);
-      return;
-    }
-
-    await readRequestBody(
-      request,
-      0,
-      false,
-      config.requestBodyTimeoutMs,
-      clientSignal,
-    );
-  }
-
-  if (!hasCookie(request)) {
-    sendGatewayError(response, 401, "unauthorized", requestId);
-    logRequest(config, trace, requestId, "unauthorized", 401);
-    return;
-  }
-
+  if (!hasCookie(request)) throw new GatewayHttpError(401, "unauthorized");
   const session = await verifySession(
     request,
     config,
@@ -829,6 +831,24 @@ async function handleSelfProfileRequest(
     clientSignal,
     trace,
   );
+  if (requestedUserId !== session.userId) {
+    if (method === "PATCH") throw new GatewayHttpError(404, "not_found");
+    assertSessionAuthority(session, "verified");
+  }
+  let body = await readRequestBody(
+    request,
+    method === "PATCH"
+      ? Math.min(
+          config.requestBodyLimitBytes,
+          SELF_PROFILE_UPDATE_BODY_LIMIT_BYTES,
+        )
+      : 0,
+    method === "PATCH",
+    config.requestBodyTimeoutMs,
+    clientSignal,
+  );
+  if (method === "PATCH") body = validateSelfProfilePatch(body);
+
   if (method !== "GET") {
     takeRateLimit(
       config,
@@ -836,12 +856,6 @@ async function handleSelfProfileRequest(
       60,
     );
   }
-  if (method === "PATCH" && session.userId !== requestedUserId) {
-    sendGatewayError(response, 404, "not_found", requestId);
-    logRequest(config, trace, requestId, "id_mismatch", 404);
-    return;
-  }
-
   const upstream = await fetchUpstream(
     request,
     method,
@@ -860,6 +874,7 @@ async function handleSelfProfileRequest(
     method,
     requestId,
     session.setCookies,
+    requestedUserId === session.userId,
   );
   logRequest(config, trace, requestId, "proxied", response.statusCode);
 }
@@ -927,6 +942,7 @@ function sendSelfProfileResponse(
   method: string,
   requestId: string,
   sessionSetCookies: readonly string[],
+  isSelf: boolean,
 ): void {
   const setCookies = [
     ...sessionSetCookies,
@@ -944,7 +960,7 @@ function sendSelfProfileResponse(
   }
   if (!upstream.response.ok) throw new UpstreamFailureError();
 
-  const profile = sanitizeSelfProfile(upstream.body, expectedUserId);
+  const profile = sanitizeSelfProfile(upstream.body, expectedUserId, isSelf);
   if (!profile) {
     throw new UpstreamFailureError();
   }
@@ -956,6 +972,7 @@ function sendSelfProfileResponse(
 function sanitizeSelfProfile(
   body: Buffer,
   expectedUserId: number,
+  isSelf: boolean,
 ): Record<string, unknown> | undefined {
   let payload: unknown;
   try {
@@ -965,6 +982,14 @@ function sanitizeSelfProfile(
   }
 
   try {
+    if (isSelf) {
+      const own = projectPublicPayload(
+        payload,
+        "/api/auth/me",
+        "GET",
+      ) as Record<string, unknown>;
+      return own.id === expectedUserId ? own : undefined;
+    }
     return projectProfile(payload, expectedUserId);
   } catch {
     return undefined;
@@ -1037,6 +1062,8 @@ async function verifySession(
 
   return {
     userId,
+    isVerified: (payload as Record<string, unknown>).isVerified === true,
+    isAdmin: (payload as Record<string, unknown>).isAdmin === true,
     setCookies: getSetCookies(upstream.response.headers),
   };
 }
@@ -1399,4 +1426,14 @@ function logRequest(
       ? { upstreamDurationMs: trace.upstreamDurationMs }
       : {}),
   });
+}
+
+function assertSessionAuthority(
+  session: SessionVerification,
+  authority: "session" | "verified" | "admin",
+): void {
+  if (authority !== "session" && !session.isVerified)
+    throw new GatewayHttpError(403, "forbidden");
+  if (authority === "admin" && !session.isAdmin)
+    throw new GatewayHttpError(403, "forbidden");
 }

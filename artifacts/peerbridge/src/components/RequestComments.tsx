@@ -5,6 +5,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  editRequestComment,
+  deleteRequestComment,
   createRequestComment,
   listRequestComments,
   type CreateCommentBody,
@@ -20,11 +22,24 @@ export default function RequestComments({
   userId: number;
 }) {
   const client = useQueryClient();
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
   const [draft, setDraft] = useState("");
   const [reply, setReply] = useState<RequestComment | null>(null);
   const busy = useRef(false);
   const attempt = useRef<CreateCommentBody | null>(null);
   const queryKey = ["journey", userId, "comments", requestId];
+  const change = useMutation({
+    retry: false,
+    mutationFn: ({ id, remove }: { id: number; remove: boolean }) =>
+      remove
+        ? deleteRequestComment(requestId, id)
+        : editRequestComment(requestId, id, { body: editText.trim() }),
+    onSuccess: () => {
+      setEditing(null);
+      void client.invalidateQueries({ queryKey });
+    },
+  });
   const comments = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as number | undefined,
@@ -56,7 +71,7 @@ export default function RequestComments({
     event.preventDefault();
     const body = draft.trim(),
       parentId = reply?.id ?? null;
-    if (!body || busy.current) return;
+    if (!body || Array.from(body).length > 2000 || busy.current) return;
     busy.current = true;
     if (
       attempt.current?.body !== body ||
@@ -124,8 +139,66 @@ export default function RequestComments({
               </p>
             )}
             <p className="whitespace-pre-wrap break-words text-sm mt-1">
-              {c.body}
+              {c.deletedAt ? "Comment deleted" : c.body}
+              {!c.deletedAt && c.updatedAt && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (edited)
+                </span>
+              )}
             </p>
+            {c.authorId === userId && !c.deletedAt && (
+              <div className="my-2 flex flex-wrap gap-3">
+                {editing === c.id ? (
+                  <div className="w-full">
+                    <label htmlFor={`edit-comment-${c.id}`}>
+                      Edit comment text
+                    </label>
+                    <textarea
+                      id={`edit-comment-${c.id}`}
+                      className="block w-full border rounded p-2"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                    />
+                    <button
+                      disabled={
+                        change.isPending ||
+                        !editText.trim() ||
+                        Array.from(editText.trim()).length > 2000
+                      }
+                      onClick={() => change.mutate({ id: c.id, remove: false })}
+                    >
+                      Save comment
+                    </button>
+                    <button className="ml-4" onClick={() => setEditing(null)}>
+                      Cancel edit
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      disabled={change.isPending}
+                      onClick={() => {
+                        setEditing(c.id);
+                        setEditText(c.body);
+                      }}
+                    >
+                      Edit comment
+                    </button>
+                    <button
+                      disabled={change.isPending}
+                      onClick={() => {
+                        if (
+                          confirm("Delete this comment? Replies will be kept.")
+                        )
+                          change.mutate({ id: c.id, remove: true });
+                      }}
+                    >
+                      Delete comment
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {!c.parentId && (
               <button
                 type="button"
@@ -138,6 +211,7 @@ export default function RequestComments({
           </li>
         ))}
       </ol>
+      {change.error && <p role="alert">{apiErrorMessage(change.error)}</p>}
       <form onSubmit={submit}>
         {reply && (
           <p className="text-sm mb-2">
@@ -160,18 +234,24 @@ export default function RequestComments({
         <textarea
           id="request-comment"
           value={draft}
-          maxLength={2000}
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
           className="w-full rounded-lg border p-3 text-sm"
         />
         <button
           type="submit"
-          disabled={!draft.trim() || mutation.isPending}
+          disabled={
+            !draft.trim() ||
+            Array.from(draft.trim()).length > 2000 ||
+            mutation.isPending
+          }
           className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           {reply ? "Post reply" : "Post comment"}
         </button>
+        {Array.from(draft.trim()).length > 2000 && (
+          <p role="alert">Use at most 2,000 characters.</p>
+        )}
         {mutation.error && (
           <p role="alert" className="text-sm text-destructive mt-2">
             {apiErrorMessage(mutation.error)} You can retry this unchanged

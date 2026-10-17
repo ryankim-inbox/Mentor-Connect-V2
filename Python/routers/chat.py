@@ -1,3 +1,5 @@
+from fastapi import Depends
+from security import require_verified_user
 # chat.py — chat learning missions
 #
 # This router is the student's project: a messenger-style chat with a global
@@ -22,24 +24,26 @@ from uuid import UUID
 from typing import Annotated
 
 from fastapi import BackgroundTasks, APIRouter, Query, Request, WebSocket, WebSocketDisconnect, HTTPException
-from pydantic import BaseModel
+from pydantic import ConfigDict, BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from db import db  # imported for you — every mission's queries will use it
 
 # REST endpoints; main.py mounts this under /api (so: GET /api/chat/rooms).
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_verified_user)])
 
 # WebSocket endpoints; mounted WITHOUT the /api prefix (so: /ws/chat/rooms/1).
 ws_router = APIRouter()
 
 
 class SendMessageBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     body: str
     clientMessageId: UUID | None = None
 
 
 class StartDmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     toUserId: int
 
 
@@ -84,10 +88,7 @@ def _require_user(request: Request) -> int:
         It raises ``HTTPException(401)`` itself, so you never repeat the check.
     Used by: Missions 1, 2, 3, 5, 6, 7.
     """
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user_id
+    return require_verified_user(request)["id"]
 
 
 def _clean_body(raw: str) -> str:
@@ -576,6 +577,7 @@ def _authorized_recipients(sockets: list[WebSocket], message: dict) -> list[WebS
             if not user_id:
                 continue
             try:
+                require_verified_user(socket)
                 if "roomId" in message:
                     _load_room_for_user(cur, message["roomId"], user_id)
                 else:
@@ -636,6 +638,21 @@ def _unregister(
         registry.pop(key, None)
 
 
+def _authorize_room_socket(websocket: WebSocket, room_id: int, user_id: int) -> None:
+    # Keep the complete blocking DB lifetime off the single ASGI event loop.
+    require_verified_user(websocket)
+    with db() as conn:
+        _load_room_for_user(conn.cursor(), room_id, user_id)
+
+
+def _authorize_dm_socket(websocket: WebSocket, conversation_id: int, user_id: int) -> None:
+    require_verified_user(websocket)
+    with db() as conn:
+        cur = conn.cursor()
+        convo = _load_conversation_membership(cur, conversation_id, user_id)
+        _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
+
+
 @ws_router.websocket("/ws/chat/rooms/{room_id}")
 async def chat_room_socket(websocket: WebSocket, room_id: int):
     """Mission 4 — live updates for a chat room."""
@@ -645,8 +662,7 @@ async def chat_room_socket(websocket: WebSocket, room_id: int):
         return
 
     try:
-        with db() as conn:
-            _load_room_for_user(conn.cursor(), room_id, user_id)
+        await run_in_threadpool(_authorize_room_socket, websocket, room_id, user_id)
     except HTTPException:
         await websocket.close(code=4403)
         return
@@ -685,10 +701,7 @@ async def dm_socket(websocket: WebSocket, conversation_id: int) -> None:
         return
 
     try:
-        with db() as conn:
-            cur = conn.cursor()
-            convo = _load_conversation_membership(cur, conversation_id, user_id)
-            _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
+        await run_in_threadpool(_authorize_dm_socket, websocket, conversation_id, user_id)
     except HTTPException:
         await websocket.close(code=4403)
         return
@@ -703,16 +716,10 @@ async def dm_socket(websocket: WebSocket, conversation_id: int) -> None:
                 continue
 
             try:
-                with db() as conn:
-                    cur = conn.cursor()
-                    convo = _load_conversation_membership(cur, conversation_id, user_id)
-                    _require_unblocked_pair(cur, convo["user_a_id"], convo["user_b_id"])
-                    cur.execute(
-                        """INSERT INTO dm_messages (conversation_id, sender_id, body)
-                           VALUES (%s, %s, %s) RETURNING id""",
-                        (conversation_id, user_id, clean),
-                    )
-                    message = _fetch_dm_message(cur, cur.fetchone()["id"])
+                # Match room sockets: recheck authority and commit in a worker.
+                message = await run_in_threadpool(
+                    send_dm_message, conversation_id, SendMessageBody(body=clean), websocket
+                )
             except HTTPException:
                 await websocket.close(code=4403)
                 break

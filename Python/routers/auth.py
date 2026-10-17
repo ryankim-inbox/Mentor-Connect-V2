@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Request, Response, HTTPException
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.concurrency import run_in_threadpool
 from db import db
 import bcrypt
 import re
+import hashlib
+import secrets
+from security import require_user
+from email_delivery import deliver_verification, DeliveryUnavailable
 
 router = APIRouter()
 
@@ -16,6 +21,7 @@ def normalize_display_name(value: str) -> str:
     return normalized
 
 class RegisterBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: str
     name: str
     password: str
@@ -42,6 +48,7 @@ class RegisterBody(BaseModel):
         return v
 
 class LoginBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: str
     password: str
 
@@ -55,7 +62,8 @@ def format_user(user, district_name):
         "districtName": district_name,
         "bio": user["bio"],
         "subjects": user["subjects"] or [],
-        "isVerified": user["is_verified"],
+        "isVerified": user["email_verified_at"] is not None,
+        "isAdmin": user["is_admin"],
         "createdAt": user["created_at"].isoformat(),
     }
 
@@ -77,7 +85,7 @@ def register(body: RegisterBody, request: Request):
 
         cur.execute(
             """INSERT INTO users (email, name, password_hash, role, district_id, is_verified, subjects)
-               VALUES (%s, %s, %s, %s, %s, true, '{}') RETURNING *""",
+               VALUES (%s, %s, %s, %s, %s, false, '{}') RETURNING *""",
             (body.email, body.name, password_hash, body.role, body.districtId),
         )
         user = cur.fetchone()
@@ -108,19 +116,70 @@ def logout(request: Request):
 
 @router.get("/auth/me")
 def me(request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = require_user(request)
+    return format_user(user, user['district_name'])
 
+
+class ConfirmBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    token: str = Field(min_length=43, max_length=128, pattern=r'^[A-Za-z0-9_-]+$')
+
+
+def _limit_attempt(cur, user_id, kind):
+    # Serialize all token transitions per account, including multi-worker races.
+    cur.execute('SELECT * FROM users WHERE id=%s FOR UPDATE', (user_id,))
+    user = cur.fetchone()
+    if not user:
+        raise HTTPException(401, 'Not authenticated')
+    cur.execute("DELETE FROM email_verification_requests WHERE user_id=%s AND requested_at < now()-interval '1 hour'",(user_id,))
+    cur.execute("SELECT count(*) AS n, COALESCE(bool_or(requested_at > now()-interval '60 seconds'),false) AS recent FROM email_verification_requests WHERE user_id=%s AND kind=%s AND requested_at > now()-(CASE WHEN %s='confirm' THEN interval '15 minutes' ELSE interval '1 hour' END)",(user_id,kind,kind))
+    history = cur.fetchone()
+    if history['n'] >= (10 if kind=='confirm' else 5) or (kind=='request' and history['recent']):
+        raise HTTPException(429,'Verification rate limit exceeded',headers={'Retry-After':'60'})
+    cur.execute('INSERT INTO email_verification_requests(user_id,kind) VALUES (%s,%s)',(user_id,kind))
+    return user
+
+
+@router.post('/auth/verification/request',status_code=202)
+async def request_verification(request: Request):
+    user = await run_in_threadpool(require_user, request)
+    if await request.body():
+        raise HTTPException(422,'Request body must be empty')
+    return await run_in_threadpool(_request_verification, user['id'])
+
+
+def _request_verification(user_id):
+    # Keep the lock, delivery, and commit together without blocking the event loop.
+    delivery_failed = False
     with db() as conn:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT u.*, d.name as district_name FROM users u LEFT JOIN districts d ON d.id = u.district_id WHERE u.id = %s",
-            (user_id,),
-        )
-        user = cur.fetchone()
+        user = _limit_attempt(cur,user_id,'request')
+        token = secrets.token_urlsafe(32)
+        try:
+            deliver_verification(user['email'],token)
+        except DeliveryUnavailable:
+            delivery_failed = True
+        else:
+            cur.execute('DELETE FROM email_verification_tokens WHERE user_id=%s',(user['id'],))
+            cur.execute("INSERT INTO email_verification_tokens(user_id,email,token_hash,expires_at) VALUES (%s,%s,%s,now()+interval '30 minutes')",(user['id'],user['email'],hashlib.sha256(token.encode()).hexdigest()))
+    if delivery_failed:
+        raise HTTPException(503, 'Email delivery unavailable')
+    return {'message':'Verification email sent'}
 
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
 
-    return format_user(user, user["district_name"])
+@router.post('/auth/verification/confirm', dependencies=[Depends(require_user)])
+def confirm_verification(body: ConfirmBody, request: Request):
+    user = require_user(request)
+    with db() as conn:
+        cur = conn.cursor()
+        user = _limit_attempt(cur,user['id'],'confirm')
+        cur.execute('DELETE FROM email_verification_tokens WHERE user_id=%s AND email=%s AND token_hash=%s AND expires_at>now() RETURNING user_id', (user['id'],user['email'],hashlib.sha256(body.token.encode()).hexdigest()))
+        found = cur.fetchone()
+        if found:
+            cur.execute('UPDATE users SET email_verified_at=now(),is_verified=true WHERE id=%s RETURNING *',(user['id'],))
+            user = cur.fetchone()
+            cur.execute('SELECT name FROM districts WHERE id=%s',(user['district_id'],))
+            district = cur.fetchone()
+    if not found:
+        raise HTTPException(400,'Invalid or expired verification token')
+    return format_user(user,district['name'])

@@ -26,7 +26,7 @@ export const usersTable = pgTable(
       .references(() => districtsTable.id),
     bio: text("bio"),
     subjects: text("subjects").array().notNull().default([]),
-    isVerified: boolean("is_verified").notNull().default(true),
+    isVerified: boolean("is_verified").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -39,8 +39,11 @@ export const usersTable = pgTable(
     languages: text("languages").array(),
     gradeLevel: text("grade_level"),
     teachingStyle: text("teaching_style"),
+    emailVerifiedAt: timestamp("email_verified_at", {withTimezone:true}),
+    isAdmin: boolean("is_admin").notNull().default(false),
   },
   (table) => [
+    check("users_email_ownership_check",sql`${table.isVerified} = (${table.emailVerifiedAt} IS NOT NULL)`),
     check(
       "users_role_check",
       sql`${table.role} IN ('mentee', 'mentor', 'both')`,

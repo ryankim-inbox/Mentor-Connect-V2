@@ -30,14 +30,18 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
         assert cur.fetchall() == messages
         cur.execute('SELECT count(*) FROM request_applications')
         assert cur.fetchone()[0] == 0
+        cur.execute((ROOT / 'database/migrations/0006_account_trust.sql').read_text())
+        cur.execute('SELECT count(*) FROM users WHERE is_verified OR email_verified_at IS NOT NULL')
+        assert cur.fetchone()[0] == 0
+        cur.execute('UPDATE users SET email_verified_at=now(),is_verified=true')
         cur.execute(sql.SQL('CREATE ROLE {} LOGIN').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))
         grants = [
             ('SELECT', 'districts,tags,questions,chat_rooms'),
-            ('SELECT,INSERT,UPDATE', 'users,dm_messages,request_applications'),
+            ('SELECT,INSERT,UPDATE', 'users,dm_messages,request_applications,request_comments,reports'),
             ('SELECT,INSERT,UPDATE,DELETE', 'requests'),
             ('SELECT,INSERT,DELETE', 'request_tags,blocks'),
-            ('SELECT,INSERT', 'reports,chat_messages,dm_conversations,request_events,request_comments'),
+            ('SELECT,INSERT', 'chat_messages,dm_conversations,request_events'),
         ]
         for privileges, tables in grants:
             cur.execute(sql.SQL('GRANT '+privileges+' ON '+tables+' TO {}').format(sql.Identifier(role)))

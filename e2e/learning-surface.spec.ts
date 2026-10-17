@@ -9,7 +9,8 @@ const signedInUser = {
   districtName: "Classroom North",
   bio: "",
   subjects: ["Math"],
-  isVerified: false,
+  isVerified: true,
+  isAdmin: true,
   createdAt: "2026-09-09T00:00:00Z",
 };
 
@@ -83,6 +84,8 @@ const pythonEnvelope = (feature: string, data: unknown) => ({
 
 const fixtures: Record<string, unknown> = {
   "/api/auth/me": signedInUser,
+  "/api/admin/reports": [],
+  "/api/blocks": [],
   "/api/districts": [district],
   "/api/tags": [tag],
   "/api/requests": [request],

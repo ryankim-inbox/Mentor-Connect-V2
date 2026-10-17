@@ -22,6 +22,7 @@ const authenticatedUser = {
   bio: "Private free-form bio",
   subjects: ["Math", "Science"],
   isVerified: true,
+  isAdmin: false,
   createdAt: "2026-08-26T00:00:00+00:00",
 };
 
@@ -167,7 +168,7 @@ test("a session cannot patch another user's profile", async (context) => {
   assert.deepEqual(harness.calls.patchedBodies, []);
 });
 
-test("a self profile response is an explicit minimum schema", async (context) => {
+test("a self profile response retains full account flags and settings", async (context) => {
   const harness = await createHarness();
   context.after(harness.close);
 
@@ -179,17 +180,12 @@ test("a self profile response is an explicit minimum schema", async (context) =>
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("vary"), "Cookie");
-  assert.deepEqual(body, {
-    id: 1,
-    name: "Student One",
-    subjects: ["Math", "Science"],
-    createdAt: "2026-08-26T00:00:00+00:00",
-  });
+  assert.deepEqual(body, authenticatedUser);
   assert.equal(harness.calls.authMe, 1);
   assert.equal(harness.calls.user, 1);
 });
 
-test("all non-allowlisted PATCH fields are rejected before authentication or profile forwarding", async (context) => {
+test("all non-allowlisted PATCH fields are rejected after authentication and before profile forwarding", async (context) => {
   const harness = await createHarness();
   context.after(harness.close);
 
@@ -216,7 +212,7 @@ test("all non-allowlisted PATCH fields are rejected before authentication or pro
     });
   }
 
-  assert.equal(harness.calls.authMe, 0);
+  assert.equal(harness.calls.authMe, 5);
   assert.equal(harness.calls.user, 0);
 });
 
@@ -239,12 +235,7 @@ test("allowlisted PATCH fields are sanitized and forwarded only for the session 
   });
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    id: 1,
-    name: "Student One",
-    subjects: ["Math", "Science"],
-    createdAt: "2026-08-26T00:00:00+00:00",
-  });
+  assert.deepEqual(await response.json(), authenticatedUser);
   assert.equal(harness.calls.authMe, 1);
   assert.equal(harness.calls.user, 1);
   assert.deepEqual(harness.calls.patchedBodies, [
@@ -285,12 +276,18 @@ test("profile names retain the registration UTF-8 byte boundaries and trimming",
   ]) {
     assert.equal((await patch(name)).status, 400);
   }
-  assert.equal(harness.calls.authMe, 0);
+  assert.equal(harness.calls.authMe, 12);
   assert.equal(harness.calls.user, 0);
   for (const name of [
-    "x".repeat(120), "界".repeat(40), "  Ada  ",
-    "\ufeffAda\ufeff", "\u0085Ada\u0085", "\u001cAda\u001c",
-    "\u001dAda\u001d", "\u001eAda\u001e", "\u001fAda\u001f",
+    "x".repeat(120),
+    "界".repeat(40),
+    "  Ada  ",
+    "\ufeffAda\ufeff",
+    "\u0085Ada\u0085",
+    "\u001cAda\u001c",
+    "\u001dAda\u001d",
+    "\u001eAda\u001e",
+    "\u001fAda\u001f",
     "\u001c\ufeff\u001cAda\u001c\ufeff\u001c",
   ]) {
     assert.equal((await patch(name)).status, 200);

@@ -1,7 +1,9 @@
+from fastapi import Depends
+from security import require_verified_user
 from fastapi import APIRouter
 from db import db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_verified_user)])
 
 @router.get("/tags")
 def list_tags():

@@ -1,12 +1,22 @@
-from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends, Request, HTTPException
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List
 from db import db
-from routers.auth import normalize_display_name
+from routers.auth import normalize_display_name, format_user
+from security import require_user, verified
+from routers.chat import _require_unblocked_pair
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_user)])
 
 class UpdateUserBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("role")
+    @classmethod
+    def valid_role(cls, value):
+        if value is not None and value not in ("mentor","mentee","both"):
+            raise ValueError("Role must be mentor, mentee, or both")
+        return value
     name: Optional[str] = None
     bio: Optional[str] = None
     role: Optional[str] = None
@@ -17,22 +27,11 @@ class UpdateUserBody(BaseModel):
     def name_must_be_valid(cls, value):
         return normalize_display_name(value) if value is not None else None
 
-def format_user(user, district_name):
-    return {
-        "id": user["id"],
-        "email": user["email"],
-        "name": user["name"],
-        "role": user["role"],
-        "districtId": user["district_id"],
-        "districtName": district_name,
-        "bio": user["bio"],
-        "subjects": user["subjects"] or [],
-        "isVerified": user["is_verified"],
-        "createdAt": user["created_at"].isoformat(),
-    }
-
 @router.get("/users/{user_id}")
-def get_user(user_id: int):
+def get_user(user_id: int, request: Request):
+    viewer = require_user(request)
+    if viewer["id"] != user_id:
+        verified(viewer)
     with db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -44,11 +43,15 @@ def get_user(user_id: int):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if viewer["id"] != user_id:
+        with db() as conn:
+            _require_unblocked_pair(conn.cursor(),viewer["id"],user_id)
+        return {"id":user["id"],"name":user["name"],"subjects":user["subjects"] or [],"createdAt":user["created_at"].isoformat()}
     return format_user(user, user["district_name"])
 
 @router.patch("/users/{user_id}")
 def update_user(user_id: int, body: UpdateUserBody, request: Request):
-    session_user_id = request.session.get("user_id")
+    session_user_id = require_user(request)["id"]
     if not session_user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if session_user_id != user_id:

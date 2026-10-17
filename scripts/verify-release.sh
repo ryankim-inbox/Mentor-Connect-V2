@@ -43,6 +43,7 @@ run uv sync --frozen --group dev
 run "$PYTHON_BIN" -c "import pytest, psycopg, psycopg2, uvicorn, websockets"
 run node scripts/test-python-runtime.mjs
 run node scripts/test-python-freeze.mjs
+run node --test tests/support/container-runtime.test.mjs
 # The Python suite includes the built SPA/gateway HTTPS browser integration.
 # Fresh CI checkouts need both build output and Chromium before collecting it.
 run pnpm typecheck

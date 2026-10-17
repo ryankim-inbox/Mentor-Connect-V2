@@ -511,6 +511,69 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     requiresJson: false,
     queryKeys: noQuery,
   },
+  {
+    method: "POST",
+    template: "/api/auth/verification/request",
+    family: "auth",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: [],
+  },
+  {
+    method: "POST",
+    template: "/api/auth/verification/confirm",
+    family: "auth",
+    authentication: "session",
+    allowsBody: true,
+    requiresJson: true,
+    queryKeys: [],
+  },
+  {
+    method: "GET",
+    template: "/api/mentors",
+    family: "mentors",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["limit", "beforeId"],
+  },
+  {
+    method: "GET",
+    template: "/api/admin/reports",
+    family: "admin",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["status", "limit", "beforeId"],
+  },
+  {
+    method: "PATCH",
+    template: "/api/admin/reports/{id}",
+    family: "admin",
+    authentication: "session",
+    allowsBody: true,
+    requiresJson: true,
+    queryKeys: [],
+  },
+  {
+    method: "PATCH",
+    template: "/api/requests/{id}/comments/{commentId}",
+    family: "requests",
+    authentication: "session",
+    allowsBody: true,
+    requiresJson: true,
+    queryKeys: [],
+  },
+  {
+    method: "DELETE",
+    template: "/api/requests/{id}/comments/{commentId}",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: [],
+  },
 ]);
 
 const moduleNames = new Set(["find_matches", "locations", "get_blocks"]);
@@ -562,15 +625,24 @@ function isPositiveSafeInteger(value: string): boolean {
 
 function isRequestCursor(value: string): boolean {
   if (value.length > 96) return false;
-  const parts = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))\|([1-9][0-9]*)$/.exec(value);
+  const parts =
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))\|([1-9][0-9]*)$/.exec(
+      value,
+    );
   if (!parts) return false;
   const [, date, hour, minute, second, offsetHour, offsetMinute, id] = parts;
   const calendarDate = new Date(`${date}T00:00:00Z`);
-  return Number(date!.slice(0, 4)) >= 1 &&
-    Number.isFinite(calendarDate.getTime()) && calendarDate.toISOString().slice(0, 10) === date &&
-    Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59 &&
-    (offsetHour === undefined || (Number(offsetHour) <= 23 && Number(offsetMinute) <= 59)) &&
-    isPositiveSafeInteger(id!);
+  return (
+    Number(date!.slice(0, 4)) >= 1 &&
+    Number.isFinite(calendarDate.getTime()) &&
+    calendarDate.toISOString().slice(0, 10) === date &&
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    Number(second) <= 59 &&
+    (offsetHour === undefined ||
+      (Number(offsetHour) <= 23 && Number(offsetMinute) <= 59)) &&
+    isPositiveSafeInteger(id!)
+  );
 }
 
 function validateQuery(
@@ -589,16 +661,26 @@ function validateQuery(
     if (["districtId", "tagId", "user_a", "user_b"].includes(key)) {
       if (!isPositiveSafeInteger(value)) invalidQuery();
     } else if (key === "beforeId") {
-      if (!isPositiveSafeInteger(value) || Number(value) > 2147483647) invalidQuery();
+      if (!isPositiveSafeInteger(value) || Number(value) > 2147483647)
+        invalidQuery();
     } else if (key === "limit") {
-      const maximum = route.family === "requests" ? 50 : 20;
-      if (!isPositiveSafeInteger(value) || Number(value) > maximum) invalidQuery();
+      const maximum = ["requests", "mentors", "admin"].includes(route.family)
+        ? 50
+        : 20;
+      if (!isPositiveSafeInteger(value) || Number(value) > maximum)
+        invalidQuery();
     } else if (key === "before") {
       if (!isRequestCursor(value)) invalidQuery();
     } else if (key === "role") {
       if (value !== "mentor" && value !== "mentee") invalidQuery();
     } else if (key === "status") {
-      if (value !== "open" && value !== "matched" && value !== "closed")
+      if (
+        !(
+          route.template === "/api/admin/reports"
+            ? ["open", "reviewing", "resolved", "dismissed"]
+            : ["open", "matched", "closed"]
+        ).includes(value)
+      )
         invalidQuery();
     } else if (key === "search") {
       if (Buffer.byteLength(value, "utf8") > 200) invalidQuery();
@@ -653,4 +735,23 @@ export function resolvePublicRoute(
     };
   }
   return undefined;
+}
+
+// Session-only auth and own-profile access are handled separately. All other
+// protected operations require fresh ownership, and operational families require admin.
+export function requiredAuthority(
+  route: PublicRoute,
+): "session" | "verified" | "admin" {
+  if (["auth", "users"].includes(route.family)) return "session";
+  return [
+    "practice",
+    "matches",
+    "analysis",
+    "analytics",
+    "python-reports",
+    "scheduling",
+    "admin",
+  ].includes(route.family)
+    ? "admin"
+    : "verified";
 }

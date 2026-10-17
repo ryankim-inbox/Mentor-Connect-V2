@@ -78,7 +78,7 @@ pnpm --dir "$ROOT/lib/db" exec node --input-type=module -e '
       SELECT value, $sql$Tag $sql$ || value
       FROM generate_series(1, 100) AS value;
       INSERT INTO users
-        (id, email, name, password_hash, role, district_id, is_verified)
+        (id, email, name, password_hash, role, district_id, is_verified, email_verified_at)
       SELECT
         value,
         $sql$user-$sql$ || lpad(value::text, 5, $sql$0$sql$) || $sql$@example.test$sql$,
@@ -86,7 +86,8 @@ pnpm --dir "$ROOT/lib/db" exec node --input-type=module -e '
         $sql$hash$sql$,
         CASE WHEN value % 2 = 0 THEN $sql$mentor$sql$ ELSE $sql$mentee$sql$ END,
         (value % 100) + 1,
-        value % 20 <> 0
+        value % 20 <> 0,
+        CASE WHEN value % 20 <> 0 THEN now() ELSE NULL END
       FROM generate_series(1, 5000) AS value;
       INSERT INTO requests
         (id, author_id, district_id, title, description, role, status)
