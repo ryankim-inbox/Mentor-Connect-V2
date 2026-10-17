@@ -29,7 +29,7 @@ interface Navigation {
 const ChatNavigation = createContext<Navigation | null>(null);
 
 export function ChatNavigationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const account = useRef(user?.id);
   account.current = user?.id;
@@ -43,7 +43,13 @@ export function ChatNavigationProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
   const openDm = async (userId: number) => {
     const owner = user?.id;
-    if (!owner || busy.current) return;
+    if (
+      !owner ||
+      status !== "authenticated" ||
+      !user?.isVerified ||
+      busy.current
+    )
+      return;
     busy.current = true;
     setPending(userId);
     setFailure(null);

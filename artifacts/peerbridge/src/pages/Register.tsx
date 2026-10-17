@@ -22,7 +22,7 @@ export default function Register() {
   const confirmSession = async () => {
     try {
       const user = await refetch();
-      if (user) navigate(destination);
+      if (user) navigate(user.isVerified ? destination : "/verify-email");
       else
         setError(
           "Your session isn't active yet. Recheck your session or sign in again.",
@@ -116,6 +116,7 @@ export default function Register() {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== getGetMeQueryKey()[0],
       });
+      queryClient.getMutationCache().clear();
       queryClient.setQueryData(getGetMeQueryKey(), response.user);
       setNeedsConfirmation(true);
       await confirmSession();

@@ -31,7 +31,7 @@ test("chat retains no browser message draft", async () => {
   assert.doesNotMatch(chatWidgetSource, /(?:localStorage|sessionStorage)/);
 });
 
-test("the complete learning surface is public", () => {
+test("route inventory keeps operational destinations explicit", () => {
   assert.deepEqual(releaseSurface.appRoutes, {
     register: "/register",
     dashboard: "/dashboard",
