@@ -7,7 +7,14 @@
  */
 
 export interface SendChatMessageBody {
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
   body: string;
-  /** Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409. */
-  clientMessageId?: string;
+  /**
+   * Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.
+   * @nullable
+   */
+  clientMessageId?: string | null;
 }

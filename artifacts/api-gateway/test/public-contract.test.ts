@@ -92,7 +92,11 @@ test("gateway preserves generated learning TODO and successful payload semantics
   const upstream = createServer((request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
-      JSON.stringify(request.url === "/api/auth/me" ? userFixture : payload),
+      JSON.stringify(
+        request.url === "/api/auth/me"
+          ? { ...userFixture, isAdmin: true }
+          : payload,
+      ),
     );
   });
   const origin = await listen(upstream);
@@ -523,39 +527,123 @@ test("request preview disclosure is preserved and required by the public contrac
   const { requestFixture } = await import("./contract-fixtures.ts");
   for (const descriptionTruncated of [false, true]) {
     const row = { ...requestFixture, descriptionTruncated };
-    assert.deepEqual(projectPublicPayload([row], "/api/requests", "GET"), [row]);
+    assert.deepEqual(projectPublicPayload([row], "/api/requests", "GET"), [
+      row,
+    ]);
   }
-  const { descriptionTruncated: _discarded, ...missing } = { ...requestFixture, descriptionTruncated: false };
+  const { descriptionTruncated: _discarded, ...missing } = {
+    ...requestFixture,
+    descriptionTruncated: false,
+  };
   assert.throws(() => projectPublicPayload([missing], "/api/requests", "GET"));
 });
 
 test("moderation failures preserve null data and redacted diagnostics; malformed successes are rejected", () => {
   const failed = {
-    ok: false, success: false, feature: "admin.flagged_users", source: "python",
-    student_module: { module: "get_blocks", importable: true, called: false,
-      status: "runtime error", error: "database audit-canary", available_functions: ["get_flagged_users"] },
-    student_result: { email: "private audit-canary" }, error: "database audit-canary", data: null,
+    ok: false,
+    success: false,
+    feature: "admin.flagged_users",
+    source: "python",
+    student_module: {
+      module: "get_blocks",
+      importable: true,
+      called: false,
+      status: "runtime error",
+      error: "database audit-canary",
+      available_functions: ["get_flagged_users"],
+    },
+    student_result: { email: "private audit-canary" },
+    error: "database audit-canary",
+    data: null,
   };
-  const projected = projectPublicPayload(failed, "/api/admin/flagged-users", "GET") as Record<string, unknown>;
+  const projected = projectPublicPayload(
+    failed,
+    "/api/admin/flagged-users",
+    "GET",
+  ) as Record<string, unknown>;
   assert.equal(projected.ok, false);
   assert.equal(projected.data, null);
   assert.equal(projected.error, "student_module_error");
   assert.ok(!JSON.stringify(projected).includes("audit-canary"));
-  for (const data of [null, {}, [{ userId: 1, email: "private audit-canary" }]]) {
-    assert.throws(() => projectPublicPayload({ ...failed, ok: true, success: true, data }, "/api/admin/flagged-users", "GET"));
+  for (const data of [
+    null,
+    {},
+    [{ userId: 1, email: "private audit-canary" }],
+  ]) {
+    assert.throws(() =>
+      projectPublicPayload(
+        { ...failed, ok: true, success: true, data },
+        "/api/admin/flagged-users",
+        "GET",
+      ),
+    );
   }
-  assert.throws(() => projectPublicPayload({ ...failed, data: { email: "private audit-canary" } }, "/api/admin/flagged-users", "GET"));
+  assert.throws(() =>
+    projectPublicPayload(
+      { ...failed, data: { email: "private audit-canary" } },
+      "/api/admin/flagged-users",
+      "GET",
+    ),
+  );
 });
 
 test("consent and discussion projections expose only their public fields", () => {
-  const app = { id: 1, requestId: 11, applicantId: 2, applicantName: "Mentee", status: "pending", createdAt: "2026-10-16T00:00:00Z", updatedAt: "2026-10-16T00:00:00Z" };
-  const comment = { id: 1, requestId: 11, authorId: 2, authorName: "Mentee", parentId: null, parentAuthorName: null, body: "Plain text", createdAt: app.createdAt };
-  const contact = { userId: 2, name: "Mentee", requestId: 11, requestTitle: "Study" };
-  for (const [path, value] of [["/api/requests/11/applications", app], ["/api/requests/11/comments", comment], ["/api/connections", contact]] as const) {
-    assert.deepEqual(projectPublicPayload([{ ...value, email: "private", clientCommentId: "private" }], path, "GET"), [value]);
-    assert.throws(() => projectPublicPayload(Array(51).fill(value), path, "GET"));
-    assert.throws(() => projectPublicPayload([{ ...value, requestId: null }], path, "GET"));
+  const app = {
+    id: 1,
+    requestId: 11,
+    applicantId: 2,
+    applicantName: "Mentee",
+    status: "pending",
+    createdAt: "2026-10-16T00:00:00Z",
+    updatedAt: "2026-10-16T00:00:00Z",
+  };
+  const comment = {
+    id: 1,
+    requestId: 11,
+    authorId: 2,
+    authorName: "Mentee",
+    parentId: null,
+    parentAuthorName: null,
+    body: "Plain text",
+    createdAt: app.createdAt,
+    updatedAt: null,
+    deletedAt: null,
+  };
+  const contact = {
+    userId: 2,
+    name: "Mentee",
+    requestId: 11,
+    requestTitle: "Study",
+  };
+  for (const [path, value] of [
+    ["/api/requests/11/applications", app],
+    ["/api/requests/11/comments", comment],
+    ["/api/connections", contact],
+  ] as const) {
+    assert.deepEqual(
+      projectPublicPayload(
+        [{ ...value, email: "private", clientCommentId: "private" }],
+        path,
+        "GET",
+      ),
+      [value],
+    );
+    assert.throws(() =>
+      projectPublicPayload(Array(51).fill(value), path, "GET"),
+    );
+    assert.throws(() =>
+      projectPublicPayload([{ ...value, requestId: null }], path, "GET"),
+    );
   }
-  assert.deepEqual(projectPublicPayload(app, "/api/requests/11/match", "POST"), app);
-  assert.throws(() => projectPublicPayload({ ...app, status: "matched" }, "/api/requests/11/match", "POST"));
+  assert.deepEqual(
+    projectPublicPayload(app, "/api/requests/11/match", "POST"),
+    app,
+  );
+  assert.throws(() =>
+    projectPublicPayload(
+      { ...app, status: "matched" },
+      "/api/requests/11/match",
+      "POST",
+    ),
+  );
 });

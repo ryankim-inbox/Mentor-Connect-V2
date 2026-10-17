@@ -84,6 +84,7 @@ async function startControlFixture(now: () => number = Date.now): Promise<{
       const id = Number(match[1]);
       sendJson(response, 200, {
         ...userFixture,
+        isAdmin: true,
         id,
         email: `student-${id}@example.edu`,
       });
@@ -828,7 +829,7 @@ test("shares the 12-per-minute expensive bucket across matching aliases and prac
   const calls = [
     ["GET", "/api/matches/1?limit=5", undefined],
     ["GET", "/api/practice/matching/1?limit=5", undefined],
-    ["POST", "/api/matches", '{"questionId":1}'],
+    ["POST", "/api/matches", '{"question_id":1}'],
     ["POST", "/api/practice/locations/test", '{"input":"school"}'],
   ] as const;
 

@@ -90,6 +90,7 @@ const user = z.object({
   bio: string.nullable().optional(),
   subjects: string.array(),
   isVerified: z.boolean(),
+  isAdmin: z.boolean(),
   createdAt: string,
 });
 const auth = z.object({ user, message: string });
@@ -127,16 +128,61 @@ const mentorshipRequest = z.object({
   preferredTimes: string.array().optional(),
 });
 const application = z.object({
-  id, requestId: id, applicantId: id, applicantName: text,
+  id,
+  requestId: id,
+  applicantId: id,
+  applicantName: text,
   status: z.enum(["pending", "accepted", "rejected", "cancelled"]),
-  createdAt: timestamp, updatedAt: timestamp,
+  createdAt: timestamp,
+  updatedAt: timestamp,
 });
 const comment = z.object({
-  id, requestId: id, authorId: id, authorName: text,
-  parentId: id.nullable(), parentAuthorName: text.nullable(),
-  body: text.max(2000), createdAt: timestamp,
+  id,
+  requestId: id,
+  authorId: id,
+  authorName: text,
+  parentId: id.nullable(),
+  parentAuthorName: text.nullable(),
+  body: z.string().max(2000),
+  createdAt: timestamp,
+  updatedAt: timestamp.nullable(),
+  deletedAt: timestamp.nullable(),
 });
-const connection = z.object({ userId: id, name: text, requestId: id, requestTitle: text });
+const mentor = z.object({
+  id,
+  name: text,
+  role: z.enum(["mentor", "both"]),
+  subjects: z.array(z.string()),
+  districtId: id,
+  districtName: z.string().nullable(),
+  bio: z.string().nullable(),
+});
+const report = z.object({
+  id,
+  reporterId: id,
+  reporterName: text,
+  reportedUserId: id,
+  reportedUserName: text,
+  reason: z.enum([
+    "spam",
+    "harassment",
+    "inappropriate",
+    "fake_account",
+    "other",
+  ]),
+  description: z.string().max(2000).nullable(),
+  status: z.enum(["open", "reviewing", "resolved", "dismissed"]),
+  note: z.string().max(2000).nullable(),
+  reviewedBy: id.nullable(),
+  reviewedAt: timestamp.nullable(),
+  createdAt: timestamp,
+});
+const connection = z.object({
+  userId: id,
+  name: text,
+  requestId: id,
+  requestTitle: text,
+});
 const blockedUser = z.object({
   id: integer,
   blockedUserId: integer,
@@ -247,6 +293,13 @@ export function projectPublicPayload(
   path: string,
   method: string,
 ): unknown {
+  if (path === "/api/mentors") return mentor.array().max(50).parse(payload);
+  if (path === "/api/admin/reports")
+    return report.array().max(50).parse(payload);
+  if (path === "/api/admin/reports/{id}") return report.parse(payload);
+  if (path === "/api/auth/verification/confirm") return user.parse(payload);
+  if (path === "/api/auth/verification/request")
+    return messageResponse.parse(payload);
   if (path.startsWith("/api/chat/") || path.startsWith("/api/dms")) {
     if (
       payload &&
@@ -283,9 +336,10 @@ export function projectPublicPayload(
     else envelope.parse(value);
     const projected = projectStudentPayload(value) as Record<string, unknown>;
     if (path === "/api/admin/flagged-users")
-      projected.data = value.ok === false && value.data === null
-        ? null
-        : adminRow.array().parse(value.data);
+      projected.data =
+        value.ok === false && value.data === null
+          ? null
+          : adminRow.array().parse(value.data);
     return projected;
   }
   if (path === "/api/auth/me") return user.parse(payload);
@@ -300,12 +354,18 @@ export function projectPublicPayload(
   if (path === "/api/districts") return district.array().parse(payload);
   if (path.startsWith("/api/districts/")) return district.parse(payload);
   if (path === "/api/tags") return tag.array().parse(payload);
-  if (path === "/api/connections") return connection.array().max(50).parse(payload);
-  if (path === "/api/request-activity") return mentorshipRequest.array().max(50).parse(payload);
-  if (/^\/api\/requests\/[^/]+\/comments$/.test(path))
-    return (method === "GET" ? comment.array().max(50) : comment).parse(payload);
+  if (path === "/api/connections")
+    return connection.array().max(50).parse(payload);
+  if (path === "/api/request-activity")
+    return mentorshipRequest.array().max(50).parse(payload);
+  if (/^\/api\/requests\/[^/]+\/comments(?:\/[^/]+)?$/.test(path))
+    return (method === "GET" ? comment.array().max(50) : comment).parse(
+      payload,
+    );
   if (/^\/api\/requests\/[^/]+\/(?:applications(?:\/[^/]+)?|match)$/.test(path))
-    return (method === "GET" ? application.array().max(50) : application).parse(payload);
+    return (method === "GET" ? application.array().max(50) : application).parse(
+      payload,
+    );
   if (path.startsWith("/api/requests"))
     return (
       path === "/api/requests" && method === "GET"
