@@ -1,5 +1,6 @@
 // Ownership secrets live only in this document's memory. Never use a query/mutation cache.
 let token = "";
+let version = 0;
 const listeners = new Set<() => void>();
 function capture() {
   if (window.location.pathname !== "/verify-email" || !window.location.hash)
@@ -7,6 +8,7 @@ function capture() {
   const candidate =
     new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
   token = /^[A-Za-z0-9_-]{43,128}$/.test(candidate) ? candidate : "";
+  version++;
   window.history.replaceState(
     window.history.state,
     "",
@@ -27,8 +29,13 @@ export const verificationFragment = {
     };
   },
   snapshot: () => token,
-  clear() {
+  version: () => version,
+  clear(expectedVersion?: number) {
+    if (expectedVersion !== undefined && version !== expectedVersion)
+      return false;
     token = "";
+    version++;
     listeners.forEach((listener) => listener());
+    return true;
   },
 };
