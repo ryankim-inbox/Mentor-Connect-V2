@@ -14,6 +14,7 @@
     "request_applications",
     "request_comments",
     "request_events",
+    "request_submission_keys",
     "request_tags",
     "requests",
     "schedules",
@@ -574,6 +575,30 @@
       "default": null
     },
     {
+      "table": "reports",
+      "position": 11,
+      "name": "target_type",
+      "type": "text",
+      "nullable": false,
+      "default": "'profile'::text"
+    },
+    {
+      "table": "reports",
+      "position": 12,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "reports",
+      "position": 13,
+      "name": "request_title",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
       "table": "request_applications",
       "position": 1,
       "name": "id",
@@ -742,6 +767,46 @@
       "default": null
     },
     {
+      "table": "request_submission_keys",
+      "position": 1,
+      "name": "author_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_submission_keys",
+      "position": 2,
+      "name": "client_request_id",
+      "type": "uuid",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_submission_keys",
+      "position": 3,
+      "name": "request_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_submission_keys",
+      "position": 4,
+      "name": "payload_hash",
+      "type": "text",
+      "nullable": false,
+      "default": null
+    },
+    {
+      "table": "request_submission_keys",
+      "position": 5,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+    },
+    {
       "table": "request_tags",
       "position": 1,
       "name": "id",
@@ -860,6 +925,22 @@
       "type": "text[]",
       "nullable": false,
       "default": "'{}'::text[]"
+    },
+    {
+      "table": "requests",
+      "position": 13,
+      "name": "client_request_id",
+      "type": "uuid",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "requests",
+      "position": 14,
+      "name": "payload_hash",
+      "type": "text",
+      "nullable": true,
+      "default": null
     },
     {
       "table": "schedules",
@@ -1331,6 +1412,18 @@
     },
     {
       "table": "reports",
+      "name": "reports_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL"
+    },
+    {
+      "table": "reports",
+      "name": "reports_request_title_check",
+      "type": "c",
+      "definition": "CHECK (request_title IS NULL OR octet_length(request_title) <= 200)"
+    },
+    {
+      "table": "reports",
       "name": "reports_reviewed_by_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (reviewed_by) REFERENCES users(id)"
@@ -1340,6 +1433,18 @@
       "name": "reports_status_check",
       "type": "c",
       "definition": "CHECK (status = ANY (ARRAY['open'::text, 'reviewing'::text, 'resolved'::text, 'dismissed'::text]))"
+    },
+    {
+      "table": "reports",
+      "name": "reports_target_context_check",
+      "type": "c",
+      "definition": "CHECK (target_type = 'request'::text OR request_id IS NULL AND request_title IS NULL)"
+    },
+    {
+      "table": "reports",
+      "name": "reports_target_type_check",
+      "type": "c",
+      "definition": "CHECK (target_type = ANY (ARRAY['profile'::text, 'request'::text]))"
     },
     {
       "table": "request_applications",
@@ -1438,6 +1543,30 @@
       "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL"
     },
     {
+      "table": "request_submission_keys",
+      "name": "request_submission_keys_author_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES users(id)"
+    },
+    {
+      "table": "request_submission_keys",
+      "name": "request_submission_keys_payload_hash_check",
+      "type": "c",
+      "definition": "CHECK (payload_hash ~ '^[a-f0-9]{64}$'::text)"
+    },
+    {
+      "table": "request_submission_keys",
+      "name": "request_submission_keys_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (author_id, client_request_id)"
+    },
+    {
+      "table": "request_submission_keys",
+      "name": "request_submission_keys_request_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE"
+    },
+    {
       "table": "request_tags",
       "name": "request_tags_pkey",
       "type": "p",
@@ -1463,6 +1592,12 @@
     },
     {
       "table": "requests",
+      "name": "requests_author_client_request_key",
+      "type": "u",
+      "definition": "UNIQUE (author_id, client_request_id)"
+    },
+    {
+      "table": "requests",
       "name": "requests_author_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (author_id) REFERENCES users(id)"
@@ -1478,6 +1613,12 @@
       "name": "requests_matched_user_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (matched_user_id) REFERENCES users(id)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_payload_hash_check",
+      "type": "c",
+      "definition": "CHECK (payload_hash IS NULL OR payload_hash ~ '^[a-f0-9]{64}$'::text)"
     },
     {
       "table": "requests",
@@ -1700,6 +1841,11 @@
     },
     {
       "table": "reports",
+      "name": "idx_reports_target",
+      "definition": "CREATE INDEX idx_reports_target ON public.reports USING btree (reporter_id, target_type, reported_user_id, request_id, status)"
+    },
+    {
+      "table": "reports",
       "name": "reports_pkey",
       "definition": "CREATE UNIQUE INDEX reports_pkey ON public.reports USING btree (id)"
     },
@@ -1759,6 +1905,16 @@
       "definition": "CREATE UNIQUE INDEX request_events_pkey ON public.request_events USING btree (id)"
     },
     {
+      "table": "request_submission_keys",
+      "name": "idx_request_submission_keys_request",
+      "definition": "CREATE INDEX idx_request_submission_keys_request ON public.request_submission_keys USING btree (request_id)"
+    },
+    {
+      "table": "request_submission_keys",
+      "name": "request_submission_keys_pkey",
+      "definition": "CREATE UNIQUE INDEX request_submission_keys_pkey ON public.request_submission_keys USING btree (author_id, client_request_id)"
+    },
+    {
       "table": "request_tags",
       "name": "idx_request_tags_request",
       "definition": "CREATE INDEX idx_request_tags_request ON public.request_tags USING btree (request_id)"
@@ -1785,6 +1941,11 @@
     },
     {
       "table": "requests",
+      "name": "idx_requests_author_payload_created",
+      "definition": "CREATE INDEX idx_requests_author_payload_created ON public.requests USING btree (author_id, payload_hash, created_at DESC)"
+    },
+    {
+      "table": "requests",
       "name": "idx_requests_district",
       "definition": "CREATE INDEX idx_requests_district ON public.requests USING btree (district_id)"
     },
@@ -1802,6 +1963,11 @@
       "table": "requests",
       "name": "idx_requests_status",
       "definition": "CREATE INDEX idx_requests_status ON public.requests USING btree (status)"
+    },
+    {
+      "table": "requests",
+      "name": "requests_author_client_request_key",
+      "definition": "CREATE UNIQUE INDEX requests_author_client_request_key ON public.requests USING btree (author_id, client_request_id)"
     },
     {
       "table": "requests",

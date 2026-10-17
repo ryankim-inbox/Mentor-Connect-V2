@@ -3,7 +3,8 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from security import require_member_user
+from security import require_member_user, require_student_user
+from member_access import has_admin_access
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 from db import db
@@ -52,7 +53,7 @@ def _application(cur, app_id):
             "createdAt": a["created_at"].isoformat(), "updatedAt": a["updated_at"].isoformat()}
 
 
-@router.post("/requests/{request_id}/applications")
+@router.post("/requests/{request_id}/applications", dependencies=[Depends(require_student_user)])
 def apply_to_request(request_id: PositiveInt, request: Request):
     user_id = _require_user(request)
     with db() as conn:
@@ -93,7 +94,7 @@ def list_applications(request_id: PositiveInt, request: Request, limit: PageLimi
         return [_application(cur, a["id"]) for a in ids]
 
 
-@router.patch("/requests/{request_id}/applications/{application_id}")
+@router.patch("/requests/{request_id}/applications/{application_id}", dependencies=[Depends(require_student_user)])
 def act_on_application(request_id: PositiveInt, application_id: PositiveInt, body: ApplicationAction, request: Request):
     user_id = _require_user(request)
     with db() as conn:
@@ -136,21 +137,24 @@ def _comment(cur, comment_id):
 
 @router.get("/requests/{request_id}/comments")
 def list_comments(request_id: PositiveInt, request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
+    moderator = has_admin_access(viewer)
     with db() as conn:
         cur = conn.cursor()
         req = _request(cur, request_id)
-        _require_unblocked_pair(cur, req["author_id"], user_id)
+        if not moderator:
+            _require_unblocked_pair(cur, req["author_id"], user_id)
         cur.execute("""SELECT c.id FROM request_comments c WHERE c.request_id=%s AND (%s IS NULL OR c.id < %s)
-                       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE
+                       AND (%s OR NOT EXISTS (SELECT 1 FROM blocks b WHERE
                          (b.blocker_id=%s AND b.blocked_user_id=c.author_id) OR
-                         (b.blocker_id=c.author_id AND b.blocked_user_id=%s))
-                       ORDER BY c.id DESC LIMIT %s""", (request_id, beforeId, beforeId, user_id, user_id, limit))
+                         (b.blocker_id=c.author_id AND b.blocked_user_id=%s)))
+                       ORDER BY c.id DESC LIMIT %s""", (request_id, beforeId, beforeId, moderator, user_id, user_id, limit))
         ids = cur.fetchall()
         return [_comment(cur, c["id"]) for c in reversed(ids)]
 
 
-@router.post("/requests/{request_id}/comments", status_code=201)
+@router.post("/requests/{request_id}/comments", status_code=201, dependencies=[Depends(require_student_user)])
 def create_comment(request_id: PositiveInt, body: CommentBody, request: Request):
     user_id = _require_user(request)
     with db() as conn:
@@ -176,7 +180,7 @@ def create_comment(request_id: PositiveInt, body: CommentBody, request: Request)
         return _comment(cur, cur.fetchone()["id"])
 
 
-@router.get("/connections")
+@router.get("/connections", dependencies=[Depends(require_student_user)])
 def list_connections(request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
     user_id = _require_user(request)
     with db() as conn:
@@ -192,7 +196,7 @@ def list_connections(request: Request, limit: PageLimit = 50, beforeId: BeforeId
         return [{"userId": c["id"], "name": c["name"], "requestId": c["request_id"], "requestTitle": c["title"]} for c in cur.fetchall()]
 
 
-@router.get("/request-activity")
+@router.get("/request-activity", dependencies=[Depends(require_student_user)])
 def request_activity(request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
     user_id = _require_user(request)
     with db() as conn:
@@ -231,7 +235,7 @@ def _own_comment(cur,request_id,comment_id,user_id):
     return row
 
 
-@router.patch('/requests/{request_id}/comments/{comment_id}')
+@router.patch('/requests/{request_id}/comments/{comment_id}', dependencies=[Depends(require_student_user)])
 def edit_comment(request_id: PositiveInt,comment_id: PositiveInt,body: EditCommentBody,request: Request):
     user_id=_require_user(request)
     with db() as conn:
@@ -245,10 +249,18 @@ def edit_comment(request_id: PositiveInt,comment_id: PositiveInt,body: EditComme
 
 @router.delete('/requests/{request_id}/comments/{comment_id}')
 def delete_comment(request_id: PositiveInt,comment_id: PositiveInt,request: Request):
-    user_id=_require_user(request)
+    viewer=require_member_user(request)
+    user_id=viewer['id']
     with db() as conn:
         cur=conn.cursor()
-        row=_own_comment(cur,request_id,comment_id,user_id)
+        if has_admin_access(viewer):
+            _request(cur,request_id,lock=True)
+            cur.execute('SELECT * FROM request_comments WHERE id=%s AND request_id=%s FOR UPDATE',(comment_id,request_id))
+            row=cur.fetchone()
+            if not row:
+                raise HTTPException(404,'Comment not found')
+        else:
+            row=_own_comment(cur,request_id,comment_id,user_id)
         if not row['deleted_at']:
             cur.execute("UPDATE request_comments SET body='',deleted_at=now() WHERE id=%s",(comment_id,))
         return _comment(cur,comment_id)

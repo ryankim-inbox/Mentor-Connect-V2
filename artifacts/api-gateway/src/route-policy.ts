@@ -17,6 +17,15 @@ const noQuery: readonly string[] = Object.freeze([]);
 
 export const publicRoutes: readonly PublicRoute[] = Object.freeze([
   {
+    method: "GET",
+    template: "/api/users/{id}/activity-rank",
+    family: "activity-ranks",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: noQuery,
+  },
+  {
     method: "POST",
     template: "/api/auth/register",
     family: "auth",
@@ -272,7 +281,7 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     method: "GET",
     template: "/api/stats/overview",
     family: "stats",
-    authentication: "none",
+    authentication: "session",
     allowsBody: false,
     requiresJson: false,
     queryKeys: noQuery,
@@ -759,9 +768,20 @@ export function resolvePublicRoute(
 // protected operations require fresh member access, and operational families require admin.
 export function requiredAuthority(
   route: PublicRoute,
-): "session" | "member" | "admin" {
+): "session" | "member" | "student" | "admin" {
   if (["auth", "users"].includes(route.family)) return "session";
+  if (
+    ["chat", "dms", "notifications", "blocks"].includes(route.family) ||
+    ["/api/connections", "/api/request-activity"].includes(route.template) ||
+    (route.method !== "GET" &&
+      route.method !== "DELETE" &&
+      ["requests", "request-interactions", "reports", "blocks"].includes(
+        route.family,
+      ))
+  )
+    return "student";
   return [
+    "stats",
     "practice",
     "matches",
     "analysis",

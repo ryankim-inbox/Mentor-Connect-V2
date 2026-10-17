@@ -37,6 +37,11 @@
       "id": "0007_notifications",
       "path": "0007_notifications.sql",
       "sha256": "a04b73684422bb0cc73ca9552774328b37cacebf360bd8de21e13282c222b8b6"
+    },
+    {
+      "id": "0008_student_demo",
+      "path": "0008_student_demo.sql",
+      "sha256": "5b150b045ef5c21e76340f5e7ea1e721d4196726465f0f6b85bf47ad12f0d36d"
     }
   ]
 }

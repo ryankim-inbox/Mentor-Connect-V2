@@ -76,7 +76,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
         return result
 
     def module(path, source="python", *, status=False):
-        result = call(student, "GET", path)
+        result = call(admin, "GET", path)
         assert result["ok"] is True and result["success"] is True, result
         assert result["source"] == source and result["error"] is None, result
         assert result["student_module"]["importable"] is True, result
@@ -107,7 +107,8 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     student_id = call(student, "GET", "/api/auth/me")["id"]
     mentor_id = call(mentor, "GET", "/api/auth/me")["id"]
     sql("UPDATE users SET email_verified_at=now(),is_verified=true WHERE id IN (%s,%s)",(student_id,mentor_id))
-    sql("UPDATE users SET is_admin=true WHERE id=%s",(student_id,))
+    sql("UPDATE users SET is_admin=true WHERE id=%s",(2,))
+    admin, _ = login(base, "aiko.yoon.0002@test.edu")
     profile_path = f"/api/users/{student_id}"
     call(student, "PATCH", profile_path, {"bio": "Synthetic bio", "subjects": ["Math"]})
     call(student, "PATCH", profile_path, {"bio": ""})
@@ -125,6 +126,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
 
     request_body = {"districtId": 1, "title": "Completion request", "description": "Real gateway flow",
                     "role": "mentee", "tagIds": [1], "preferredTimes": ["Mon 17:00"]}
+    call(admin, "POST", "/api/requests", request_body, expected=403)
     first = call(student, "POST", "/api/requests", request_body, expected=201)
     second = call(student, "POST", "/api/requests", {**request_body, "title": "Second request"}, expected=201)
     other = call(student, "POST", "/api/requests", {**request_body, "districtId": 2}, expected=201)
@@ -145,6 +147,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     assert sql("SELECT mentor_id FROM request_events WHERE kind = 'matched'") == [(mentor_id,)]
 
     # Every adapter must run the completed module and expose its actual nonempty data.
+    call(student, "GET", "/api/analytics/weekly-matches", expected=403)
     for endpoint in ("/api/analysis/status", "/api/scheduling/status"):
         assert module(endpoint, status=True) is None
     assert module("/api/python-reports/status", "student-module", status=True) is None
@@ -165,18 +168,18 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     assert module("/api/python-reports/summary", "student-module")["total"] == 7
 
     for endpoint in ("/api/practice/status", "/api/practice/locations/status", "/api/practice/blocks/status"):
-        result = call(student, "GET", endpoint)
+        result = call(admin, "GET", endpoint)
         assert result["success"] is True and result["status"] == "connected", result
         for engine in result.get("engines", {}).values():
             assert engine["success"] is True and engine["is_real"] is True and engine["is_todo"] is False, engine
     for name in ("find_matches", "locations", "get_blocks"):
-        metadata = call(student, "GET", f"/api/practice/raw/{name}")
+        metadata = call(admin, "GET", f"/api/practice/raw/{name}")
         assert metadata["success"] is True and metadata["is_real"] is True and metadata["is_todo"] is False
     for endpoint in ("/api/matches/1", "/api/practice/matching/1"):
-        result = call(student, "GET", endpoint)
+        result = call(admin, "GET", endpoint)
         assert result["success"] is True and result["is_real"] is True, result
         assert [row["mentor_id"] for row in result["matches"]] == [mentor_id]
-    assert call(student, "POST", "/api/matches", {"question_id": 1})["success"] is True
+    assert call(admin, "POST", "/api/matches", {"question_id": 1})["success"] is True
     call(student, "POST", "/api/reports", {"reportedUserId": mentor_id, "reason": "spam"}, expected=201)
     call(student, "POST", "/api/blocks", {"blockedUserId": mentor_id}, expected=201)
     flagged = module("/api/admin/flagged-users", "student-module")
@@ -186,14 +189,14 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     assert "email" not in str(flagged) and "district" not in str(flagged)
     assert call(student, "GET", "/api/blocks")[-1]["blockedUserId"] == mentor_id
     for endpoint in ("/api/matches/1", "/api/practice/matching/1"):
-        result = call(student, "GET", endpoint)
+        result = call(admin, "GET", endpoint)
         assert result["success"] is True and result["matches"] == [] and result["is_real"] is True, result
     call(student, "DELETE", f"/api/blocks/{mentor_id}", expected=204)
-    assert call(student, "GET", "/api/matches/1")["matches"][0]["mentor_id"] == mentor_id
+    assert call(admin, "GET", "/api/matches/1")["matches"][0]["mentor_id"] == mentor_id
 
     for labels, expected in [([" San Jose ", "SAN JOSE"], {"compatible": True, "overlap": ["san jose"]}),
                              ([], {"compatible": False, "overlap": []})]:
-        result = call(student, "POST", "/api/practice/locations/test", {
+        result = call(admin, "POST", "/api/practice/locations/test", {
             "student": {"locations": labels}, "mentor": {"location": "san jose"}, "question": {},
         })
         assert result["success"] is True and result["is_real"] is True and result["is_todo"] is False
@@ -242,6 +245,6 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
                for row in module("/api/analytics/mentor-response-rates")["mentors"])
     sql("UPDATE users SET created_at = '2000-01-01T00:00:00Z'")
     assert module("/api/python-reports/summary", "student-module") == {"today": 0, "thisMonth": 0, "thisYear": 0, "total": 7}
-    for client in (student, mentor, outsider):
+    for client in (student, mentor, outsider, admin):
         call(client, "POST", "/api/auth/logout")
         call(client, "GET", "/api/auth/me", expected=401)

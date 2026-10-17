@@ -4,10 +4,12 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
   unique,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -39,8 +41,13 @@ export const requestsTable = pgTable(
       .$onUpdate(() => new Date()),
     request: text("request"),
     preferredTimes: text("preferred_times").array().notNull().default([]),
+    clientRequestId: uuid("client_request_id"),
+    payloadHash: text("payload_hash"),
   },
   (table) => [
+    unique("requests_author_client_request_key").on(table.authorId, table.clientRequestId),
+    check("requests_payload_hash_check", sql`${table.payloadHash} IS NULL OR ${table.payloadHash} ~ '^[a-f0-9]{64}$'::text`),
+    index("idx_requests_author_payload_created").on(table.authorId, table.payloadHash, table.createdAt.desc()),
     check("requests_role_check", sql`${table.role} IN ('mentee', 'mentor')`),
     check(
       "requests_status_check",
@@ -55,6 +62,18 @@ export const requestsTable = pgTable(
       .where(sql`${table.status} = 'open'`),
   ],
 );
+
+export const requestSubmissionKeysTable = pgTable("request_submission_keys", {
+  authorId: integer("author_id").notNull().references(() => usersTable.id),
+  clientRequestId: uuid("client_request_id").notNull(),
+  requestId: integer("request_id").notNull().references(() => requestsTable.id, { onDelete: "cascade" }),
+  payloadHash: text("payload_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ name: "request_submission_keys_pkey", columns: [table.authorId, table.clientRequestId] }),
+  check("request_submission_keys_payload_hash_check", sql`${table.payloadHash} ~ '^[a-f0-9]{64}$'::text`),
+  index("idx_request_submission_keys_request").on(table.requestId),
+]);
 
 export const requestTagsTable = pgTable(
   "request_tags",

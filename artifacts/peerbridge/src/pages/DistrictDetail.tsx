@@ -26,7 +26,7 @@ export default function DistrictDetail({ id }: Props) {
   });
 
   const { data: stats } = useGetDistrictStats(districtId, {
-    query: { queryKey: getGetDistrictStatsQueryKey(districtId), enabled: !!districtId }
+    query: { queryKey: getGetDistrictStatsQueryKey(districtId), enabled: !!districtId && user?.isAdmin === true && user.isVerified }
   });
 
   if (districtLoading) {
@@ -60,7 +60,7 @@ export default function DistrictDetail({ id }: Props) {
             <h1 className="text-2xl font-bold text-foreground">{district.name}</h1>
             <p className="text-muted-foreground mt-1">{district.county} County · {district.type.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())} District</p>
           </div>
-          {user && (
+          {user && !user.isAdmin && (
             <Link href={`/requests/new?districtId=${districtId}`}>
               <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors">
                 Post a request here
@@ -112,7 +112,7 @@ export default function DistrictDetail({ id }: Props) {
           {!reqLoading && !reqError && (!requests || requests.length === 0) && (
             <div className="text-center py-12 text-muted-foreground">
               <p>{before ? "No older open requests in this district." : "No open requests in this district yet."}</p>
-              {user && !before && (
+              {user && !user.isAdmin && !before && (
                 <Link href={`/requests/new?districtId=${districtId}`}>
                   <button className="mt-3 text-sm text-primary hover:underline">Be the first to post one</button>
                 </Link>

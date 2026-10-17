@@ -91,13 +91,13 @@ test("notification response contract projects only public fields and bounds ever
   }
 });
 
-test("notification routes are bodyless member operations with no caller-selected identity", () => {
+test("notification routes are bodyless student operations with no caller-selected identity", () => {
   for (const [method, path] of [
     ["GET", "/api/notifications"],
     ["POST", "/api/notifications/read"],
   ]) {
     const route = resolvePublicRoute(method, path)!;
-    assert.equal(requiredAuthority(route), "member");
+    assert.equal(requiredAuthority(route), "student");
     assert.equal(route.allowsBody, false);
     assert.deepEqual(route.queryKeys, []);
     assert.throws(

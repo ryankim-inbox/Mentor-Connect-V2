@@ -1,7 +1,12 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { useGetStatsOverview, useListRequests, useListDistricts } from "@workspace/api-client-react";
+import {
+  useGetStatsOverview,
+  getGetStatsOverviewQueryKey,
+  useListRequests,
+  useListDistricts,
+} from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
 import { releaseSurface } from "@/lib/release-flags";
@@ -18,24 +23,41 @@ function getDashboardTabFromUrl(practiceAvailable: boolean): DashboardTab {
     return "overview";
   }
 
-  return window.location.pathname.endsWith(releaseSurface.appRoutes.dashboardPractice) ||
-    new URLSearchParams(window.location.search).get("tab") === "practice-lab"
+  return window.location.pathname.endsWith(
+    releaseSurface.appRoutes.dashboardPractice,
+  ) || new URLSearchParams(window.location.search).get("tab") === "practice-lab"
     ? "practice-lab"
     : "overview";
 }
 
-export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = {}) {
+export default function Dashboard({
+  initialTab,
+  PracticeLab,
+}: DashboardProps = {}) {
   const { user } = useAuth();
-  const practiceAvailable = user?.isVerified === true && user?.isAdmin === true && PracticeLab !== undefined;
+  const practiceAvailable =
+    user?.isVerified === true &&
+    user?.isAdmin === true &&
+    PracticeLab !== undefined;
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
-    practiceAvailable ? initialTab ?? getDashboardTabFromUrl(practiceAvailable) : "overview",
+    practiceAvailable
+      ? (initialTab ?? getDashboardTabFromUrl(practiceAvailable))
+      : "overview",
   );
-  const { data: stats } = useGetStatsOverview();
-  const { data: recentRequests } = useListRequests({ status: "open", limit: 5 }, {
-    query: { queryKey: ["listRequests", "open", "dashboard"] }
+  const { data: stats } = useGetStatsOverview({
+    query: {
+      queryKey: getGetStatsOverviewQueryKey(),
+      enabled: user?.isAdmin === true && user.isVerified,
+    },
   });
+  const { data: recentRequests } = useListRequests(
+    { status: "open", limit: 5 },
+    {
+      query: { queryKey: ["listRequests", "open", "dashboard"] },
+    },
+  );
   const { data: districts } = useListDistricts(undefined, {
-    query: { queryKey: ["listDistricts", "dashboard"] }
+    query: { queryKey: ["listDistricts", "dashboard"] },
   });
 
   useEffect(() => {
@@ -61,16 +83,24 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
     if (tab === "overview") {
       window.history.pushState({}, "", "/dashboard");
     } else {
-      window.history.pushState({}, "", releaseSurface.appRoutes.dashboardPractice);
+      window.history.pushState(
+        {},
+        "",
+        releaseSurface.appRoutes.dashboardPractice,
+      );
     }
   };
 
   if (!user) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
-        <h2 className="text-2xl font-bold mb-4">Sign in to access your dashboard</h2>
+        <h2 className="text-2xl font-bold mb-4">
+          Sign in to access your dashboard
+        </h2>
         <Link href="/login">
-          <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold">Sign in</button>
+          <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold">
+            Sign in
+          </button>
         </Link>
       </div>
     );
@@ -85,17 +115,33 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
   }
 
   const overviewStats = [
-    { label: "Open requests", value: stats?.openRequests ?? 0, color: "text-blue-600" },
-    { label: "Successful matches", value: stats?.successfulMatches ?? 0, color: "text-emerald-600" },
-    { label: "Active districts", value: stats?.totalDistricts ?? 0, color: "text-violet-600" },
+    {
+      label: "Open requests",
+      value: stats?.openRequests ?? 0,
+      color: "text-blue-600",
+    },
+    {
+      label: "Successful matches",
+      value: stats?.successfulMatches ?? 0,
+      color: "text-emerald-600",
+    },
+    {
+      label: "Active districts",
+      value: stats?.totalDistricts ?? 0,
+      color: "text-violet-600",
+    },
   ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Welcome back, {user.name.split(" ")[0]}</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          Welcome back, {user.name.split(" ")[0]}
+        </h1>
         <p className="text-muted-foreground mt-1">
-          {user.districtName && `${user.districtName} ·`} {user.role === "mentor" ? "Offering mentorship" : user.role === "mentee" ? "Seeking mentorship" : "Mentor & Mentee"}
+          {user.isAdmin
+            ? "Administrator · Manage the learning community"
+            : `${user.districtName ? user.districtName + " · " : ""}${user.role === "mentor" ? "Offering mentorship" : user.role === "mentee" ? "Seeking mentorship" : "Mentor & Mentee"}`}
         </p>
       </div>
 
@@ -120,21 +166,30 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
         <PracticeLab />
       ) : (
         <>
-          <div className="grid gap-4 mb-8 md:grid-cols-3">
-            {overviewStats.map(({ label, value, color }) => (
-              <div key={label} className="bg-card border border-card-border rounded-xl p-5">
-                <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-1">{label}</p>
-              </div>
-            ))}
-          </div>
+          {user.isAdmin && (
+            <div className="grid gap-4 mb-8 md:grid-cols-3">
+              {overviewStats.map(({ label, value, color }) => (
+                <div
+                  key={label}
+                  className="bg-card border border-card-border rounded-xl p-5"
+                >
+                  <p className={`text-3xl font-bold ${color}`}>
+                    {value.toLocaleString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{label}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="grid md:grid-cols-3 gap-8">
             <div className="md:col-span-2">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-lg">Recent open requests</h2>
                 <Link href="/requests">
-                  <span className="text-sm text-primary hover:underline">View all</span>
+                  <span className="text-sm text-primary hover:underline">
+                    View all
+                  </span>
                 </Link>
               </div>
               <div className="space-y-3">
@@ -144,9 +199,13 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
                 {(!recentRequests || recentRequests.length === 0) && (
                   <div className="text-center py-12 text-muted-foreground">
                     <p>No open requests yet.</p>
-                    <Link href="/requests/new">
-                      <button className="mt-3 text-sm text-primary hover:underline">Be the first to post one</button>
-                    </Link>
+                    {!user.isAdmin && (
+                      <Link href="/requests/new">
+                        <button className="mt-3 text-sm text-primary hover:underline">
+                          Be the first to post one
+                        </button>
+                      </Link>
+                    )}
                   </div>
                 )}
               </div>
@@ -160,8 +219,12 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
                     <Link key={d.id} href={`/districts/${d.id}`}>
                       <div className="flex items-center justify-between p-3 bg-card border border-card-border rounded-lg hover:shadow-sm transition-shadow cursor-pointer">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{d.name}</p>
-                          <p className="text-xs text-muted-foreground">{d.county} County</p>
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {d.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {d.county} County
+                          </p>
                         </div>
                         <span className="shrink-0 ml-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                           {d.openRequestCount} open
@@ -171,7 +234,7 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
                   ))}
                   <Link href="/districts">
                     <div className="text-center py-2 text-sm text-primary hover:underline cursor-pointer">
-                      View all {stats?.totalDistricts} districts
+                      View all districts
                     </div>
                   </Link>
                 </div>
@@ -179,7 +242,9 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
 
               {stats?.topTags && stats.topTags.length > 0 && (
                 <div>
-                  <h2 className="font-semibold text-lg mb-3">Trending subjects</h2>
+                  <h2 className="font-semibold text-lg mb-3">
+                    Trending subjects
+                  </h2>
                   <div className="flex flex-wrap gap-2">
                     {stats.topTags.map((tag) => (
                       <Link key={tag.id} href={`/requests?tagId=${tag.id}`}>
@@ -192,13 +257,15 @@ export default function Dashboard({ initialTab, PracticeLab }: DashboardProps = 
                 </div>
               )}
 
-              <div className="mt-6">
-                <Link href="/requests/new">
-                  <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors">
-                    Post a request
-                  </button>
-                </Link>
-              </div>
+              {!user.isAdmin && (
+                <div className="mt-6">
+                  <Link href="/requests/new">
+                    <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors">
+                      Post a request
+                    </button>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </>

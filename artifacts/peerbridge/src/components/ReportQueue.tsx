@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -52,6 +53,31 @@ function Review({
       <h3 className="font-semibold">
         Report #{report.id}: {report.reportedUserName}
       </h3>
+      {report.targetType === "request" ? (
+        <p className="my-2 text-sm">
+          Post:{" "}
+          {report.requestId ? (
+            <Link
+              href={`/requests/${report.requestId}`}
+              className="text-primary underline"
+            >
+              {report.requestTitle || "View reported post"}
+            </Link>
+          ) : (
+            <span>{report.requestTitle || "Reported post"} (deleted)</span>
+          )}
+        </p>
+      ) : (
+        <p className="my-2 text-sm">
+          Profile:{" "}
+          <Link
+            href={`/profile/${report.reportedUserId}`}
+            className="text-primary underline"
+          >
+            {report.reportedUserName}
+          </Link>
+        </p>
+      )}
       <p>
         Reported by {report.reporterName} · {report.reason}
       </p>

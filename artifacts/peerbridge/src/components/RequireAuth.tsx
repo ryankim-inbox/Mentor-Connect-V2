@@ -6,10 +6,12 @@ export function RequireAuth({
   children,
   member = true,
   admin = false,
+  student = false,
 }: {
   children: ReactNode;
   member?: boolean;
   admin?: boolean;
+  student?: boolean;
 }) {
   const { user, status, refetch } = useAuth();
   const [location, navigate] = useLocation();
@@ -44,10 +46,21 @@ export function RequireAuth({
 
   if (status === "authenticated" && member && !user?.hasMemberAccess)
     return <VerificationNotice />;
-  if (status === "authenticated" && admin && (!user?.isVerified || !user?.isAdmin))
+  if (
+    status === "authenticated" &&
+    admin &&
+    (!user?.isVerified || !user?.isAdmin)
+  )
     return (
       <p role="alert" className="px-4 py-20 text-center">
         Administrator access required
+      </p>
+    );
+
+  if (status === "authenticated" && student && user?.isAdmin)
+    return (
+      <p role="alert" className="px-4 py-20 text-center">
+        Student access required
       </p>
     );
 
@@ -65,7 +78,7 @@ export function RequireAuth({
           </button>
         </div>
       )}
-      {user && (status !== "error" || (!member && !admin)) && (
+      {user && (status !== "error" || (!member && !admin && !student)) && (
         <Fragment key={user.id}>{children}</Fragment>
       )}
     </>
@@ -87,4 +100,8 @@ export function VerificationNotice() {
 }
 export function RequireAdmin({ children }: { children: ReactNode }) {
   return <RequireAuth admin>{children}</RequireAuth>;
+}
+
+export function RequireStudent({ children }: { children: ReactNode }) {
+  return <RequireAuth student>{children}</RequireAuth>;
 }

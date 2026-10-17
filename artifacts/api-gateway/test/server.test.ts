@@ -79,6 +79,7 @@ async function rawRequest(
 
 test("forwards one valid request from every REST family with exact method, target, body, and cookie", async (context) => {
   const calls: UpstreamCall[] = [];
+  let currentAdmin = false;
   const upstream = createServer(async (request, response) => {
     const body = await readBody(request);
     calls.push({
@@ -90,7 +91,7 @@ test("forwards one valid request from every REST family with exact method, targe
 
     if (request.url === "/api/auth/me") {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ...userFixture, isAdmin: true }));
+      response.end(JSON.stringify({ ...userFixture, isAdmin: currentAdmin }));
       return;
     }
     if (request.url === "/api/users/2") {
@@ -216,7 +217,7 @@ test("forwards one valid request from every REST family with exact method, targe
       family: "stats",
       method: "GET",
       path: "/api/stats/overview",
-      session: false,
+      session: true,
     },
     {
       family: "matches",
@@ -278,6 +279,16 @@ test("forwards one valid request from every REST family with exact method, targe
   ] as const;
 
   for (const example of cases) {
+    currentAdmin = [
+      "stats",
+      "matches",
+      "practice",
+      "analysis",
+      "analytics",
+      "python-reports",
+      "scheduling",
+      "admin",
+    ].includes(example.family);
     calls.length = 0;
     const headers: Record<string, string> = { cookie: "session=user-a" };
     if (example.method !== "GET") {

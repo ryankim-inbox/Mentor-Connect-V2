@@ -26,9 +26,8 @@ tags:
   - name: stats
     description: Statistics and dashboard operations
   - name: chat
-    description: Python chat learning routes preserve both implemented room/conversation results and
-      unfinished ScaffoldTodo responses. WebSocket contracts are documented separately in
-      docs/runbooks/api-gateway.md.
+    description: Python chat learning routes preserve both implemented room/conversation results and unfinished
+      ScaffoldTodo responses. WebSocket contracts are documented separately in docs/runbooks/api-gateway.md.
 paths:
   /notifications:
     get:
@@ -64,7 +63,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /notifications/read:
     post:
       operationId: markNotificationsRead
@@ -95,7 +94,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /healthz:
     get:
       operationId: healthCheck
@@ -258,9 +257,9 @@ paths:
       tags:
         - users
       summary: Get own account or a member profile summary
-      description: Own profile is available to the authenticated account before verification and returns
-        full User. Other profiles require server-computed member access and expose only id, name, subjects,
-        and createdAt.
+      description: Own profile is available to the authenticated account before verification and returns full User.
+        Other profiles require server-computed member access and expose only id, name, subjects, and
+        createdAt.
       parameters:
         - name: id
           in: path
@@ -301,10 +300,8 @@ paths:
       tags:
         - users
       summary: Update the authenticated user's allowed profile fields
-      description: |
-        The gateway accepts only name, bio, and subjects for the authenticated
-        session owner. Identity and authorization fields, including id, email,
-        role, and is_verified, are rejected before any upstream request.
+      description: |-
+        The gateway accepts only name, bio, and subjects for the authenticated session owner. Administrators may update name only. Identity and authorization fields, including id, email, role, and is_verified, are rejected.
       parameters:
         - name: id
           in: path
@@ -536,7 +533,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /requests/{id}:
     get:
       operationId: getRequest
@@ -627,7 +624,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
     delete:
       operationId: deleteRequest
       tags:
@@ -671,8 +668,7 @@ paths:
       tags:
         - requests
       summary: Apply to a mentorship request (compatibility alias)
-      description: Creates a pending application. Only the author can accept it; this endpoint never
-        matches immediately.
+      description: Creates a pending application. Only the author can accept it; this endpoint never matches immediately.
       parameters:
         - name: id
           in: path
@@ -712,7 +708,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /tags:
     get:
       operationId: listTags
@@ -788,7 +784,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /blocks:
     get:
       operationId: listBlocks
@@ -821,7 +817,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
     post:
       operationId: blockUser
       tags:
@@ -863,7 +859,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /blocks/{blockedUserId}:
     delete:
       operationId: unblockUser
@@ -901,7 +897,7 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /stats/overview:
     get:
       operationId: getStatsOverview
@@ -926,8 +922,14 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
-      security: []
-      x-required-authority: public
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+      security:
+        - cookieAuth: []
+      x-required-authority: admin
+      description: Administrator-only aggregate information. Student roles cannot access these statistics.
   /stats/district/{id}:
     get:
       operationId: getDistrictStats
@@ -966,7 +968,8 @@ paths:
           $ref: "#/components/responses/Error403"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: admin
+      description: Administrator-only aggregate information. Student roles cannot access these statistics.
   /chat/rooms:
     get:
       operationId: listChatRooms
@@ -1004,7 +1007,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /chat/rooms/{roomId}/messages:
     get:
       operationId: listChatRoomMessages
@@ -1023,8 +1026,8 @@ paths:
             type: integer
         - name: beforeId
           in: query
-          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must
-            belong to this channel; omitted returns the latest page.
+          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this
+            channel; omitted returns the latest page.
           schema:
             type: integer
             minimum: 1
@@ -1059,7 +1062,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
     post:
       operationId: sendChatRoomMessage
       tags:
@@ -1124,7 +1127,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /dms:
     get:
       operationId: listDmConversations
@@ -1165,7 +1168,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /dms/start:
     post:
       operationId: startDmConversation
@@ -1212,7 +1215,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /dms/{conversationId}/messages:
     get:
       operationId: listDmMessages
@@ -1231,8 +1234,8 @@ paths:
             type: integer
         - name: beforeId
           in: query
-          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must
-            belong to this channel; omitted returns the latest page.
+          description: Return up to 50 older visible messages, ordered by createdAt then id. Cursor must belong to this
+            channel; omitted returns the latest page.
           schema:
             type: integer
             minimum: 1
@@ -1267,7 +1270,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
     post:
       operationId: sendDmMessage
       tags:
@@ -1332,7 +1335,7 @@ paths:
           $ref: "#/components/responses/Error409"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /matches/{questionId}:
     get:
       operationId: getMatches
@@ -1777,9 +1780,9 @@ paths:
       tags:
         - analytics
       summary: Mentor matching activity observed after tracking started
-      description: Compatibility URL for observed matching activity. Durations measure request creation to
-        match, including closed time; no personal response rate is inferred. Python
-        response_time_analysis() returns this same activity payload.
+      description: Compatibility URL for observed matching activity. Durations measure request creation to match,
+        including closed time; no personal response rate is inferred. Python response_time_analysis() returns
+        this same activity payload.
       responses:
         "200":
           description: Python learning result
@@ -2117,7 +2120,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateCommentBody"
-      x-required-authority: member
+      x-required-authority: student
   /requests/{id}/applications:
     get:
       operationId: listRequestApplications
@@ -2225,7 +2228,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /requests/{id}/applications/{applicationId}:
     patch:
       operationId: actOnRequestApplication
@@ -2285,7 +2288,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ApplicationAction"
-      x-required-authority: member
+      x-required-authority: student
   /connections:
     get:
       operationId: listConnections
@@ -2340,7 +2343,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /request-activity:
     get:
       operationId: listRequestActivity
@@ -2395,7 +2398,7 @@ paths:
           $ref: "#/components/responses/Error504"
       security:
         - cookieAuth: []
-      x-required-authority: member
+      x-required-authority: student
   /auth/verification/request:
     post:
       operationId: requestEmailVerification
@@ -2615,9 +2618,8 @@ paths:
         - admin
       summary: Review a moderation report
       description: >-
-        Update status and record the current administrator and review time. An
-        omitted note preserves the saved note atomically; an explicit null clears
-        it, and a supplied string replaces it.
+        Update status and record the current administrator and review time. An omitted note preserves the
+        saved note atomically; an explicit null clears it, and a supplied string replaces it.
       security:
         - cookieAuth: []
       parameters:
@@ -2718,7 +2720,7 @@ paths:
           $ref: "#/components/responses/Error503"
         "504":
           $ref: "#/components/responses/Error504"
-      x-required-authority: member
+      x-required-authority: student
       requestBody:
         required: true
         content:
@@ -2775,12 +2777,61 @@ paths:
         "504":
           $ref: "#/components/responses/Error504"
       x-required-authority: member
+  /users/{id}/activity-rank:
+    get:
+      operationId: getUserActivityRank
+      tags:
+        - users
+      summary: Get an eligible student’s public activity badge
+      description: Requires fresh member access. Administrators may inspect eligible student badges for moderation
+        but have no badge of their own. Missing, ineligible and blocked targets return 404. Counts distinct
+        eligible accepted study partners; zero activity has null rank and tier. No private account fields are
+        returned.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Public activity badge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityRank"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      x-required-authority: member
 components:
   schemas:
     NotificationItem:
       type: object
       additionalProperties: false
-      required: [id, kind, requestId, message, createdAt, read]
+      required: [ id, kind, requestId, message, createdAt, read ]
       properties:
         id:
           type: integer
@@ -2788,9 +2839,9 @@ components:
           maximum: 9007199254740991
         kind:
           type: string
-          enum: [request_match, request_match_summary]
+          enum: [ request_match, request_match_summary ]
         requestId:
-          type: [integer, "null"]
+          type: [ integer, "null" ]
           minimum: 1
           maximum: 9007199254740991
         message:
@@ -2806,7 +2857,7 @@ components:
     NotificationsResponse:
       type: object
       additionalProperties: false
-      required: [unreadCount, items]
+      required: [ unreadCount, items ]
       properties:
         unreadCount:
           type: integer
@@ -2846,7 +2897,8 @@ components:
       properties:
         email:
           type: string
-          description: Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access.
+          description: Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private
+            server configuration. Registration never verifies ownership or grants administrator access.
         name:
           type: string
         password:
@@ -2922,7 +2974,8 @@ components:
         hasMemberAccess:
           type: boolean
           readOnly: true
-          description: Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.
+          description: Server-computed member access from actual ownership or the two-account test-site policy. Does not
+            grant administrator access.
         createdAt:
           type: string
         isAdmin:
@@ -3097,6 +3150,12 @@ components:
           items:
             type: string
             pattern: ^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([01][0-9]|2[0-3]):00$
+        clientRequestId:
+          type: string
+          format: uuid
+          description: Optional stable client publication key. Reusing it with different content returns 409. An
+            explicit identical retry returns the original request; clients must not blindly retry an uncertain
+            publish.
       required:
         - districtId
         - title
@@ -3120,8 +3179,7 @@ components:
             type: integer
             minimum: 1
         status:
-          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears
-            matchedUserId.
+          description: Only Connect can enter matched; retaining matched is allowed. Reopening clears matchedUserId.
           type: string
           enum:
             - open
@@ -3148,6 +3206,11 @@ components:
             - "null"
           maxLength: 2000
           x-length-unit: unicode-code-points
+        requestId:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: When present, report this request. reportedUserId must equal its server-resolved author.
       required:
         - reportedUserId
         - reason
@@ -3326,8 +3389,8 @@ components:
             - string
             - "null"
           format: uuid
-          description: Reuse for an explicit retry of the same message. Scoped to sender and room or
-            conversation; different content returns 409.
+          description: Reuse for an explicit retry of the same message. Scoped to sender and room or conversation;
+            different content returns 409.
       required:
         - body
       additionalProperties: false
@@ -3485,8 +3548,8 @@ components:
         coverage:
           type: string
           enum: [ untracked, partial, complete ]
-          description: Complete means the whole elapsed portion was tracked; partial means tracking started
-            after Monday midnight.
+          description: Complete means the whole elapsed portion was tracked; partial means tracking started after Monday
+            midnight.
     SubjectDemand:
       type: object
       required: [ subject, requests, color ]
@@ -3507,8 +3570,7 @@ components:
           format: date-time
         mentors:
           type: array
-          description: Current mentor/both users, including zero matches, ordered by totalMatches descending
-            then ID.
+          description: Current mentor/both users, including zero matches, ordered by totalMatches descending then ID.
           items:
             $ref: "#/components/schemas/MentorActivityRow"
     MentorActivityRow:
@@ -3525,8 +3587,8 @@ components:
         avgTimeToMatchHours:
           type: [ number, "null" ]
           minimum: 0
-          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid
-            durations; recorded matches are still counted.
+          description: Mean nonnegative creation-to-match interval for observed events. Null means no valid durations;
+            recorded matches are still counted.
     WeeklyMatchesEnvelope:
       allOf:
         - $ref: "#/components/schemas/PyEnvelope"
@@ -3877,8 +3939,8 @@ components:
           type:
             - string
             - "null"
-          description: Preserved report evidence, including legacy descriptions longer than the new-submission
-            limit. Subject to the overall gateway response byte limit; never truncated.
+          description: Preserved report evidence, including legacy descriptions longer than the new-submission limit.
+            Subject to the overall gateway response byte limit; never truncated.
         status:
           type: string
           enum:
@@ -3902,6 +3964,24 @@ components:
             - string
             - "null"
         createdAt: *a14
+        targetType:
+          type: string
+          enum:
+            - profile
+            - request
+        requestId:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 2147483647
+          description: Null for profile reports and deleted requests.
+        requestTitle:
+          type:
+            - string
+            - "null"
+          maxLength: 200
+          description: Server-captured title retained for moderation after request deletion.
       required:
         - id
         - reporterId
@@ -3915,6 +3995,9 @@ components:
         - reviewedBy
         - reviewedAt
         - createdAt
+        - targetType
+        - requestId
+        - requestTitle
     EditCommentBody:
       type: object
       additionalProperties: false
@@ -3926,6 +4009,47 @@ components:
           x-length-unit: unicode-code-points
       required:
         - body
+    ActivityRank:
+      type: object
+      additionalProperties: false
+      properties:
+        userId:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        distinctPartners:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+        rank:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 2147483647
+          description: Competition rank among eligible students, null when distinctPartners is zero.
+        tier:
+          type:
+            - string
+            - "null"
+          enum:
+            - Bronze
+            - Silver
+            - Gold
+            - Platinum
+            - Emerald
+            - Diamond
+            - Master
+            - Grand Master
+            - Challenger
+            - null
+          description: "Absolute distinct-partner thresholds: 1, 3, 5, 10, 20, 35, 50, 75, 100 respectively. Null for
+            zero activity."
+      required:
+        - userId
+        - distinctPartners
+        - rank
+        - tier
   securitySchemes:
     cookieAuth:
       type: apiKey

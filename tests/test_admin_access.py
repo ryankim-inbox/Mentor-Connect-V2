@@ -6,7 +6,8 @@ from test_account_trust import execute
 
 OPERATIONS = ('/api/analysis/status','/api/analytics/weekly-matches','/api/analytics/popular-subjects',
               '/api/analytics/popular-time-slots','/api/analytics/mentor-response-rates',
-              '/api/admin/flagged-users','/api/admin/reports','/api/matches/1')
+              '/api/admin/flagged-users','/api/admin/reports','/api/matches/1',
+              '/api/stats/overview','/api/stats/district/1')
 
 
 def test_admin_boundary_and_live_revocation(backend_database,backend_server):
@@ -47,6 +48,8 @@ def test_report_content_admin_only_and_moderation_audit(backend_database,backend
         admin,_=login(base,'mentor501@test.edu')
         status,reports=api(admin,base,'GET','/api/admin/reports?status=open&limit=1')
         assert status == 200 and reports[0]['description']=='private report'
+        assert reports[0]['targetType']=='profile'
+        assert reports[0]['requestId'] is None and reports[0]['requestTitle'] is None
         path=f"/api/admin/reports/{reports[0]['id']}"
         assert api(student,base,'PATCH',path,{'status':'resolved'})[0] == 403
         status,report=api(admin,base,'PATCH',path,{'status':'reviewing','note':'Internal'})
@@ -69,17 +72,33 @@ def test_every_student_role_denied_operational_get_and_mutation(backend_server,e
             assert api(build_opener(),base,method,path,body)[0]==401,path
 
 
-@pytest.mark.parametrize('path',['/api/districts/1','/api/stats/district/1'])
-def test_district_member_details_require_verification_but_list_and_overview_are_public(backend_database,backend_server,path):
+def test_district_list_is_public_and_details_require_membership(backend_database,backend_server):
     from test_account_trust import unverify
     unverify(backend_database)
     with backend_server() as base:
         anonymous=build_opener()
         assert api(anonymous,base,'GET','/api/districts')[0]==200
-        assert api(anonymous,base,'GET','/api/stats/overview')[0]==200
-        assert api(anonymous,base,'GET',path)[0]==401
+        assert api(anonymous,base,'GET','/api/districts/1')[0]==401
         student,_=login(base,'student001@test.edu')
-        assert api(student,base,'GET',path)[0]==403
+        assert api(student,base,'GET','/api/districts/1')[0]==403
         for email in ['mentor501@test.edu','both951@test.edu']:
             verified,_=login(base,email)
-            assert api(verified,base,'GET',path)[0]==200
+            assert api(verified,base,'GET','/api/districts/1')[0]==200
+
+
+@pytest.mark.parametrize('path',['/api/stats/overview','/api/stats/district/1'])
+def test_stats_require_current_verified_admin_authority(backend_database,backend_server,path):
+    with backend_server() as base:
+        assert api(build_opener(),base,'GET',path)[0]==401
+        student,_=login(base,'student001@test.edu')
+        assert api(student,base,'GET',path)[0]==403
+        execute(backend_database,'UPDATE users SET is_admin=true WHERE id=501')
+        admin,_=login(base,'mentor501@test.edu')
+        status,stats=api(admin,base,'GET',path)
+        assert status==200
+        if path.endswith('overview'):
+            assert stats['totalUsers']==5 and stats['totalDistricts']==2
+        else:
+            assert stats['districtId']==1 and stats['memberCount']==3
+        execute(backend_database,'UPDATE users SET is_admin=false WHERE id=501')
+        assert api(admin,base,'GET',path)[0]==403

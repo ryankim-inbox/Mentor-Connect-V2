@@ -19,6 +19,7 @@ import {
   questionsTable,
   reportsTable,
   requestTagsTable,
+  requestSubmissionKeysTable,
   requestsTable,
   requestEventsTable,
   requestApplicationsTable,
@@ -41,6 +42,7 @@ const tables = [
   questionsTable,
   reportsTable,
   requestTagsTable,
+  requestSubmissionKeysTable,
   requestsTable,
   requestEventsTable,
   requestApplicationsTable,
@@ -78,9 +80,10 @@ const expectedColumnCounts = new Map([
   ["dm_conversations", 4],
   ["dm_messages", 8],
   ["questions", 10],
-  ["reports", 10],
+  ["reports", 13],
   ["request_tags", 3],
-  ["requests", 12],
+  ["requests", 14],
+  ["request_submission_keys", 5],
   ["request_events", 6],
   ["request_applications", 6],
   ["request_comments", 9],
@@ -141,6 +144,8 @@ test("Drizzle represents every canonical table and column", () => {
       "updated_at",
       "request",
       "preferred_times",
+      "client_request_id",
+      "payload_hash",
     ],
   );
 });
@@ -251,7 +256,7 @@ test("Drizzle exposes the new integrity checks and matching indexes", () => {
     getTableConfig(reportsTable)
       .checks.map((check) => check.name)
       .sort(),
-    ["reports_no_self_check", "reports_note_check", "reports_status_check"],
+    ["reports_no_self_check", "reports_note_check", "reports_request_title_check", "reports_status_check", "reports_target_context_check", "reports_target_type_check"],
   );
   assert.deepEqual(
     getTableConfig(dmConversationsTable)

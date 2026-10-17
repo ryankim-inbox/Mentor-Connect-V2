@@ -34,8 +34,11 @@ def runtime_role(dsn):
         cur.execute(sql.SQL('CREATE ROLE {} LOGIN').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT USAGE ON SCHEMA public TO {}').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}').format(sql.Identifier(role)))
-        cur.execute(sql.SQL('GRANT INSERT ON requests,request_tags,notifications TO {}').format(sql.Identifier(role)))
+        cur.execute(sql.SQL('GRANT INSERT ON requests,request_tags,request_submission_keys,notifications TO {}').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT UPDATE(read_at) ON notifications TO {}').format(sql.Identifier(role)))
+        # Row-level delivery locks need an UPDATE privilege; never grant authority fields.
+        cur.execute(sql.SQL('GRANT UPDATE(title) ON requests TO {}').format(sql.Identifier(role)))
+        cur.execute(sql.SQL('GRANT UPDATE(name) ON users TO {}').format(sql.Identifier(role)))
         cur.execute(sql.SQL('GRANT USAGE ON SEQUENCE requests_id_seq,request_tags_id_seq,notifications_id_seq TO {}').format(sql.Identifier(role)))
         conn.commit()
         try:

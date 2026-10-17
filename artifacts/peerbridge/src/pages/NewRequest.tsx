@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useCreateRequest, useListDistricts, useListTags, getListRequestsQueryKey } from "@workspace/api-client-react";
+import {
+  useCreateRequest,
+  useListDistricts,
+  useListTags,
+  getListRequestsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { notificationsQueryKey } from "@/lib/notifications";
 import { TagBadge } from "@/components/TagBadge";
 import { PreferredTimesField } from "@/components/PreferredTimesField";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +16,8 @@ export default function NewRequest() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const busy = useRef(false);
+  const attempt = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -22,18 +30,23 @@ export default function NewRequest() {
   const [error, setError] = useState("");
   const [districtSearch, setDistrictSearch] = useState("");
 
-  const { data: districts } = useListDistricts({ search: districtSearch }, {
-    query: { queryKey: ["districts", districtSearch] }
-  });
+  const { data: districts } = useListDistricts(
+    { search: districtSearch },
+    {
+      query: { queryKey: ["districts", districtSearch] },
+    },
+  );
   const { data: tags } = useListTags();
-  const createRequest = useCreateRequest();
+  const createRequest = useCreateRequest({ mutation: { retry: false } });
 
   if (!user) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <h2 className="text-xl font-bold mb-4">Sign in to post a request</h2>
         <Link href="/login">
-          <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold">Sign in</button>
+          <button className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-semibold">
+            Sign in
+          </button>
         </Link>
       </div>
     );
@@ -42,20 +55,31 @@ export default function NewRequest() {
   const toggleTag = (id: number) => {
     setForm((f) => ({
       ...f,
-      tagIds: f.tagIds.includes(id) ? f.tagIds.filter((t) => t !== id) : [...f.tagIds, id],
+      tagIds: f.tagIds.includes(id)
+        ? f.tagIds.filter((t) => t !== id)
+        : [...f.tagIds, id],
     }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current || user.isAdmin) return;
     setError("");
 
-    if (!form.title.trim() || new TextEncoder().encode(form.title).length > 200) {
+    if (
+      !form.title.trim() ||
+      new TextEncoder().encode(form.title).length > 200
+    ) {
       setError("Title must contain text and be at most 200 UTF-8 bytes.");
       return;
     }
-    if (!form.description.trim() || new TextEncoder().encode(form.description).length > 4000) {
-      setError("Description must contain text and be at most 4,000 UTF-8 bytes.");
+    if (
+      !form.description.trim() ||
+      new TextEncoder().encode(form.description).length > 4000
+    ) {
+      setError(
+        "Description must contain text and be at most 4,000 UTF-8 bytes.",
+      );
       return;
     }
 
@@ -69,30 +93,57 @@ export default function NewRequest() {
       return;
     }
 
+    const data = {
+      ...form,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      tagIds: [...form.tagIds].sort((a, b) => a - b),
+      preferredTimes: [...form.preferredTimes].sort(),
+    };
+    const fingerprint = JSON.stringify(data);
+    if (attempt.current?.fingerprint !== fingerprint)
+      attempt.current = { fingerprint, id: crypto.randomUUID() };
+    busy.current = true;
     createRequest.mutate(
-      { data: form },
+      { data: { ...data, clientRequestId: attempt.current.id } },
       {
         onSuccess: (req) => {
-          queryClient.invalidateQueries({ queryKey: getListRequestsQueryKey() });
+          queryClient.invalidateQueries({
+            queryKey: getListRequestsQueryKey(),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: notificationsQueryKey(user.id),
+          });
+          attempt.current = null;
           navigate(`/requests/${req.id}`);
         },
-        onError: (err: unknown) => {
-          const e = err as { data?: { error?: string } };
-          setError(e?.data?.error ?? "Failed to create request. Please try again.");
+        onError: () => {
+          setError(
+            "We could not confirm that your request was published. Check your requests, or explicitly submit the unchanged form again to recover the same request. Nothing is retried automatically.",
+          );
         },
-      }
+        onSettled: () => {
+          busy.current = false;
+        },
+      },
     );
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-foreground mb-2">Post a mentorship request</h1>
-      <p className="text-muted-foreground mb-8">Share what you're looking for and connect with the right student</p>
+      <h1 className="text-2xl font-bold text-foreground mb-2">
+        Post a mentorship request
+      </h1>
+      <p className="text-muted-foreground mb-8">
+        Share what you're looking for and connect with the right student
+      </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-card border border-card-border rounded-2xl p-6">
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-2">I am a...</label>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              I am a...
+            </label>
             <div className="grid grid-cols-2 gap-3">
               {(["mentee", "mentor"] as const).map((r) => (
                 <button
@@ -105,18 +156,24 @@ export default function NewRequest() {
                       : "bg-background border-input text-foreground hover:bg-accent"
                   }`}
                 >
-                  {r === "mentee" ? "Mentee — seeking a mentor" : "Mentor — offering help"}
+                  {r === "mentee"
+                    ? "Mentee — seeking a mentor"
+                    : "Mentor — offering help"}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-1.5">Request title</label>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Request title
+            </label>
             <input
               type="text"
               value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, title: e.target.value }))
+              }
               placeholder="e.g. Need help with AP Calculus BC"
               required
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
@@ -124,20 +181,29 @@ export default function NewRequest() {
           </div>
 
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-1.5">Description</label>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Description
+            </label>
             <textarea
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
               placeholder="Describe what you're looking for, your background, and your goals..."
               required
               rows={4}
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition resize-none"
             />
-            <p className="text-xs text-muted-foreground mt-1 text-right">{new TextEncoder().encode(form.description).length}/4,000 UTF-8 bytes</p>
+            <p className="text-xs text-muted-foreground mt-1 text-right">
+              {new TextEncoder().encode(form.description).length}/4,000 UTF-8
+              bytes
+            </p>
           </div>
 
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-2">District</label>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              District
+            </label>
             <input
               type="text"
               placeholder="Search districts..."
@@ -147,21 +213,30 @@ export default function NewRequest() {
             />
             <select
               value={form.districtId || ""}
-              onChange={(e) => setForm((f) => ({ ...f, districtId: Number(e.target.value) }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, districtId: Number(e.target.value) }))
+              }
               required
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
               size={4}
             >
-              <option value="" disabled>Select a district</option>
+              <option value="" disabled>
+                Select a district
+              </option>
               {districts?.map((d) => (
-                <option key={d.id} value={d.id}>{d.name} ({d.county} County)</option>
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.county} County)
+                </option>
               ))}
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
-              Subject tags <span className="text-muted-foreground font-normal">(select all that apply)</span>
+              Subject tags{" "}
+              <span className="text-muted-foreground font-normal">
+                (select all that apply)
+              </span>
             </label>
             <div className="flex flex-wrap gap-2">
               {tags?.map((tag) => (
@@ -179,7 +254,10 @@ export default function NewRequest() {
               ))}
             </div>
             {form.tagIds.length > 0 && (
-              <p className="text-xs text-primary mt-2">{form.tagIds.length} tag{form.tagIds.length !== 1 ? "s" : ""} selected</p>
+              <p className="text-xs text-primary mt-2">
+                {form.tagIds.length} tag{form.tagIds.length !== 1 ? "s" : ""}{" "}
+                selected
+              </p>
             )}
           </div>
         </div>
@@ -187,12 +265,19 @@ export default function NewRequest() {
         <div className="bg-card border border-card-border rounded-2xl p-6">
           <PreferredTimesField
             value={form.preferredTimes}
-            onChange={(preferredTimes) => setForm((f) => ({ ...f, preferredTimes }))}
+            onChange={(preferredTimes) =>
+              setForm((f) => ({ ...f, preferredTimes }))
+            }
           />
         </div>
 
         {error && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>
+          <p
+            role="alert"
+            className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2"
+          >
+            {error}
+          </p>
         )}
 
         <div className="flex gap-3">
@@ -204,7 +289,10 @@ export default function NewRequest() {
             {createRequest.isPending ? "Posting..." : "Post request"}
           </button>
           <Link href="/requests">
-            <button type="button" className="px-6 py-3 border border-border rounded-xl font-semibold hover:bg-accent transition-colors">
+            <button
+              type="button"
+              className="px-6 py-3 border border-border rounded-xl font-semibold hover:bg-accent transition-colors"
+            >
               Cancel
             </button>
           </Link>

@@ -461,7 +461,7 @@ test("each ordinary wire-model family agrees with generated validation and rejec
     r.end(
       JSON.stringify(
         q.url === "/api/auth/me" && target.path !== "/api/auth/me"
-          ? f.userFixture
+          ? { ...f.userFixture, isAdmin: target.path.startsWith("/api/stats/") }
           : target.bad,
       ),
     );
@@ -646,4 +646,83 @@ test("consent and discussion projections expose only their public fields", () =>
       "POST",
     ),
   );
+});
+
+test("activity projection exposes only a bounded badge and checks rank/tier consistency", () => {
+  const zero = { userId: 501, distinctPartners: 0, rank: null, tier: null };
+  const active = { userId: 501, distinctPartners: 3, rank: 1, tier: "Silver" };
+  for (const row of [zero, active])
+    assert.deepEqual(
+      projectPublicPayload(
+        { ...row, email: "private@example.test", password_hash: "secret" },
+        "/api/users/{id}/activity-rank",
+        "GET",
+      ),
+      row,
+    );
+  for (const row of [
+    { ...active, distinctPartners: -1 },
+    { ...active, rank: 0 },
+    { ...active, tier: "Untrusted" },
+    { ...zero, rank: 1 },
+    { ...active, tier: null },
+    { ...active, tier: "Challenger" },
+  ])
+    assert.throws(() =>
+      projectPublicPayload(row, "/api/users/{id}/activity-rank", "GET"),
+    );
+});
+
+test("profile activity gateway rejects wrong target and unexpected successful status", async (t) => {
+  let status = 200;
+  let targetId = 501;
+  const upstream = createServer((req, res) => {
+    if (req.url === "/api/auth/me") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(userFixture));
+      return;
+    }
+    res.writeHead(status, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        userId: targetId,
+        distinctPartners: 1,
+        rank: 1,
+        tier: "Bronze",
+        email: "private@example.test",
+      }),
+    );
+  });
+  const gateway = createGatewayServer({
+    upstreamOrigin: await listen(upstream),
+    publicOrigin: TEST_PUBLIC_ORIGIN,
+    allowLoopbackPublicOrigin: true,
+    logger: { info() {} },
+  });
+  const base = await listen(gateway);
+  t.after(() => {
+    gateway.closeAllConnections();
+    upstream.closeAllConnections();
+    gateway.close();
+    upstream.close();
+  });
+  const get = () =>
+    fetch(base + "/api/users/501/activity-rank", {
+      headers: { cookie: "session=synthetic" },
+    });
+  const valid = await get();
+  assert.equal(valid.status, 200);
+  assert.deepEqual(await valid.json(), {
+    userId: 501,
+    distinctPartners: 1,
+    rank: 1,
+    tier: "Bronze",
+  });
+  targetId = 502;
+  assert.equal((await get()).status, 502);
+  targetId = 501;
+  for (const unexpected of [201, 204]) {
+    status = unexpected;
+    assert.equal((await get()).status, 502);
+  }
 });

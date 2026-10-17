@@ -10,8 +10,13 @@ export function useNotifications() {
   return useQuery({
     queryKey: notificationsQueryKey(user?.id),
     queryFn: ({ signal }) => listNotifications({ signal }),
-    enabled: status === "authenticated" && user?.hasMemberAccess === true,
-    refetchInterval: 30_000,
+    enabled:
+      status === "authenticated" &&
+      user?.hasMemberAccess === true &&
+      !user.isAdmin,
+    refetchInterval: (query) => (query.state.error ? false : 30_000),
+    refetchIntervalInBackground: false,
+    retry: false,
     staleTime: 0,
   });
 }

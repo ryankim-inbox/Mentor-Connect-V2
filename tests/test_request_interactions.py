@@ -110,7 +110,7 @@ def test_comments_replies_retries_and_cross_post_parent(backend_server):
         status, reply = api(owner, base, "POST", path, reply_body)
         assert status == 201 and reply["parentId"] == comment["id"]
         assert api(owner, base, "POST", path, {**reply_body, "parentId": reply["id"], "clientCommentId": str(uuid4())})[0] == 400
-        other = f"/api/requests/{create(owner, base)}/comments"
+        other = f"/api/requests/{create(owner, base, title='E2E TEST separate post')}/comments"
         assert api(owner, base, "POST", other, reply_body)[0] == 400
         rows = api(owner, base, "GET", path)[1]
         assert [row["id"] for row in rows] == [comment["id"], reply["id"]]

@@ -28,6 +28,11 @@ function MemberLinks({ className }: { className: string }) {
   const links = memberLinks.filter(([label]) => {
     if (["Profile", "Settings"].includes(label)) return true;
     if (status !== "authenticated" || !user?.hasMemberAccess) return false;
+    if (
+      user.isAdmin &&
+      ["My connections", "Notifications", "New Request"].includes(label)
+    )
+      return false;
     return (
       !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
         label,
