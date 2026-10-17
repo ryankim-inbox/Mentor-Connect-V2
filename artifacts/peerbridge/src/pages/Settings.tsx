@@ -1,3 +1,4 @@
+import { BlockedMembers } from "@/components/MemberSafety";
 import { trimDisplayName } from "@/lib/display-name";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -222,6 +223,7 @@ export default function Settings() {
           </button>
         </form>
       </div>
+      <BlockedMembers key={user.id} />
     </div>
   );
 }

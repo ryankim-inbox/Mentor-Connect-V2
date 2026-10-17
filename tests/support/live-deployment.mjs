@@ -12,6 +12,7 @@ import { createReadinessChecker } from "../../artifacts/api-gateway/dist/readine
 import { bootstrapClassroom } from "../../ops/bootstrap-classroom.mjs";
 import { verifySchemaAssets } from "../../lib/db/tools/schema-assets.mjs";
 import { runMentorshipJourney } from "./mentorship-journey.mjs";
+import { runAccountTrustJourney } from "./account-trust-journey.mjs";
 import { runLiveChat } from "../../scripts/smoke-live-chat.mjs";
 const { Client } = createRequire(
   new URL("../../lib/db/package.json", import.meta.url),
@@ -58,6 +59,8 @@ const backendPort = await listen(portFinder);
 await new Promise((resolve) => portFinder.close(resolve));
 let python, gateway, checker, browser, containerId, gatewayPort;
 const containerImage = process.env.DEPLOYMENT_TEST_IMAGE;
+let developmentDelivery = !containerImage;
+const ownershipOutbox = path.join(temp, "ownership-outbox");
 const sockets = new Set();
 const tls = httpsServer(
   { key: readFileSync(key), cert: readFileSync(cert) },
@@ -131,7 +134,10 @@ async function startPython() {
         ...process.env,
         DATABASE_URL: dsn,
         SESSION_SECRET: "local-test-session-secret-is-long-enough",
-        NODE_ENV: "production",
+        NODE_ENV: developmentDelivery ? "test" : "production",
+        EMAIL_DELIVERY_MODE: developmentDelivery ? "development-file" : "disabled",
+        EMAIL_DEV_OUTBOX_DIR: ownershipOutbox,
+        APP_ORIGIN: origin,
       },
       stdio: "ignore",
     },
@@ -248,6 +254,12 @@ try {
     newContext: (options) =>
       browser.newContext({ ...options, ignoreHTTPSErrors: true }),
   };
+  if (developmentDelivery) {
+    await runAccountTrustJourney({origin, outbox:ownershipOutbox},localBrowser);
+    await stopStack();
+    developmentDelivery = false;
+    await startStack();
+  }
   const config = {
     origin,
     credentials: {

@@ -1,0 +1,27 @@
+# Account ownership and administrator rollout
+
+This branch implements local account-trust behavior. It is not ready for deployment: real mail delivery is deliberately disabled and no administrator has been provisioned. No production or remote steps below have been performed.
+
+## Before any future deployment
+
+1. Obtain explicit approval for the target environment, maintenance window, backup/restore procedure, migration and the individual administrator account. Select a mail provider and implement delivery in a separately reviewed change; provider signup, paid plans and credentials require separate authorization. Configure the application's trusted origin. Test a real delivery path and failure handling before resetting ownership.
+2. Back up the target database and rehearse restoration. Review migration 0006 and the exact installed migration ledger. Migrations 0001–0005 are immutable.
+3. Coordinate a maintenance rollout of Python, gateway, generated contracts and UI. Migration 0006 resets all legacy ownership flags, adds `email_verified_at` and `is_admin`, and enforces consistency between timestamp proof and `is_verified`. Old registration code writes `is_verified=true` without proof and is incompatible after migration. Stop old application writers before applying it; do not use a rolling overlap with the old registration implementation.
+4. Define and independently review the remote migration/grant procedure. The current `ops/upgrade-account-trust.mjs` intentionally accepts only disposable loopback databases named `account_trust_upgrade_*`. It is a rehearsal tool and must not be repurposed into a remote migration by changing its safeguards. A separately authorized, reviewed remote path is a deployment prerequisite.
+5. Apply the coordinated release during maintenance and verify migration ledger/catalog, ownership consistency, readiness and rollback readiness before reopening registration. The application role needs the reviewed token/attempt and comment/report grants; it must not receive blanket privileges or the ability to self-grant administration.
+
+## Ownership verification and administration
+
+- Registration creates an unverified, non-admin account. A `.edu` suffix is an eligibility rule, never proof of mailbox ownership. The owner explicitly requests delivery at `/verify-email`, opens the newest link and explicitly confirms it while signed in to the same account. Links expire after 30 minutes and work once. Resend limits are 60 seconds between attempts and five per hour per account.
+- Failed or disabled delivery is an error. Do not tell users a message was sent unless delivery returned success. An uncertain confirmation is not retried automatically; refresh session state or request a new link deliberately.
+- The UI removes the link fragment before rendering. Secrets stay only in document memory and are never stored in return destinations, browser storage, query/mutation caches or ordinary logs. A logged-out recipient is told to sign in and request a fresh link. Do not put real verification links into support tickets, screenshots, traces, analytics or incident logs.
+- Administrator privilege is separate from mentor/mentee/both. Verify ownership through the approved proof flow first. An authorized operator then grants `is_admin` to one explicitly selected account under the reviewed remote procedure, with an audit record identifying operator, target account, approval and time. Never infer administrators from student role, email suffix, client input or historical data. This branch performs no administrator grant.
+- Revocation takes effect on the next authoritative HTTP or socket authorization check. Verify anonymous, unverified, mentor, mentee, both and administrator paths after rollout. Normal verified student room/DM chat remains supported; membership and bilateral blocks still apply.
+
+## Disposable local rehearsal
+
+Use only temporary local databases and test identities. The existing upgrade rehearsal requires `ACCOUNT_TRUST_DATABASE_URL`, exact `ACCOUNT_TRUST_TARGET` JSON (`host`, `port`, `database`, `appRole`), 40-hex `ACCOUNT_TRUST_APP_SHA`, an approval identifier, 64-hex backup digest and a new absolute audit path. Run `node ops/upgrade-account-trust.mjs --apply --acknowledge-email-ownership-reset` only with a disposable `account_trust_upgrade_*` loopback target. Review its protected audit file afterward. It neither selects nor grants an administrator.
+
+The real browser harness in `tests/support/live-deployment.mjs` creates a disposable database and local TLS origin. Only its ownership phase uses `NODE_ENV=test`, `EMAIL_DELIVERY_MODE=development-file`, a protected temporary outbox and `APP_ORIGIN` equal to that local TLS origin. It checks 0700/0600 permissions and reads the local test message without printing the URL/token. It then stops the stack, disables delivery and restarts with `NODE_ENV=production` for the existing consent/chat/restart journey. Container mode retains production behavior and excludes that development-file phase. Production development-file refusal remains enforced independently by Python tests.
+
+Run the complete local pipeline with Node 24 and PostgreSQL 16 on PATH, `PYTHON_BIN` and `CLASSROOM_TEST_PYTHON` pointing at this worktree's `.venv/bin/python`, then `sh scripts/verify-release.sh`. No deployment, remote migration/grants, actual mail, provider selection/signup, credentials/settings, push or PR is part of this task.

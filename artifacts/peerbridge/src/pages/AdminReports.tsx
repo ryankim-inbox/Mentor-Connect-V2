@@ -1,3 +1,4 @@
+import ReportQueue from "@/components/ReportQueue";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -66,6 +67,8 @@ export default function AdminReports() {
           Review the current Python report outputs and signup summary.
         </p>
       </div>
+
+      <ReportQueue />
 
       <section className="mb-6 rounded-2xl border border-card-border bg-card p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

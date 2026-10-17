@@ -9,6 +9,7 @@ const memberLinks = [
   ["Requests", releaseSurface.appRoutes.requests],
   ["My connections", "/connections"],
   ["New Request", "/requests/new"],
+  ["Mentors", "/mentors"],
   ["Matches", releaseSurface.appRoutes.matching],
   ["Practice", releaseSurface.appRoutes.practice],
   ["Analytics", releaseSurface.appRoutes.analytics],
@@ -19,9 +20,19 @@ const memberLinks = [
 ] as const;
 
 function MemberLinks({ className }: { className: string }) {
+  const { user, status } = useAuth();
+  const links = memberLinks.filter(([label]) => {
+    if (["Profile", "Settings"].includes(label)) return true;
+    if (status !== "authenticated" || !user?.isVerified) return false;
+    return (
+      !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
+        label,
+      ) || user.isAdmin
+    );
+  });
   return (
     <div className={className}>
-      {memberLinks.map(([label, href]) => (
+      {links.map(([label, href]) => (
         <Link
           key={href}
           href={href}
@@ -60,6 +71,14 @@ export function Navbar() {
       {error && (
         <p role="alert" className="px-4 py-2 text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {user && !user.isVerified && (
+        <p className="px-4 py-2 text-sm">
+          Email ownership pending.{" "}
+          <Link href="/verify-email" className="underline">
+            Verify email
+          </Link>
         </p>
       )}
       <div className="mx-auto max-w-[96rem] px-4 sm:px-6 lg:px-8">

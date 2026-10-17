@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, useSearch, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,7 +11,10 @@ import Login from "@/pages/Login";
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
-import { RequireAuth } from "@/components/RequireAuth";
+import VerifyEmail from "@/pages/VerifyEmail";
+import Mentors from "@/pages/Mentors";
+import { useAuth } from "@/lib/auth-context";
+import { RequireAdmin, RequireAuth } from "@/components/RequireAuth";
 import { releaseSurface } from "@/lib/release-flags";
 
 const Connections = lazy(() => import("@/pages/Connections"));
@@ -59,10 +62,22 @@ function DashboardRoute({
 }: {
   initialTab?: "overview" | "practice-lab";
 }) {
-  return (
-    <RequireAuth>
-      <Dashboard initialTab={initialTab} PracticeLab={PracticeLab} />
-    </RequireAuth>
+  const { user } = useAuth();
+  const search = useSearch();
+  const operational =
+    initialTab === "practice-lab" ||
+    new URLSearchParams(search).get("tab") === "practice-lab";
+  const content = (
+    <Dashboard
+      key={`${user?.id}-${operational}`}
+      initialTab={initialTab}
+      PracticeLab={user?.isAdmin ? PracticeLab : undefined}
+    />
+  );
+  return operational ? (
+    <RequireAdmin>{content}</RequireAdmin>
+  ) : (
+    <RequireAuth>{content}</RequireAuth>
   );
 }
 
@@ -74,7 +89,16 @@ function Router() {
         <Switch>
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
-          <Route path={releaseSurface.appRoutes.register} component={Register} />
+          <Route path="/verify-email" component={VerifyEmail} />
+          <Route path="/mentors">
+            <RequireAuth>
+              <Mentors />
+            </RequireAuth>
+          </Route>
+          <Route
+            path={releaseSurface.appRoutes.register}
+            component={Register}
+          />
           <Route path={releaseSurface.appRoutes.dashboardPractice}>
             <DashboardRoute initialTab="practice-lab" />
           </Route>
@@ -111,49 +135,51 @@ function Router() {
             </RequireAuth>
           </Route>
           <Route path="/connections">
-            <RequireAuth><Connections /></RequireAuth>
+            <RequireAuth>
+              <Connections />
+            </RequireAuth>
           </Route>
           <Route path="/profile/:id">
             {(params) => (
-              <RequireAuth>
+              <RequireAuth verified={false}>
                 <MemberProfile id={params.id ?? ""} />
               </RequireAuth>
             )}
           </Route>
           <Route path="/profile">
-            <RequireAuth>
+            <RequireAuth verified={false}>
               <Profile />
             </RequireAuth>
           </Route>
           <Route path="/settings">
-            <RequireAuth>
+            <RequireAuth verified={false}>
               <Settings />
             </RequireAuth>
           </Route>
           <Route path={releaseSurface.appRoutes.matching}>
-            <RequireAuth>
+            <RequireAdmin>
               <Recommendations />
-            </RequireAuth>
+            </RequireAdmin>
           </Route>
           <Route path={releaseSurface.appRoutes.practice}>
-            <RequireAuth>
+            <RequireAdmin>
               <PracticeLab />
-            </RequireAuth>
+            </RequireAdmin>
           </Route>
           <Route path={releaseSurface.appRoutes.analytics}>
-            <RequireAuth>
+            <RequireAdmin>
               <Analytics />
-            </RequireAuth>
+            </RequireAdmin>
           </Route>
           <Route path={releaseSurface.appRoutes.scheduling}>
-            <RequireAuth>
+            <RequireAdmin>
               <Scheduling />
-            </RequireAuth>
+            </RequireAdmin>
           </Route>
           <Route path={releaseSurface.appRoutes.admin}>
-            <RequireAuth>
+            <RequireAdmin>
               <AdminReports />
-            </RequireAuth>
+            </RequireAdmin>
           </Route>
           <Route component={NotFound} />
         </Switch>

@@ -1,8 +1,16 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useLocation } from "wouter";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation } from "wouter";
 import { useAuth, sessionReturnPath } from "@/lib/auth-context";
 
-export function RequireAuth({ children }: { children: ReactNode }) {
+export function RequireAuth({
+  children,
+  verified = true,
+  admin = false,
+}: {
+  children: ReactNode;
+  verified?: boolean;
+  admin?: boolean;
+}) {
   const { user, status, refetch } = useAuth();
   const [location, navigate] = useLocation();
   const [retrying, setRetrying] = useState(false);
@@ -34,6 +42,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (status === "anonymous")
     return <p className="px-4 py-20 text-center">Sign in to continue</p>;
 
+  if (status === "authenticated" && verified && !user?.isVerified)
+    return <VerificationNotice />;
+  if (status === "authenticated" && admin && !user?.isAdmin)
+    return (
+      <p role="alert" className="px-4 py-20 text-center">
+        Administrator access required
+      </p>
+    );
+
   return (
     <>
       {status === "error" && (
@@ -48,7 +65,26 @@ export function RequireAuth({ children }: { children: ReactNode }) {
           </button>
         </div>
       )}
-      {user && children}
+      {user && (status !== "error" || (!verified && !admin)) && (
+        <Fragment key={user.id}>{children}</Fragment>
+      )}
     </>
   );
+}
+
+export function VerificationNotice() {
+  return (
+    <section className="mx-auto max-w-xl px-4 py-12">
+      <h1 className="text-2xl font-bold">Verify your email</h1>
+      <p className="my-4">
+        Confirm email ownership to discover mentors, post requests and use chat.
+      </p>
+      <Link href="/verify-email" className="text-primary underline">
+        Verify email
+      </Link>
+    </section>
+  );
+}
+export function RequireAdmin({ children }: { children: ReactNode }) {
+  return <RequireAuth admin>{children}</RequireAuth>;
 }

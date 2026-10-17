@@ -21,8 +21,8 @@ test.beforeEach(async ({ request }) => {
   expect((await request.post("http://127.0.0.1:18181/__fixture/reset")).ok()).toBe(true);
 });
 
-test("all learning routes load their required APIs through the built gateway after login", async ({ page }) => {
-  await signIn(page);
+test("administrator learning routes load their required APIs through the built gateway after login", async ({ page }) => {
+  await signIn(page,"admin");
   const routes = [
     ["/dashboard", "Welcome back, Classroom", ["/api/stats/overview", "/api/requests", "/api/districts"]],
     ["/districts", "High School District Channels", ["/api/districts"]],
@@ -211,7 +211,7 @@ for (const width of [1440, 375, 320]) {
         body: pythonEnvelope("analysis", weekly) },
     })).ok()).toBe(true);
     // Keep this file below the gateway's real per-account login limit.
-    await signIn(page, "mentee");
+    await signIn(page, "admin");
     await page.goto("/analytics");
     await expect(page.getByText("Week-to-date", { exact: true })).toBeVisible();
     await expect(page.getByText("Untracked", { exact: true })).toBeVisible();
