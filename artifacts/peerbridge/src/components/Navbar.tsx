@@ -1,6 +1,8 @@
 import { Link } from "wouter";
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { fetchNotifications, notificationsQueryKey } from "@/pages/Notifications";
 import { releaseSurface } from "@/lib/release-flags";
 
 const memberLinks = [
@@ -8,6 +10,7 @@ const memberLinks = [
   ["Districts", releaseSurface.appRoutes.districts],
   ["Requests", releaseSurface.appRoutes.requests],
   ["My connections", "/connections"],
+  ["Notifications", "/notifications"],
   ["New Request", "/requests/new"],
   ["Mentors", "/mentors"],
   ["Matches", releaseSurface.appRoutes.matching],
@@ -21,6 +24,13 @@ const memberLinks = [
 
 function MemberLinks({ className }: { className: string }) {
   const { user, status } = useAuth();
+  const { data: notifications } = useQuery({
+    queryKey: notificationsQueryKey,
+    queryFn: fetchNotifications,
+    enabled: status === "authenticated" && Boolean(user?.isVerified),
+    refetchInterval: 30_000,
+  });
+  const unread = notifications?.unreadCount ?? 0;
   const links = memberLinks.filter(([label]) => {
     if (["Profile", "Settings"].includes(label)) return true;
     if (status !== "authenticated" || !user?.isVerified) return false;
@@ -39,6 +49,11 @@ function MemberLinks({ className }: { className: string }) {
           className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           {label}
+          {label === "Notifications" && unread > 0 && (
+            <span className="ml-1 rounded-full bg-red-600 px-1.5 text-xs text-white">
+              {unread}
+            </span>
+          )}
         </Link>
       ))}
     </div>
