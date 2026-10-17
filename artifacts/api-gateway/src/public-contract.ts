@@ -126,6 +126,17 @@ const mentorshipRequest = z.object({
   createdAt: string,
   preferredTimes: string.array().optional(),
 });
+const application = z.object({
+  id, requestId: id, applicantId: id, applicantName: text,
+  status: z.enum(["pending", "accepted", "rejected", "cancelled"]),
+  createdAt: timestamp, updatedAt: timestamp,
+});
+const comment = z.object({
+  id, requestId: id, authorId: id, authorName: text,
+  parentId: id.nullable(), parentAuthorName: text.nullable(),
+  body: text.max(2000), createdAt: timestamp,
+});
+const connection = z.object({ userId: id, name: text, requestId: id, requestTitle: text });
 const blockedUser = z.object({
   id: integer,
   blockedUserId: integer,
@@ -289,6 +300,12 @@ export function projectPublicPayload(
   if (path === "/api/districts") return district.array().parse(payload);
   if (path.startsWith("/api/districts/")) return district.parse(payload);
   if (path === "/api/tags") return tag.array().parse(payload);
+  if (path === "/api/connections") return connection.array().max(50).parse(payload);
+  if (path === "/api/request-activity") return mentorshipRequest.array().max(50).parse(payload);
+  if (/^\/api\/requests\/[^/]+\/comments$/.test(path))
+    return (method === "GET" ? comment.array().max(50) : comment).parse(payload);
+  if (/^\/api\/requests\/[^/]+\/(?:applications(?:\/[^/]+)?|match)$/.test(path))
+    return (method === "GET" ? application.array().max(50) : application).parse(payload);
   if (path.startsWith("/api/requests"))
     return (
       path === "/api/requests" && method === "GET"

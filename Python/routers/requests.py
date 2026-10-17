@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, PositiveInt, field_validator
 from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional, List
 from db import db
-from request_events import record_match_event
 
 router = APIRouter()
 
@@ -240,7 +239,7 @@ def update_request(request_id: PositiveInt, body: UpdateRequestBody, request: Re
             if existing["author_id"] != user_id:
                 raise HTTPException(status_code=403, detail="Forbidden")
             if body.status == "matched" and existing["status"] != "matched":
-                raise HTTPException(status_code=409, detail="Use Connect to match a request")
+                raise HTTPException(status_code=409, detail="Accept an application to match a request")
             validate_tag_references(cur, body.tagIds)
 
             fields = []
@@ -257,6 +256,10 @@ def update_request(request_id: PositiveInt, body: UpdateRequestBody, request: Re
                 fields.append("updated_at = now()")
             if body.status == "open":
                 fields.append("matched_user_id = NULL")
+            if body.status in ("open", "closed") and body.status != existing["status"]:
+                cur.execute("UPDATE request_applications SET status='cancelled', updated_at=now() WHERE request_id=%s AND status='pending'", (request_id,))
+                if body.status == "open":
+                    cur.execute("UPDATE request_applications SET status='cancelled', updated_at=now() WHERE request_id=%s AND status='accepted'", (request_id,))
 
             if fields:
                 values.append(request_id)
@@ -301,35 +304,6 @@ def delete_request(request_id: PositiveInt, request: Request):
 
 @router.post("/requests/{request_id}/match")
 def match_request(request_id: PositiveInt, request: Request):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    with db() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM requests WHERE id = %s FOR UPDATE", (request_id,))
-        req = cur.fetchone()
-        if not req:
-            raise HTTPException(status_code=404, detail="Request not found")
-        if req["author_id"] == user_id:
-            raise HTTPException(status_code=400, detail="Cannot match your own request")
-        if req["status"] != "open":
-            raise HTTPException(status_code=400, detail="Request is not open")
-
-        cur.execute(
-            """SELECT 1 FROM blocks
-               WHERE (blocker_id = %s AND blocked_user_id = %s)
-                  OR (blocker_id = %s AND blocked_user_id = %s)
-               LIMIT 1""",
-            (req["author_id"], user_id, user_id, req["author_id"]),
-        )
-        if cur.fetchone():
-            raise HTTPException(status_code=403, detail="Connection is blocked between these users")
-
-        cur.execute(
-            "UPDATE requests SET status = 'matched', matched_user_id = %s, updated_at = now() WHERE id = %s RETURNING *",
-            (user_id, request_id),
-        )
-        updated = cur.fetchone()
-        record_match_event(cur, updated)
-        return build_request_response(cur, updated)
+    # Compatibility alias: old clients must not bypass the author's consent.
+    from routers.request_interactions import apply_to_request
+    return apply_to_request(request_id, request)

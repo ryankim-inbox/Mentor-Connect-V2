@@ -7,6 +7,7 @@ const memberLinks = [
   ["Dashboard", releaseSurface.appRoutes.dashboard],
   ["Districts", releaseSurface.appRoutes.districts],
   ["Requests", releaseSurface.appRoutes.requests],
+  ["My connections", "/connections"],
   ["New Request", "/requests/new"],
   ["Matches", releaseSurface.appRoutes.matching],
   ["Practice", releaseSurface.appRoutes.practice],

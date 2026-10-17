@@ -192,6 +192,7 @@ async function interceptApi(
 ) {
   const unknownRequests: string[] = [];
   let currentRequest = request;
+  let applications: unknown[] = [];
   await page.route("**/api/**", async (route: Route) => {
     const { pathname } = new URL(route.request().url());
     const method = route.request().method();
@@ -212,7 +213,13 @@ async function interceptApi(
       return;
     }
 
-    if (method === "POST" && pathname === "/api/requests/11/match") currentRequest = matchedRequest;
+    if (pathname === "/api/requests/11/comments" || pathname === "/api/connections") {
+      await route.fulfill({ json: [] }); return;
+    }
+    if (pathname === "/api/requests/11/applications") {
+      if (method === "POST") applications = [{ id: 1, requestId: 11, applicantId: fixtures["/api/auth/me"].id, applicantName: fixtures["/api/auth/me"].name, status: "pending", createdAt: fixtures["/api/auth/me"].createdAt, updatedAt: fixtures["/api/auth/me"].createdAt }];
+      await route.fulfill({ json: method === "POST" ? applications[0] : applications }); return;
+    }
 
     const fixture =
       method === "POST" && pathname === "/api/requests/11/match"
@@ -358,24 +365,20 @@ test("desktop navigation exposes every signed-in destination", async ({ page }) 
   expect(unknownRequests).toEqual([]);
 });
 
-test("request detail Connect completes through the production control", async ({ page }) => {
+test("request detail application remains pending through the production control", async ({ page }) => {
   const unknownRequests = await interceptApi(page);
 
   await page.goto("/requests/11");
   await expect(page.getByRole("heading", { name: "Calculus study session" })).toBeVisible();
   const connectRequest = page.waitForRequest((request) => {
     const { pathname } = new URL(request.url());
-    return request.method() === "POST" && pathname === "/api/requests/11/match";
+    return request.method() === "POST" && pathname === "/api/requests/11/applications";
   });
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await page.getByRole("button", { name: "Apply to connect", exact: true }).click();
   await connectRequest;
 
-  await expect(page.getByRole("heading", { name: "This request has been matched" })).toBeVisible();
-  await expect(
-    page.getByText("Minimum member profiles include names, subjects, and join dates.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(page.getByText("Application pending", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This request has been matched" })).toHaveCount(0);
   expect(unknownRequests).toEqual([]);
 });
 

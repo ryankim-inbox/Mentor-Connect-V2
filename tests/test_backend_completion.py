@@ -137,8 +137,9 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     call(student, "POST", "/api/requests", {**request_body, "title": " "}, expected=422)
     call(student, "PATCH", path, {"tagIds": [999999]}, expected=404)
     matched = call(mentor, "POST", path + "/match")
-    assert matched["status"] == "matched" and matched["matchedUserId"] == mentor_id
-    call(mentor, "POST", path + "/match", expected=400)
+    assert matched["status"] == "pending" and matched["applicantId"] == mentor_id
+    call(student, "PATCH", path + f'/applications/{matched["id"]}', {"action": "accept"})
+    assert call(mentor, "POST", path + "/match")["status"] == "accepted"
     assert sql("SELECT mentor_id FROM request_events WHERE kind = 'matched'") == [(mentor_id,)]
 
     # Every adapter must run the completed module and expose its actual nonempty data.

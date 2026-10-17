@@ -152,6 +152,69 @@ export const publicRoutes: readonly PublicRoute[] = Object.freeze([
     queryKeys: noQuery,
   },
   {
+    method: "GET",
+    template: "/api/requests/{id}/comments",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["limit", "beforeId"],
+  },
+  {
+    method: "POST",
+    template: "/api/requests/{id}/comments",
+    family: "requests",
+    authentication: "session",
+    allowsBody: true,
+    requiresJson: true,
+    queryKeys: noQuery,
+  },
+  {
+    method: "GET",
+    template: "/api/requests/{id}/applications",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["limit", "beforeId"],
+  },
+  {
+    method: "POST",
+    template: "/api/requests/{id}/applications",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: noQuery,
+  },
+  {
+    method: "PATCH",
+    template: "/api/requests/{id}/applications/{applicationId}",
+    family: "requests",
+    authentication: "session",
+    allowsBody: true,
+    requiresJson: true,
+    queryKeys: noQuery,
+  },
+  {
+    method: "GET",
+    template: "/api/connections",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["limit", "beforeId"],
+  },
+  {
+    method: "GET",
+    template: "/api/request-activity",
+    family: "requests",
+    authentication: "session",
+    allowsBody: false,
+    requiresJson: false,
+    queryKeys: ["limit", "beforeId"],
+  },
+  {
     method: "POST",
     template: "/api/reports",
     family: "reports",
@@ -528,7 +591,7 @@ function validateQuery(
     } else if (key === "beforeId") {
       if (!isPositiveSafeInteger(value) || Number(value) > 2147483647) invalidQuery();
     } else if (key === "limit") {
-      const maximum = route.template === "/api/requests" ? 50 : 20;
+      const maximum = route.family === "requests" ? 50 : 20;
       if (!isPositiveSafeInteger(value) || Number(value) > maximum) invalidQuery();
     } else if (key === "before") {
       if (!isRequestCursor(value)) invalidQuery();

@@ -469,46 +469,32 @@ export const DeleteRequestParams = zod.object({
 export const DeleteRequestResponse = zod.void();
 
 /**
- * Returns 403 when either participant blocks the other.
- * @summary Match/respond to a mentorship request
+ * Creates a pending application. Only the author can accept it; this endpoint never matches immediately.
+ * @summary Apply to a mentorship request (compatibility alias)
  */
 
 export const MatchRequestParams = zod.object({
   id: zod.coerce.number().int().min(1),
 });
 
+export const matchRequestResponseIdMax = 2147483647;
+
+export const matchRequestResponseRequestIdMax = 2147483647;
+
+export const matchRequestResponseApplicantIdMax = 2147483647;
+
 export const MatchRequestResponse = zod.object({
-  id: zod.number().int(),
-  authorId: zod.number().int(),
-  authorName: zod.string(),
-  authorRole: zod.enum(["mentor", "mentee"]),
-  districtId: zod.number().int(),
-  districtName: zod.string(),
-  title: zod.string(),
-  description: zod.string(),
-  descriptionTruncated: zod
-    .boolean()
-    .describe(
-      "True when the list description is a bounded preview. Detail reads return false.",
-    ),
-  tags: zod.array(
-    zod.object({
-      id: zod.number().int(),
-      name: zod.string(),
-      color: zod.string(),
-      requestCount: zod.number().int(),
-    }),
-  ),
-  status: zod.enum(["open", "matched", "closed"]),
-  matchedUserId: zod.number().int().nullish(),
-  matchedUserName: zod.string().nullish(),
-  createdAt: zod.string(),
-  preferredTimes: zod
-    .array(zod.string())
-    .optional()
-    .describe(
-      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
-    ),
+  id: zod.number().int().min(1).max(matchRequestResponseIdMax),
+  requestId: zod.number().int().min(1).max(matchRequestResponseRequestIdMax),
+  applicantId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(matchRequestResponseApplicantIdMax),
+  applicantName: zod.string(),
+  status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
 });
 
 /**
@@ -756,6 +742,13 @@ export const SendChatRoomMessageParams = zod.object({
 
 export const SendChatRoomMessageBody = zod.object({
   body: zod.string(),
+  clientMessageId: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
+    ),
 });
 
 export const sendChatRoomMessageResponseOneIdMax = 9007199254740991;
@@ -1009,6 +1002,13 @@ export const SendDmMessageParams = zod.object({
 
 export const SendDmMessageBody = zod.object({
   body: zod.string(),
+  clientMessageId: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.",
+    ),
 });
 
 export const sendDmMessageResponseOneIdMax = 9007199254740991;
@@ -2006,3 +2006,326 @@ export const GetFlaggedUsersResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary listRequestComments
+ */
+export const listRequestCommentsPathIdMax = 2147483647;
+
+export const ListRequestCommentsParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(listRequestCommentsPathIdMax),
+});
+
+export const listRequestCommentsQueryLimitDefault = 50;
+export const listRequestCommentsQueryLimitMax = 50;
+
+export const listRequestCommentsQueryBeforeIdMax = 2147483647;
+
+export const ListRequestCommentsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestCommentsQueryLimitMax)
+    .default(listRequestCommentsQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestCommentsQueryBeforeIdMax)
+    .optional(),
+});
+
+export const listRequestCommentsResponseIdMax = 2147483647;
+
+export const listRequestCommentsResponseRequestIdMax = 2147483647;
+
+export const listRequestCommentsResponseAuthorIdMax = 2147483647;
+
+export const ListRequestCommentsResponseItem = zod.object({
+  id: zod.number().int().min(1).max(listRequestCommentsResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestCommentsResponseRequestIdMax),
+  authorId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestCommentsResponseAuthorIdMax),
+  authorName: zod.string(),
+  parentId: zod.number().int().nullable(),
+  parentAuthorName: zod.string().nullable(),
+  body: zod.string(),
+  createdAt: zod.string().datetime({ offset: true }),
+});
+export const ListRequestCommentsResponse = zod.array(
+  ListRequestCommentsResponseItem,
+);
+
+/**
+ * @summary createRequestComment
+ */
+export const createRequestCommentPathIdMax = 2147483647;
+
+export const CreateRequestCommentParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(createRequestCommentPathIdMax),
+});
+
+export const createRequestCommentBodyBodyMax = 2000;
+
+export const CreateRequestCommentBody = zod.object({
+  body: zod.string().min(1).max(createRequestCommentBodyBodyMax),
+  parentId: zod.number().int().min(1).nullish(),
+  clientCommentId: zod.string().uuid(),
+});
+
+export const createRequestCommentResponseIdMax = 2147483647;
+
+export const createRequestCommentResponseRequestIdMax = 2147483647;
+
+export const createRequestCommentResponseAuthorIdMax = 2147483647;
+
+export const CreateRequestCommentResponse = zod.object({
+  id: zod.number().int().min(1).max(createRequestCommentResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(createRequestCommentResponseRequestIdMax),
+  authorId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(createRequestCommentResponseAuthorIdMax),
+  authorName: zod.string(),
+  parentId: zod.number().int().nullable(),
+  parentAuthorName: zod.string().nullable(),
+  body: zod.string(),
+  createdAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary listRequestApplications
+ */
+export const listRequestApplicationsPathIdMax = 2147483647;
+
+export const ListRequestApplicationsParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(listRequestApplicationsPathIdMax),
+});
+
+export const listRequestApplicationsQueryLimitDefault = 50;
+export const listRequestApplicationsQueryLimitMax = 50;
+
+export const listRequestApplicationsQueryBeforeIdMax = 2147483647;
+
+export const ListRequestApplicationsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestApplicationsQueryLimitMax)
+    .default(listRequestApplicationsQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestApplicationsQueryBeforeIdMax)
+    .optional(),
+});
+
+export const listRequestApplicationsResponseIdMax = 2147483647;
+
+export const listRequestApplicationsResponseRequestIdMax = 2147483647;
+
+export const listRequestApplicationsResponseApplicantIdMax = 2147483647;
+
+export const ListRequestApplicationsResponseItem = zod.object({
+  id: zod.number().int().min(1).max(listRequestApplicationsResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestApplicationsResponseRequestIdMax),
+  applicantId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestApplicationsResponseApplicantIdMax),
+  applicantName: zod.string(),
+  status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+export const ListRequestApplicationsResponse = zod.array(
+  ListRequestApplicationsResponseItem,
+);
+
+/**
+ * @summary applyToRequest
+ */
+export const applyToRequestPathIdMax = 2147483647;
+
+export const ApplyToRequestParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(applyToRequestPathIdMax),
+});
+
+export const applyToRequestResponseIdMax = 2147483647;
+
+export const applyToRequestResponseRequestIdMax = 2147483647;
+
+export const applyToRequestResponseApplicantIdMax = 2147483647;
+
+export const ApplyToRequestResponse = zod.object({
+  id: zod.number().int().min(1).max(applyToRequestResponseIdMax),
+  requestId: zod.number().int().min(1).max(applyToRequestResponseRequestIdMax),
+  applicantId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(applyToRequestResponseApplicantIdMax),
+  applicantName: zod.string(),
+  status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary actOnRequestApplication
+ */
+export const actOnRequestApplicationPathIdMax = 2147483647;
+
+export const actOnRequestApplicationPathApplicationIdMax = 2147483647;
+
+export const ActOnRequestApplicationParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(actOnRequestApplicationPathIdMax),
+  applicationId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(actOnRequestApplicationPathApplicationIdMax),
+});
+
+export const ActOnRequestApplicationBody = zod.object({
+  action: zod.enum(["accept", "reject", "cancel"]),
+});
+
+export const actOnRequestApplicationResponseIdMax = 2147483647;
+
+export const actOnRequestApplicationResponseRequestIdMax = 2147483647;
+
+export const actOnRequestApplicationResponseApplicantIdMax = 2147483647;
+
+export const ActOnRequestApplicationResponse = zod.object({
+  id: zod.number().int().min(1).max(actOnRequestApplicationResponseIdMax),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(actOnRequestApplicationResponseRequestIdMax),
+  applicantId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(actOnRequestApplicationResponseApplicantIdMax),
+  applicantName: zod.string(),
+  status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
+  createdAt: zod.string().datetime({ offset: true }),
+  updatedAt: zod.string().datetime({ offset: true }),
+});
+
+/**
+ * @summary listConnections
+ */
+export const listConnectionsQueryLimitDefault = 50;
+export const listConnectionsQueryLimitMax = 50;
+
+export const listConnectionsQueryBeforeIdMax = 2147483647;
+
+export const ListConnectionsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listConnectionsQueryLimitMax)
+    .default(listConnectionsQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listConnectionsQueryBeforeIdMax)
+    .optional(),
+});
+
+export const listConnectionsResponseUserIdMax = 2147483647;
+
+export const listConnectionsResponseRequestIdMax = 2147483647;
+
+export const ListConnectionsResponseItem = zod.object({
+  userId: zod.number().int().min(1).max(listConnectionsResponseUserIdMax),
+  name: zod.string(),
+  requestId: zod.number().int().min(1).max(listConnectionsResponseRequestIdMax),
+  requestTitle: zod.string(),
+});
+export const ListConnectionsResponse = zod.array(ListConnectionsResponseItem);
+
+/**
+ * @summary listRequestActivity
+ */
+export const listRequestActivityQueryLimitDefault = 50;
+export const listRequestActivityQueryLimitMax = 50;
+
+export const listRequestActivityQueryBeforeIdMax = 2147483647;
+
+export const ListRequestActivityQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestActivityQueryLimitMax)
+    .default(listRequestActivityQueryLimitDefault),
+  beforeId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listRequestActivityQueryBeforeIdMax)
+    .optional(),
+});
+
+export const ListRequestActivityResponseItem = zod.object({
+  id: zod.number().int(),
+  authorId: zod.number().int(),
+  authorName: zod.string(),
+  authorRole: zod.enum(["mentor", "mentee"]),
+  districtId: zod.number().int(),
+  districtName: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  descriptionTruncated: zod
+    .boolean()
+    .describe(
+      "True when the list description is a bounded preview. Detail reads return false.",
+    ),
+  tags: zod.array(
+    zod.object({
+      id: zod.number().int(),
+      name: zod.string(),
+      color: zod.string(),
+      requestCount: zod.number().int(),
+    }),
+  ),
+  status: zod.enum(["open", "matched", "closed"]),
+  matchedUserId: zod.number().int().nullish(),
+  matchedUserName: zod.string().nullish(),
+  createdAt: zod.string(),
+  preferredTimes: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
+});
+export const ListRequestActivityResponse = zod.array(
+  ListRequestActivityResponseItem,
+);

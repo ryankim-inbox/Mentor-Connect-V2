@@ -106,7 +106,9 @@ def test_real_gateway_analytics_counts_both_directions_and_deleted_requests(gate
             "districtId": 1, "tagIds": [1], "preferredTimes": [],
         })
         assert status == 201, request
-        assert api(matcher, gateway_server, "POST", f"/api/requests/{request['id']}/match")[0] == 200
+        status, application = api(matcher, gateway_server, "POST", f"/api/requests/{request['id']}/match")
+        assert status == 200 and application["status"] == "pending"
+        assert api(author, gateway_server, "PATCH", f"/api/requests/{request['id']}/applications/{application['id']}", {"action": "accept"})[0] == 200
         assert api(author, gateway_server, "DELETE", f"/api/requests/{request['id']}")[0] == 204
     for path in ["weekly-matches", "popular-subjects", "mentor-response-rates"]:
         status, result = api(mentor, gateway_server, "GET", "/api/analytics/" + path)

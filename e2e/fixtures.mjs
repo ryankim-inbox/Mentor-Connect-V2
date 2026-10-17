@@ -3,11 +3,14 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { fixtureAccounts, fixturePassword, fixtureRooms, fixtures, request as initialRequest, tag, district } from './fixtures.ts';
 
-let accounts, requests, messages, sessions, failures, nextRequestId;
+let accounts, requests, messages, sessions, failures, nextRequestId, applications, comments, dmMessages;
 function reset() {
   accounts = structuredClone(fixtureAccounts);
-  requests = [structuredClone(initialRequest)];
+  requests = [{ ...structuredClone(initialRequest), authorName: accounts.mentee.name }];
   messages = [];
+  applications = [];
+  comments = [];
+  dmMessages = [];
   sessions = new Map();
   failures = new Map();
   nextRequestId = 100;
@@ -39,7 +42,7 @@ const server = createServer(async (req, res) => {
     const failure = failures.get(`${req.method} ${path}${url.search}`) ?? failures.get(`${req.method} ${path}`);
     if (failure) return send(failure.status, failure.body);
     if (path === '/api/auth/login' && req.method === 'POST') {
-      const account = Object.values(accounts).find(account => account.email === body.email && body.password === fixturePassword);
+      const account = Object.values(accounts).find(account => account.email === body.email?.replace(/\+[^@]+(?=@)/, "") && body.password === fixturePassword);
       if (!account) return send(401, { detail: 'Invalid email or password' });
       const session = randomUUID();
       sessions.set(session, account.id);
@@ -80,6 +83,37 @@ const server = createServer(async (req, res) => {
       requests.push(item);
       return send(201, item);
     }
+    const interaction = path.match(/^\/api\/requests\/(\d+)\/(comments|applications|match)(?:\/(\d+))?$/);
+    if (interaction) {
+      const item = requests.find(r => r.id === Number(interaction[1]));
+      if (!item) return send(404, { detail: 'Missing request' });
+      const kind = interaction[2];
+      if (kind === 'comments') {
+        if (req.method === 'GET') return send(200, comments.filter(c => c.requestId === item.id));
+        const prior = comments.find(c => c.clientCommentId === body.clientCommentId && c.authorId === user.id && c.requestId === item.id);
+        if (prior) return send(201, prior);
+        const parent = comments.find(c => c.id === body.parentId);
+        const comment = { id: comments.length+1, requestId:item.id, authorId:user.id, authorName:user.name, parentId:body.parentId??null, parentAuthorName:parent?.authorName??null, body:body.body, clientCommentId:body.clientCommentId, createdAt:new Date().toISOString() };
+        comments.push(comment); return send(201,comment);
+      }
+      if (req.method === 'GET') return send(200, applications.filter(a => a.requestId === item.id && (item.authorId === user.id || a.applicantId === user.id)).reverse());
+      if (req.method === 'POST') {
+        let application = applications.find(a => a.requestId === item.id && a.applicantId === user.id);
+        if (application?.status === 'cancelled') application.status = 'pending';
+        if (!application) { application = {id:applications.length+1,requestId:item.id,applicantId:user.id,applicantName:user.name,status:'pending',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; applications.push(application); }
+        return send(200,application);
+      }
+      const application = applications.find(a => a.id === Number(interaction[3]));
+      if (!application) return send(404,{detail:'Missing application'});
+      if (body.action === 'accept') {
+        Object.assign(item,{status:'matched',matchedUserId:application.applicantId,matchedUserName:application.applicantName});
+        applications.filter(a=>a.requestId===item.id&&a.id!==application.id&&a.status==='pending').forEach(a=>a.status='rejected');
+      }
+      application.status={accept:'accepted',reject:'rejected',cancel:'cancelled'}[body.action];
+      return send(200,application);
+    }
+    if(path==='/api/connections') return send(200,requests.filter(r=>r.status==='matched'&&(r.authorId===user.id||r.matchedUserId===user.id)).map(r=>({userId:r.authorId===user.id?r.matchedUserId:r.authorId,name:r.authorId===user.id?r.matchedUserName:r.authorName,requestId:r.id,requestTitle:r.title})));
+    if(path==='/api/request-activity') return send(200,requests.filter(r=>r.authorId===user.id||r.matchedUserId===user.id||applications.some(a=>a.requestId===r.id&&a.applicantId===user.id)));
     const requestMatch = path.match(/^\/api\/requests\/(\d+)(\/match)?$/);
     if (requestMatch) {
       const item = requests.find(item => item.id === Number(requestMatch[1]));
@@ -109,7 +143,12 @@ const server = createServer(async (req, res) => {
       if (req.method === 'GET') return send(200, messages);
     }
     if (path === '/api/dms' && req.method === 'GET') return send(200, [{ id: 1, otherUserId: user.id === 1 ? 2 : 1, otherUserName: user.id === 1 ? accounts.mentee.name : accounts.mentor.name, createdAt: '2026-09-09T00:00:00Z' }]);
-    if (/^\/api\/dms\/\d+\/messages$/.test(path)) return send(200, { status: 'todo', mission: 7, message: 'Complete Mission 7', guide: 'docs/STUDENT_CHAT_BACKEND_GUIDE.md' });
+    if (path === '/api/dms/start') return send(200,{ id:1,otherUserId:user.id===1?2:1,otherUserName:user.id===1?accounts.mentee.name:accounts.mentor.name,createdAt:'2026-09-09T00:00:00Z' });
+    if (/^\/api\/dms\/\d+\/messages$/.test(path)) {
+      if(req.method==='GET') return send(200,dmMessages);
+      const row={id:dmMessages.length+1,conversationId:1,senderId:user.id,body:body.body,createdAt:new Date().toISOString(),readAt:null};
+      dmMessages.push(row);return send(201,row);
+    }
     if (path === '/api/blocks' && req.method === 'GET') return send(200, []);
     if (path === '/api/matches/1' && req.method === 'GET') return send(200, fixtures['/api/practice/matching/1']);
     if (req.method === 'GET' && Object.hasOwn(fixtures, path)) return send(200, fixtures[path]);

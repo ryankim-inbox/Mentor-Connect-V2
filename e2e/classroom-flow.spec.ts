@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { fixtureAccounts, fixturePassword, pythonEnvelope } from "./fixtures";
+import { fixtureAccounts, fixtureLoginEmail, fixturePassword, pythonEnvelope } from "./fixtures";
 
 async function signIn(page: Page, role: keyof typeof fixtureAccounts = "mentor") {
   await page.goto("/login");
-  await page.getByLabel("School email").fill(fixtureAccounts[role].email);
+  await page.getByLabel("School email").fill(fixtureLoginEmail(role, test.info().testId));
   await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
   const accepted = page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/auth/login" && response.request().method() === "POST");
@@ -97,17 +97,16 @@ test("a member creates, reads and deletes their request through the production c
   await expect(page.getByText("Classroom gateway study request", { exact: true })).toHaveCount(0);
 });
 
-test("Connect persists the returned match and survives a reload", async ({ page }) => {
+test("application stays pending after reload until the author accepts", async ({ page }) => {
   await signIn(page);
   await page.goto("/requests/11");
-  const connected = apiResponse(page, "/api/requests/11/match", "POST");
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
-  const response = await connected;
-  expect(response.status()).toBe(200);
-  expect((await response.json()).status).toBe("matched");
-  await expect(page.getByRole("heading", { name: "This request has been matched" })).toBeVisible();
+  const applied = apiResponse(page, "/api/requests/11/applications", "POST");
+  await page.getByRole("button", { name: "Apply to connect", exact: true }).click();
+  expect((await applied).status()).toBe(200);
+  await expect(page.getByText("Application pending", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "This request has been matched" })).toBeVisible();
+  await expect(page.getByText("Application pending", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This request has been matched" })).toHaveCount(0);
 });
 
 test("a saved room message is visible to the other signed-in account", async ({ page, browser }) => {
