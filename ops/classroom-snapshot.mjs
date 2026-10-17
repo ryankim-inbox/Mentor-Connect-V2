@@ -57,7 +57,7 @@ export function classroomConnection(options, environment = process.env) {
   return {
     target,
     env,
-    createClient() {
+    createClient({ connectionTimeoutMillis, query_timeout } = {}) {
       const tls =
         env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: true };
       if (tls) {
@@ -76,6 +76,8 @@ export function classroomConnection(options, environment = process.env) {
         user: env.PGUSER,
         password: env.PGPASSWORD,
         ssl: tls,
+        connectionTimeoutMillis,
+        query_timeout,
       });
       // pg uses process.env for absent/empty values; enforce the validated fields.
       client.connectionParameters.password = env.PGPASSWORD;
