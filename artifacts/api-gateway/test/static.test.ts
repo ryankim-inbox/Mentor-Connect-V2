@@ -35,6 +35,7 @@ test("serves the built SPA with safe fallback and security headers", async () =>
       "/dashboard",
       "/requests/42",
       "/connections",
+      "/notifications",
       "/profile/1",
       "/dashboard/practice-lab",
     ]) {
@@ -56,6 +57,10 @@ test("serves the built SPA with safe fallback and security headers", async () =>
     assert.match(asset.headers.get("content-type")!, /javascript/);
     assert.match(asset.headers.get("cache-control")!, /immutable/);
     assert.equal(
+      (await fetch(base + "/notifications", { method: "HEAD" })).status,
+      200,
+    );
+    assert.equal(
       (await fetch(base + "/assets/App-aBc12345.js", { method: "HEAD" }))
         .status,
       200,
@@ -64,6 +69,8 @@ test("serves the built SPA with safe fallback and security headers", async () =>
       "/api/missing",
       "/ws/missing",
       "/missing",
+      "/notifications/1",
+      "/notifications/missing.js",
       "/assets/missing.js",
       "/assets/leak.js",
       "/.env",

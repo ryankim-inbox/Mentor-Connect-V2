@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 // Only actual client routes get index.html. API/WS and unknown assets stay 404.
 const SPA_ROUTE =
-  /^\/(?:login|register|verify-email|mentors|dashboard(?:\/practice-lab)?|districts(?:\/[1-9]\d*)?|requests(?:\/(?:new|[1-9]\d*))?|profile(?:\/[1-9]\d*)?|settings|connections|recommendations|practice-lab|analytics|scheduling|admin\/reports)?$/;
+  /^\/(?:login|register|verify-email|mentors|dashboard(?:\/practice-lab)?|districts(?:\/[1-9]\d*)?|requests(?:\/(?:new|[1-9]\d*))?|profile(?:\/[1-9]\d*)?|settings|connections|notifications|recommendations|practice-lab|analytics|scheduling|admin\/reports)?$/;
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
