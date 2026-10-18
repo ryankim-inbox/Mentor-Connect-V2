@@ -1,3 +1,4 @@
+import { ActivityBadge } from "@/components/ActivityBadge";
 import { useState } from "react";
 import { Link } from "wouter";
 import { getGetUserQueryKey, useGetUser } from "@workspace/api-client-react";
@@ -92,6 +93,7 @@ export default function MemberProfile({ id }: { id: string }) {
         <h1 className="text-xl font-bold text-foreground">
           {profile.data.name}
         </h1>
+        <ActivityBadge userId={userId} />
         {profile.data.subjects.length > 0 && (
           <div className="mt-4">
             <p className="mb-2 text-sm font-medium text-muted-foreground">

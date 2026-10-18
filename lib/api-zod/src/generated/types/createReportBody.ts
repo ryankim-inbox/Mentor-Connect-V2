@@ -16,4 +16,10 @@ export interface CreateReportBody {
    * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
    */
   description?: string | null;
+  /**
+   * When present, report this request. reportedUserId must equal its server-resolved author.
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  requestId?: number;
 }

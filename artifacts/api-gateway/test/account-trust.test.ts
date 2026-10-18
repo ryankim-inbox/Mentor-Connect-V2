@@ -81,10 +81,20 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
     assert.equal((await get(path)).status, 403, path);
   identity = { id: 1, isVerified: true, hasMemberAccess: true, isAdmin: true };
   assert.equal((await get("/api/admin/reports")).status, 200);
-  identity = { id: 1, isVerified: false, hasMemberAccess: false, isAdmin: false };
+  identity = {
+    id: 1,
+    isVerified: false,
+    hasMemberAccess: false,
+    isAdmin: false,
+  };
   assert.equal((await get("/api/admin/reports")).status, 403);
   // Member access is explicit server authority, not claimed email ownership.
-  identity = { id: 1, isVerified: false, hasMemberAccess: true, isAdmin: false };
+  identity = {
+    id: 1,
+    isVerified: false,
+    hasMemberAccess: true,
+    isAdmin: false,
+  };
   assert.equal((await get("/api/mentors")).status, 200);
   assert.equal((await get("/api/users/2")).status, 200);
   assert.equal((await get("/api/admin/reports")).status, 403);
@@ -98,6 +108,7 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
 
 test("sensitive bodies reject forged claims before upstream and never expose tokens", async (t) => {
   const calls: string[] = [];
+  let isAdmin = false;
   const logs: unknown[] = [];
   const upstream = createServer((req, res) => {
     calls.push(req.url!);
@@ -105,7 +116,7 @@ test("sensitive bodies reject forged claims before upstream and never expose tok
     res.end(
       JSON.stringify(
         req.url === "/api/auth/me"
-          ? { id: 1, isVerified: true, hasMemberAccess: true, isAdmin: true }
+          ? { id: 1, isVerified: true, hasMemberAccess: true, isAdmin }
           : { message: "sent" },
       ),
     );
@@ -142,6 +153,7 @@ test("sensitive bodies reject forged claims before upstream and never expose tok
     ["/api/chat/rooms/1/messages", "POST", { body: "hi", senderId: 2 }],
     ["/api/matches", "POST", { questionId: 1, isAdmin: true }],
   ] as const) {
+    isAdmin = path.startsWith("/api/admin/") || path === "/api/matches";
     const response = await fetch(base + path, {
       method,
       headers: {
@@ -154,6 +166,7 @@ test("sensitive bodies reject forged claims before upstream and never expose tok
     assert.equal(response.status, 422, path);
     assert.doesNotMatch(await response.text(), /SENSITIVE_TOKEN/);
   }
+  isAdmin = false;
   const blank = await fetch(base + "/api/chat/rooms/1/messages", {
     method: "POST",
     headers: {
@@ -220,7 +233,12 @@ test("new projections retain trust, moderation and tombstones while stripping se
 
 test("generated trust schemas match gateway public models and enforce bounded fields", async () => {
   const api = await import("../../../lib/api-zod/src/generated/api.ts");
-  const user = { ...userFixture, isVerified: false, hasMemberAccess: false, isAdmin: false };
+  const user = {
+    ...userFixture,
+    isVerified: false,
+    hasMemberAccess: false,
+    isAdmin: false,
+  };
   assert.equal(
     api.ConfirmEmailVerificationResponse.safeParse(user).success,
     true,
@@ -258,6 +276,9 @@ test("generated trust schemas match gateway public models and enforce bounded fi
     reporterName: "Student",
     reportedUserId: 501,
     reportedUserName: "Mentor",
+    targetType: "profile",
+    requestId: null,
+    requestTitle: null,
     reason: "other",
     description: null,
     status: "open",
@@ -361,4 +382,83 @@ test("confirmation throttling uses account identity across distinct tokens and r
   }
   assert.equal(confirmations, 10);
   assert.doesNotMatch(JSON.stringify(logs), /sensitive/);
+});
+
+test("fresh administrator authority denies student actions before forwarding and permits only name updates", async (t) => {
+  let isAdmin = false;
+  const calls: string[] = [];
+  const upstream = createServer((req, res) => {
+    calls.push(req.url!);
+    res.setHeader("content-type", "application/json");
+    res.end(
+      JSON.stringify(
+        req.url === "/api/auth/me"
+          ? { ...userFixture, isAdmin }
+          : req.url === "/api/users/1"
+            ? userFixture
+            : [],
+      ),
+    );
+  });
+  const gateway = createGatewayServer({
+    upstreamOrigin: await listen(upstream),
+    publicOrigin: origin,
+    logger: { info() {} },
+  });
+  const base = await listen(gateway);
+  t.after(async () => {
+    for (const server of [gateway, upstream]) {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+  const call = (method: string, path: string, body?: object) =>
+    fetch(base + path, {
+      method,
+      headers: {
+        cookie: "session=synthetic",
+        origin,
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  assert.equal((await call("GET", "/api/chat/rooms")).status, 200);
+  isAdmin = true; // same cookie, newly changed DB authority
+  for (const [method, path, body] of [
+    ["GET", "/api/chat/rooms"],
+    ["GET", "/api/dms"],
+    ["GET", "/api/blocks"],
+    ["GET", "/api/notifications"],
+    ["GET", "/api/connections"],
+    ["GET", "/api/request-activity"],
+    [
+      "POST",
+      "/api/requests",
+      { districtId: 1, role: "mentee", title: "Question", description: "Help" },
+    ],
+    ["PATCH", "/api/requests/1", { title: "Edit" }],
+    [
+      "POST",
+      "/api/requests/1/comments",
+      {
+        body: "Reply",
+        clientCommentId: "00000000-0000-4000-8000-000000000001",
+      },
+    ],
+    ["PATCH", "/api/requests/1/comments/2", { body: "Replace" }],
+    ["POST", "/api/reports", { reportedUserId: 2, reason: "spam" }],
+    ["DELETE", "/api/blocks/2"],
+    ["PATCH", "/api/users/1", { role: "both" }],
+    ["PATCH", "/api/users/1", { bio: "Student bio" }],
+  ] as const) {
+    calls.length = 0;
+    assert.equal((await call(method, path, body)).status, 403, path);
+    assert.deepEqual(calls, ["/api/auth/me"], path);
+  }
+  calls.length = 0;
+  assert.equal(
+    (await call("PATCH", "/api/users/1", { name: "Moderator" })).status,
+    200,
+  );
+  assert.deepEqual(calls, ["/api/auth/me", "/api/users/1"]);
 });

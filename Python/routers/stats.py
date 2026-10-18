@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from security import require_member_user
+from security import require_admin
 from db import db
 
 router = APIRouter()
@@ -21,7 +21,7 @@ def get_top_tags(cur, limit: int = 5, district_id: int | None = None) -> list[di
         for tag in cur.fetchall()
     ]
 
-@router.get("/stats/overview")
+@router.get("/stats/overview", dependencies=[Depends(require_admin)])
 def stats_overview():
     with db() as conn:
         cur = conn.cursor()
@@ -49,7 +49,7 @@ def stats_overview():
         "topTags": top_tags,
     }
 
-@router.get("/stats/district/{district_id}", dependencies=[Depends(require_member_user)])
+@router.get("/stats/district/{district_id}", dependencies=[Depends(require_admin)])
 def district_stats(district_id: int):
     with db() as conn:
         cur = conn.cursor()

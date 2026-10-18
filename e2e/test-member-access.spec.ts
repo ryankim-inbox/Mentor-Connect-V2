@@ -49,19 +49,23 @@ test("test-member login follows return path and revoked access blocks direct URL
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
 });
 
-test("member access alone cannot render operational pages even with an inconsistent admin claim", async ({ page }) => {
+test("an inconsistent unverified admin claim grants neither operations nor student participation", async ({ page }) => {
   await setup(page, () => ({ ...testMember, isAdmin: true }));
   const operations: string[] = [];
   page.on("request", (request) => {
-    if (/\/api\/(admin|practice|analytics|scheduling|matches|python-reports)/.test(request.url())) operations.push(request.url());
+    if (/\/api\/(admin|practice|analytics|scheduling|matches|python-reports|stats|chat|dms|notifications|connections)/.test(request.url())) operations.push(request.url());
   });
   await page.goto("/dashboard");
-  await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Verify your email" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Python Practice Lab" })).toHaveCount(0);
   for (const path of ["/admin/reports", "/practice-lab", "/analytics", "/scheduling", "/recommendations"]) {
     await page.goto(path);
     await expect(page.getByText("Administrator access required", { exact: true })).toBeVisible();
+  }
+  for (const path of ["/requests/new", "/notifications", "/connections"]) {
+    await page.goto(path);
+    await expect(page.getByText("Student access required", { exact: true })).toBeVisible();
   }
   expect(operations).toEqual([]);
 });

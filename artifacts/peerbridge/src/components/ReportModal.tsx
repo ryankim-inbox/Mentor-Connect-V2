@@ -1,8 +1,11 @@
 import { useRef, useState } from "react";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { useAuth } from "@/lib/auth-context";
 import { useCreateReport } from "@workspace/api-client-react";
 
 interface Props {
+  requestId?: number;
+  requestTitle?: string;
   reportedUserId: number;
   reportedUserName: string;
   onClose: () => void;
@@ -17,10 +20,13 @@ const REASONS = [
 ] as const;
 
 export default function ReportModal({
+  requestId,
+  requestTitle,
   reportedUserId,
   reportedUserName,
   onClose,
 }: Props) {
+  const { user, status } = useAuth();
   const busy = useRef(false);
   const [reason, setReason] = useState<string>("");
   const [description, setDescription] = useState("");
@@ -38,6 +44,7 @@ export default function ReportModal({
       {
         data: {
           reportedUserId,
+          ...(requestId ? { requestId } : {}),
           reason: reason as
             | "spam"
             | "harassment"
@@ -56,6 +63,9 @@ export default function ReportModal({
     );
   };
 
+  if (status !== "authenticated" || !user?.hasMemberAccess || user.isAdmin)
+    return null;
+
   return (
     <div
       className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4"
@@ -64,7 +74,7 @@ export default function ReportModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Report ${reportedUserName}`}
+        aria-label={requestId ? "Report post" : `Report ${reportedUserName}`}
         className="bg-card border border-card-border rounded-2xl p-6 w-full max-w-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -101,10 +111,12 @@ export default function ReportModal({
         ) : (
           <>
             <h3 className="font-semibold text-lg text-foreground mb-1">
-              Report {reportedUserName}
+              {requestId ? "Report post" : `Report ${reportedUserName}`}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Help us keep the community safe.
+              {requestId
+                ? `${requestTitle ?? "Mentorship request"} · Posted by ${reportedUserName}`
+                : "Help us keep the community safe."}
             </p>
             {createReport.error && (
               <p role="alert">{apiErrorMessage(createReport.error)}</p>

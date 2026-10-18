@@ -7,6 +7,7 @@
  */
 import type { ModerationReportReason } from "./moderationReportReason";
 import type { ModerationReportStatus } from "./moderationReportStatus";
+import type { ModerationReportTargetType } from "./moderationReportTargetType";
 
 export interface ModerationReport {
   /**
@@ -46,4 +47,18 @@ export interface ModerationReport {
   /** @nullable */
   reviewedAt: string | null;
   createdAt: string;
+  targetType: ModerationReportTargetType;
+  /**
+   * Null for profile reports and deleted requests.
+   * @minimum 1
+   * @maximum 2147483647
+   * @nullable
+   */
+  requestId: number | null;
+  /**
+   * Server-captured title retained for moderation after request deletion.
+   * @maxLength 200
+   * @nullable
+   */
+  requestTitle: string | null;
 }

@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from routers import auth, users, districts, tags, requests, reports, stats, matches, chat, request_interactions, mentors, notifications
+from routers import auth, users, districts, tags, requests, reports, stats, matches, chat, request_interactions, mentors, notifications, activity_ranks
 from api.routers import admin, analytics, practice, python_reports, scheduling
 
 app = FastAPI(title="PeerBridge Python API")
@@ -57,6 +57,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(activity_ranks.router, prefix="/api")
 app.include_router(mentors.router, prefix="/api")
 app.include_router(districts.router, prefix="/api")
 app.include_router(tags.router, prefix="/api")

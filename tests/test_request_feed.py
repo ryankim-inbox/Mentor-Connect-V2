@@ -14,6 +14,7 @@ def test_request_utf8_limits(backend_server):
         body = {"districtId": 1, "title": " é ", "description": " Detail ", "role": "mentee"}
         status, created = api(client, base, "POST", "/api/requests", body)
         assert status == 201
+        assert created['title'] == 'é' and created['description'] == 'Detail'
         path = f'/api/requests/{created["id"]}'
         for field, valid, invalid in [
             ("title", "é" * 100, "é" * 100 + "a"),
@@ -24,7 +25,9 @@ def test_request_utf8_limits(backend_server):
                 assert api(client, base, "POST", "/api/requests", {**body, field: value})[0] == expected
                 assert api(client, base, "PATCH", path, {field: value})[0] == (200 if expected == 201 else expected)
         status, trimmed = api(client, base, "POST", "/api/requests", body)
-        assert status == 201 and trimmed["title"] == "é" and trimmed["description"] == "Detail"
+        # An identical original submission now returns its current edited record.
+        assert status == 201 and trimmed['id'] == created['id']
+        assert trimmed['title'] == 'é' * 100 and trimmed['description'] == '🦉' * 1000
         assert trimmed["descriptionTruncated"] is False
         assert api(client, base, "GET", path)[1]["descriptionTruncated"] is False
 

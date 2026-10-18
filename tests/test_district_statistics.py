@@ -15,6 +15,7 @@ def test_district_top_tags_exclude_other_districts(chat_server, chat_database):
                 (title,),
             )
             cur.execute("INSERT INTO request_tags (request_id, tag_id) VALUES (%s, 1)", (cur.fetchone()[0],))
+        cur.execute("UPDATE users SET is_admin=true WHERE id=1")
         conn.commit()
 
     with chat_server() as base:

@@ -174,12 +174,55 @@ const mentor = z.object({
   districtName: z.string().nullable(),
   bio: z.string().nullable(),
 });
+const activityTiers = [
+  [1, "Bronze"],
+  [3, "Silver"],
+  [5, "Gold"],
+  [10, "Platinum"],
+  [20, "Emerald"],
+  [35, "Diamond"],
+  [50, "Master"],
+  [75, "Grand Master"],
+  [100, "Challenger"],
+] as const;
+const activityRank = z
+  .object({
+    userId: id.max(2147483647),
+    distinctPartners: z.number().int().nonnegative().max(2147483647),
+    rank: id.max(2147483647).nullable(),
+    tier: z
+      .enum([
+        "Bronze",
+        "Silver",
+        "Gold",
+        "Platinum",
+        "Emerald",
+        "Diamond",
+        "Master",
+        "Grand Master",
+        "Challenger",
+      ])
+      .nullable(),
+  })
+  .refine((row) => {
+    const tier =
+      [...activityTiers]
+        .reverse()
+        .find(([minimum]) => row.distinctPartners >= minimum)?.[1] ?? null;
+    return (
+      row.tier === tier &&
+      (row.distinctPartners === 0 ? row.rank === null : row.rank !== null)
+    );
+  });
 const report = z.object({
   id,
   reporterId: id,
   reporterName: text,
   reportedUserId: id,
   reportedUserName: text,
+  targetType: z.enum(["profile", "request"]),
+  requestId: id.max(2147483647).nullable(),
+  requestTitle: z.string().max(200).nullable(),
   reason: z.enum([
     "spam",
     "harassment",
@@ -314,6 +357,8 @@ export function projectPublicPayload(
   path: string,
   method: string,
 ): unknown {
+  if (path === "/api/users/{id}/activity-rank")
+    return activityRank.parse(payload);
   if (path === "/api/notifications" && method === "GET")
     return notifications.parse(payload);
   if (path === "/api/mentors") return mentor.array().max(50).parse(payload);

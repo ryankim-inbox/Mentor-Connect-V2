@@ -234,9 +234,7 @@ export const GetUserResponse = zod.union([
 ]);
 
 /**
- * The gateway accepts only name, bio, and subjects for the authenticated
- * session owner. Identity and authorization fields, including id, email,
- * role, and is_verified, are rejected before any upstream request.
+ * The gateway accepts only name, bio, and subjects for the authenticated session owner. Administrators may update name only. Identity and authorization fields, including id, email, role, and is_verified, are rejected.
  * @summary Update the authenticated user's allowed profile fields
  */
 export const UpdateUserParams = zod.object({
@@ -426,6 +424,13 @@ export const CreateRequestBody = zod.object({
     .optional()
     .describe(
       "Optional weekly slots ('Ddd HH:00' 24-hour strings, Mon 00:00–Sun 23:00), no duplicates.",
+    ),
+  clientRequestId: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Optional stable client publication key. Reusing it with different content returns 409. An explicit identical retry returns the original request; clients must not blindly retry an uncertain publish.",
     ),
 });
 
@@ -630,6 +635,7 @@ export const createReportBodyDescriptionRegExp = new RegExp(
   "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
   "u",
 );
+export const createReportBodyRequestIdMax = 2147483647;
 
 export const CreateReportBody = zod.object({
   reportedUserId: zod.number().int().min(1),
@@ -641,6 +647,15 @@ export const CreateReportBody = zod.object({
     "other",
   ]),
   description: zod.string().regex(createReportBodyDescriptionRegExp).nullish(),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(createReportBodyRequestIdMax)
+    .optional()
+    .describe(
+      "When present, report this request. reportedUserId must equal its server-resolved author.",
+    ),
 });
 
 export const CreateReportResponse = zod.object({
@@ -681,6 +696,7 @@ export const UnblockUserParams = zod.object({
 export const UnblockUserResponse = zod.void();
 
 /**
+ * Administrator-only aggregate information. Student roles cannot access these statistics.
  * @summary Platform statistics overview
  */
 export const GetStatsOverviewResponse = zod.object({
@@ -701,6 +717,7 @@ export const GetStatsOverviewResponse = zod.object({
 });
 
 /**
+ * Administrator-only aggregate information. Student roles cannot access these statistics.
  * @summary Stats for a specific district
  */
 export const GetDistrictStatsParams = zod.object({
@@ -2598,6 +2615,10 @@ export const listAdminReportsResponseNoteRegExp = new RegExp(
   "u",
 );
 
+export const listAdminReportsResponseRequestIdMax = 2147483647;
+
+export const listAdminReportsResponseRequestTitleMax = 200;
+
 export const ListAdminReportsResponseItem = zod.object({
   id: zod.number().int().min(1).max(listAdminReportsResponseIdMax),
   reporterId: zod
@@ -2630,6 +2651,21 @@ export const ListAdminReportsResponseItem = zod.object({
   reviewedBy: zod.number().int().min(1).nullable(),
   reviewedAt: zod.string().nullable(),
   createdAt: zod.string(),
+  targetType: zod.enum(["profile", "request"]),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminReportsResponseRequestIdMax)
+    .nullable()
+    .describe("Null for profile reports and deleted requests."),
+  requestTitle: zod
+    .string()
+    .max(listAdminReportsResponseRequestTitleMax)
+    .nullable()
+    .describe(
+      "Server-captured title retained for moderation after request deletion.",
+    ),
 });
 export const ListAdminReportsResponse = zod
   .array(ListAdminReportsResponseItem)
@@ -2672,6 +2708,10 @@ export const moderateReportResponseNoteRegExp = new RegExp(
   "u",
 );
 
+export const moderateReportResponseRequestIdMax = 2147483647;
+
+export const moderateReportResponseRequestTitleMax = 200;
+
 export const ModerateReportResponse = zod.object({
   id: zod.number().int().min(1).max(moderateReportResponseIdMax),
   reporterId: zod
@@ -2704,6 +2744,21 @@ export const ModerateReportResponse = zod.object({
   reviewedBy: zod.number().int().min(1).nullable(),
   reviewedAt: zod.string().nullable(),
   createdAt: zod.string(),
+  targetType: zod.enum(["profile", "request"]),
+  requestId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(moderateReportResponseRequestIdMax)
+    .nullable()
+    .describe("Null for profile reports and deleted requests."),
+  requestTitle: zod
+    .string()
+    .max(moderateReportResponseRequestTitleMax)
+    .nullable()
+    .describe(
+      "Server-captured title retained for moderation after request deletion.",
+    ),
 });
 
 /**
@@ -2809,4 +2864,56 @@ export const DeleteRequestCommentResponse = zod.object({
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
+});
+
+/**
+ * Requires fresh member access. Administrators may inspect eligible student badges for moderation but have no badge of their own. Missing, ineligible and blocked targets return 404. Counts distinct eligible accepted study partners; zero activity has null rank and tier. No private account fields are returned.
+ * @summary Get an eligible student’s public activity badge
+ */
+export const getUserActivityRankPathIdMax = 2147483647;
+
+export const GetUserActivityRankParams = zod.object({
+  id: zod.coerce.number().int().min(1).max(getUserActivityRankPathIdMax),
+});
+
+export const getUserActivityRankResponseUserIdMax = 2147483647;
+
+export const getUserActivityRankResponseDistinctPartnersMin = 0;
+export const getUserActivityRankResponseDistinctPartnersMax = 2147483647;
+
+export const getUserActivityRankResponseRankMax = 2147483647;
+
+export const GetUserActivityRankResponse = zod.object({
+  userId: zod.number().int().min(1).max(getUserActivityRankResponseUserIdMax),
+  distinctPartners: zod
+    .number()
+    .int()
+    .min(getUserActivityRankResponseDistinctPartnersMin)
+    .max(getUserActivityRankResponseDistinctPartnersMax),
+  rank: zod
+    .number()
+    .int()
+    .min(1)
+    .max(getUserActivityRankResponseRankMax)
+    .nullable()
+    .describe(
+      "Competition rank among eligible students, null when distinctPartners is zero.",
+    ),
+  tier: zod
+    .union([
+      zod.literal("Bronze"),
+      zod.literal("Silver"),
+      zod.literal("Gold"),
+      zod.literal("Platinum"),
+      zod.literal("Emerald"),
+      zod.literal("Diamond"),
+      zod.literal("Master"),
+      zod.literal("Grand Master"),
+      zod.literal("Challenger"),
+      zod.literal(null),
+    ])
+    .nullable()
+    .describe(
+      "Absolute distinct-partner thresholds: 1, 3, 5, 10, 20, 35, 50, 75, 100 respectively. Null for zero activity.",
+    ),
 });

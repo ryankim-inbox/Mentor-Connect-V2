@@ -35,7 +35,7 @@ def has_member_access(user):
     if is_synthetic_locked(user):
         return False
     if user['email_verified_at'] is not None:
-        return True
+        return user['is_admin'] is False or has_admin_access(user)
     return (user['is_admin'] is False
             and enabled_test_members().get(user['id']) == user['role'])
 
@@ -47,3 +47,9 @@ def has_admin_access(user):
             and user['email_verified_at'] is not None
             and user['is_admin'] is True
             and user['id'] not in configured_test_members())
+
+
+def has_student_access(user):
+    return (user['is_admin'] is False
+            and user['role'] in ('mentor', 'mentee', 'both')
+            and has_member_access(user))

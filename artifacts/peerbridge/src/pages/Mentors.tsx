@@ -1,8 +1,10 @@
+import { useAuth } from "@/lib/auth-context";
 import { useState } from "react";
 import { Link } from "wouter";
 import { useListMentors } from "@workspace/api-client-react";
 import { apiErrorMessage } from "@/lib/api-error-message";
 export default function Mentors() {
+  const { user } = useAuth();
   const [cursors, setCursors] = useState<(number | undefined)[]>([undefined]);
   const mentors = useListMentors({ limit: 50, beforeId: cursors.at(-1) });
   return (
@@ -51,9 +53,11 @@ export default function Mentors() {
           More mentors
         </button>
       </div>
-      <Link href="/requests/new" className="text-primary underline">
-        Post a mentorship request
-      </Link>
+      {!user?.isAdmin && (
+        <Link href="/requests/new" className="text-primary underline">
+          Post a mentorship request
+        </Link>
+      )}
     </section>
   );
 }

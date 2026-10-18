@@ -15,6 +15,7 @@ import {
   assertValidPublicOrigin,
   createLimiter,
   validateAuthBody,
+  validateSensitiveBody,
 } from "../src/request-controls.js";
 import { requestFixture, userFixture } from "./contract-fixtures.js";
 
@@ -189,15 +190,17 @@ async function startControlFixture(now: () => number = Date.now): Promise<{
     });
 
     if (request.url === "/api/auth/me") {
-      const match = /session=user-(\d+)/.exec(request.headers.cookie ?? "");
+      const match = /session=(user|admin)-(\d+)/.exec(
+        request.headers.cookie ?? "",
+      );
       if (!match) {
         sendJson(response, 401, { detail: "not authenticated" });
         return;
       }
-      const id = Number(match[1]);
+      const id = Number(match[2]);
       sendJson(response, 200, {
         ...userFixture,
-        isAdmin: true,
+        isAdmin: match[1] === "admin",
         id,
         email: `student-${id}@example.edu`,
       });
@@ -951,7 +954,7 @@ test("shares the 12-per-minute expensive bucket across matching aliases and prac
       const response = await fetch(fixture.gatewayOrigin + path, {
         method,
         headers: {
-          cookie: "session=user-1",
+          cookie: "session=admin-1",
           ...(body === undefined
             ? {}
             : {
@@ -966,7 +969,7 @@ test("shares the 12-per-minute expensive bucket across matching aliases and prac
   }
 
   const limited = await fetch(fixture.gatewayOrigin + "/api/matches/1", {
-    headers: { cookie: "session=user-1" },
+    headers: { cookie: "session=admin-1" },
   });
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("retry-after"), "60");
@@ -1007,9 +1010,35 @@ test("allows classroom polling and informational practice GETs without mutation 
   ]) {
     for (let request = 0; request < 13; request += 1) {
       const response = await fetch(fixture.gatewayOrigin + path, {
-        headers: { cookie: "session=user-1" },
+        headers: { cookie: "session=admin-1" },
       });
       assert.equal(response.status, 200, path);
     }
   }
+});
+
+test("request idempotency keys and contextual report IDs pass strict mutation boundaries", () => {
+  const request = {
+    districtId: 1,
+    role: "mentee",
+    title: "Math",
+    description: "Help",
+    clientRequestId: "a92300b5-1a7d-4b4b-9f58-dfc704ca982d",
+  };
+  const report = { reportedUserId: 501, requestId: 2, reason: "spam" };
+  for (const [path, body] of [
+    ["/api/requests", request],
+    ["/api/reports", report],
+  ] as const)
+    assert.doesNotThrow(() =>
+      validateSensitiveBody(path, "POST", Buffer.from(JSON.stringify(body))),
+    );
+  for (const [path, body] of [
+    ["/api/requests", { ...request, clientRequestId: "invalid" }],
+    ["/api/reports", { ...report, requestId: 0 }],
+    ["/api/reports", { ...report, requestId: true }],
+  ] as const)
+    assert.throws(() =>
+      validateSensitiveBody(path, "POST", Buffer.from(JSON.stringify(body))),
+    );
 });

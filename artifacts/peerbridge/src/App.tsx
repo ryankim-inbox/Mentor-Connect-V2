@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ChatNavigationProvider } from "@/lib/chat-navigation";
 import { AuthProvider } from "@/lib/auth-context";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Navbar } from "@/components/Navbar";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
@@ -14,7 +15,11 @@ import NotFound from "@/pages/not-found";
 import VerifyEmail from "@/pages/VerifyEmail";
 import Mentors from "@/pages/Mentors";
 import { useAuth } from "@/lib/auth-context";
-import { RequireAdmin, RequireAuth } from "@/components/RequireAuth";
+import {
+  RequireAdmin,
+  RequireAuth,
+  RequireStudent,
+} from "@/components/RequireAuth";
 import { releaseSurface } from "@/lib/release-flags";
 
 const Connections = lazy(() => import("@/pages/Connections"));
@@ -128,9 +133,9 @@ function Router() {
             </RequireAuth>
           </Route>
           <Route path="/requests/new">
-            <RequireAuth>
+            <RequireStudent>
               <NewRequest />
-            </RequireAuth>
+            </RequireStudent>
           </Route>
           <Route path="/requests/:id">
             {(params) => (
@@ -145,14 +150,14 @@ function Router() {
             </RequireAuth>
           </Route>
           <Route path="/notifications">
-            <RequireAuth>
+            <RequireStudent>
               <Notifications />
-            </RequireAuth>
+            </RequireStudent>
           </Route>
           <Route path="/connections">
-            <RequireAuth>
+            <RequireStudent>
               <Connections />
-            </RequireAuth>
+            </RequireStudent>
           </Route>
           <Route path="/profile/:id">
             {(params) => <MemberProfileRoute id={params.id ?? ""} />}
@@ -206,6 +211,7 @@ function ReleaseAwareApp() {
         <Suspense fallback={<FeatureLoading />}>
           <Router />
           <ChatWidget />
+          <NotificationBell />
         </Suspense>
       </ChatNavigationProvider>
     </AuthProvider>

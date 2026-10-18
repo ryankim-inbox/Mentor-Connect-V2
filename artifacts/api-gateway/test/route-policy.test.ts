@@ -3,10 +3,14 @@ import test from "node:test";
 
 import { ListDistrictsQueryParams } from "../../../lib/api-zod/src/generated/api.js";
 
-import { publicRoutes, resolvePublicRoute } from "../src/route-policy.js";
+import {
+  publicRoutes,
+  requiredAuthority,
+  resolvePublicRoute,
+} from "../src/route-policy.js";
 
-test("registers the complete 64-operation REST contract", () => {
-  assert.equal(publicRoutes.length, 64);
+test("registers the complete 65-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 65);
   assert.equal(
     publicRoutes.filter((route) => route.authentication === "cookie").length,
     1,
@@ -25,6 +29,7 @@ test("resolves every operation in the approved REST contract", () => {
     ["POST", "/api/auth/logout"],
     ["GET", "/api/auth/me"],
     ["GET", "/api/users/1"],
+    ["GET", "/api/users/1/activity-rank"],
     ["PATCH", "/api/users/1"],
     ["GET", "/api/districts?type=high_school&search=North"],
     ["GET", "/api/districts/1"],
@@ -92,8 +97,8 @@ test("resolves every operation in the approved REST contract", () => {
     assert.ok(route, `${method} ${target}`);
     resolved.add(`${route.method} ${route.template}`);
   }
-  assert.equal(operations.length, 64);
-  assert.equal(resolved.size, 64);
+  assert.equal(operations.length, 65);
+  assert.equal(resolved.size, 65);
   assert.deepEqual(
     resolved,
     new Set(publicRoutes.map((route) => `${route.method} ${route.template}`)),
@@ -295,4 +300,44 @@ test("account trust routes have bounded query values", () => {
     "/api/admin/reports?status=open&status=resolved",
   ])
     assert.throws(() => resolvePublicRoute("GET", path), /invalid_query/, path);
+});
+
+test("student-only actions, admin aggregates and bounded profile activity are explicit", () => {
+  for (const [method, path] of [
+    ["GET", "/api/blocks"],
+    ["DELETE", "/api/blocks/2"],
+    ["GET", "/api/notifications"],
+    ["POST", "/api/notifications/read"],
+    ["GET", "/api/connections"],
+    ["GET", "/api/request-activity"],
+    ["POST", "/api/requests"],
+    ["PATCH", "/api/requests/2"],
+    ["POST", "/api/requests/2/comments"],
+    ["PATCH", "/api/requests/2/comments/3"],
+    ["POST", "/api/reports"],
+    ["GET", "/api/chat/rooms"],
+    ["GET", "/api/dms"],
+  ]) {
+    const route = resolvePublicRoute(method, path);
+    assert.ok(route, path);
+    assert.equal(requiredAuthority(route), "student", path);
+  }
+  for (const path of ["/api/stats/overview", "/api/stats/district/1"]) {
+    const route = resolvePublicRoute("GET", path)!;
+    assert.equal(route.authentication, "session");
+    assert.equal(requiredAuthority(route), "admin");
+  }
+  const rank = resolvePublicRoute("GET", "/api/users/501/activity-rank");
+  assert.equal(rank?.family, "activity-ranks");
+  assert.equal(requiredAuthority(rank!), "member");
+  assert.equal(
+    resolvePublicRoute("GET", "/api/users/0/activity-rank"),
+    undefined,
+  );
+  assert.equal(resolvePublicRoute("GET", "/api/mentor-ranks"), undefined);
+  for (const path of ["/api/requests/2", "/api/requests/2/comments/3"])
+    assert.equal(
+      requiredAuthority(resolvePublicRoute("DELETE", path)!),
+      "member",
+    );
 });

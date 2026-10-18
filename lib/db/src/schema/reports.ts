@@ -12,6 +12,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { requestsTable } from "./requests";
 
 export const reportsTable = pgTable(
   "reports",
@@ -29,11 +30,18 @@ export const reportsTable = pgTable(
     note: text("note"),
     reviewedBy: integer("reviewed_by").references(() => usersTable.id),
     reviewedAt: timestamp("reviewed_at", {withTimezone:true}),
+    targetType: text("target_type").notNull().default("profile"),
+    requestId: integer("request_id").references(() => requestsTable.id, { onDelete: "set null" }),
+    requestTitle: text("request_title"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
+    check("reports_target_type_check", sql`${table.targetType} IN ('profile', 'request')`),
+    check("reports_target_context_check", sql`${table.targetType} = 'request'::text OR ${table.requestId} IS NULL AND ${table.requestTitle} IS NULL`),
+    check("reports_request_title_check", sql`${table.requestTitle} IS NULL OR octet_length(${table.requestTitle}) <= 200`),
+    index("idx_reports_target").on(table.reporterId, table.targetType, table.reportedUserId, table.requestId, table.status),
     check(
       "reports_no_self_check",
       sql`${table.reporterId} <> ${table.reportedUserId}`,

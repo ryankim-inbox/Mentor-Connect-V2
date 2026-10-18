@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 from db import db
-from security import require_member_user
+from security import require_student_user
 
 router = APIRouter()
 SafeId = Annotated[int, Field(strict=True, ge=1, le=9007199254740991)]
@@ -26,7 +26,7 @@ class NotificationsResponse(BaseModel):
 
 
 @router.get("/notifications", response_model=NotificationsResponse)
-def list_notifications(user=Depends(require_member_user)):
+def list_notifications(user=Depends(require_student_user)):
     """Return the signed-in user's 50 newest notifications and unread count."""
     user_id = user['id']
     with db() as conn:
@@ -60,7 +60,7 @@ def list_notifications(user=Depends(require_member_user)):
 
 
 @router.post("/notifications/read", status_code=204, response_class=Response)
-def mark_notifications_read(user=Depends(require_member_user)):
+def mark_notifications_read(user=Depends(require_student_user)):
     user_id = user['id']
     with db() as conn:
         cur = conn.cursor()

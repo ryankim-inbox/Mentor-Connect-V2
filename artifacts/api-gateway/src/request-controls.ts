@@ -308,6 +308,7 @@ export function validateSensitiveBody(
     schema = z
       .object({
         reportedUserId: positive,
+        requestId: positive.max(2147483647).optional(),
         reason: z.enum([
           "spam",
           "harassment",
@@ -348,6 +349,7 @@ export function validateSensitiveBody(
     schema = z
       .object({
         ...requestFields,
+        clientRequestId: z.string().uuid().optional(),
         districtId: positive,
         title: requestText(200),
         description: requestText(4000),
