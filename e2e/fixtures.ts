@@ -12,6 +12,7 @@ export const signedInUser = {
   subjects: ["Math"],
   isVerified: true, hasMemberAccess: true,
   isAdmin: false,
+  isDemo: false,
   createdAt: "2026-09-09T00:00:00Z",
 };
 
@@ -40,6 +41,8 @@ export const request = {
   status: "open",
   matchedUserId: null,
   matchedUserName: null,
+  isDemo: false,
+  matchedUserIsDemo: false,
   createdAt: "2026-09-09T01:00:00Z",
   preferredTimes: ["Mon 17:00"],
 };
@@ -102,6 +105,7 @@ export const fixtures: Record<string, unknown> = {
     status: "connected",
     message: "Matching module loaded.",
     question_id: 1,
+    isDemo: false,
     student_id: 1,
     student_name: "Classroom Mentor",
     requested_subject: "Math",
@@ -123,9 +127,9 @@ export const fixtures: Record<string, unknown> = {
   "/api/analytics/mentor-response-rates": pythonEnvelope("analysis", {
     trackingStartedAt: "2026-09-09T00:00:00Z",
     mentors: [
-      { mentorId: 1, mentorName: "Classroom Mentor", totalMatches: 2, avgTimeToMatchHours: 1.5 },
-      { mentorId: 2, mentorName: "New Mentor", totalMatches: 0, avgTimeToMatchHours: null },
-      { mentorId: 3, mentorName: "Unknown Duration Mentor", totalMatches: 1, avgTimeToMatchHours: null },
+      { mentorId: 1, mentorName: "Classroom Mentor", isDemo: false, totalMatches: 2, avgTimeToMatchHours: 1.5 },
+      { mentorId: 2, mentorName: "New Mentor", isDemo: false, totalMatches: 0, avgTimeToMatchHours: null },
+      { mentorId: 3, mentorName: "Unknown Duration Mentor", isDemo: false, totalMatches: 1, avgTimeToMatchHours: null },
     ],
   }),
   "/api/scheduling/status": pythonEnvelope("scheduling", null),
@@ -136,6 +140,7 @@ export const fixtures: Record<string, unknown> = {
     {
       userId: 7,
       name: "Reported Learner",
+      isDemo: false,
       reportCount: 2,
       blockCount: 1,
       status: "review",
@@ -151,6 +156,7 @@ export const fixtures: Record<string, unknown> = {
   }),
   "/api/users/7": {
     id: 7,
+    isDemo: false,
     name: "Reported Learner",
     subjects: ["Biology"],
     createdAt: "2026-01-15T00:00:00Z",

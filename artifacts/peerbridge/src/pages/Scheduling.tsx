@@ -5,12 +5,14 @@ import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
 import { SourceBadge } from "@/components/SourceBadge";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 
 interface SchedulingOverview {
   topSlots: { slot: string; count: number }[];
 }
 
 interface SuggestUser {
+  isDemo?: boolean;
   id: number;
   name: string;
   role: string;
@@ -327,6 +329,8 @@ export default function Scheduling() {
                   <p className="text-sm font-semibold text-foreground">
                     {u.name} <span className="text-xs font-normal text-muted-foreground">(#{u.id} · {u.role})</span>
                   </p>
+                  <DemoBadge isDemo={u.isDemo} kind="profile" />
+                  <DemoNotice isDemo={u.isDemo} kind="profile" />
                   <div className="mt-2">
                     <TimeChips times={u.available_times ?? []} highlight={suggestData.overlap} />
                   </div>

@@ -34,4 +34,6 @@ export interface FlaggedUser {
   lastReportedAt: string | null;
   /** @items.minLength 1 */
   topReasons: string[];
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo: boolean;
 }

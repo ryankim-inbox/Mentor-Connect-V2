@@ -13,6 +13,7 @@ import {
 import { discardReportState, reportAuthorityKey } from "@/lib/report-authority";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge } from "./DemoBadge";
 const statuses: ModerateReportBodyStatus[] = [
   "open",
   "reviewing",
@@ -53,6 +54,7 @@ function Review({
       <h3 className="font-semibold">
         Report #{report.id}: {report.reportedUserName}
       </h3>
+      <DemoBadge isDemo={report.reportedUserIsDemo} kind="profile" />
       {report.targetType === "request" ? (
         <p className="my-2 text-sm">
           Post:{" "}
@@ -66,6 +68,7 @@ function Review({
           ) : (
             <span>{report.requestTitle || "Reported post"} (deleted)</span>
           )}
+          {" "}<DemoBadge isDemo={report.requestIsDemo} kind="post" />
         </p>
       ) : (
         <p className="my-2 text-sm">
@@ -80,6 +83,7 @@ function Review({
       )}
       <p>
         Reported by {report.reporterName} · {report.reason}
+        {" "}<DemoBadge isDemo={report.reporterIsDemo} kind="profile" />
       </p>
       <p className="my-3 whitespace-pre-wrap break-words">
         {report.description || "No description provided."}

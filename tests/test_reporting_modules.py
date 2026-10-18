@@ -109,7 +109,7 @@ def test_flagged_users_real_module_and_redaction(backend_database, gateway_serve
     client, _ = login(gateway_server, "student001@test.edu")
     status, result = api(client, gateway_server, "GET", "/api/admin/flagged-users")
     assert status == 200 and result["ok"] and result["source"] == "student-module", result
-    assert set(result["data"][0]) == {"userId", "name", "reportCount", "blockCount", "status", "lastReportedAt", "topReasons"}
+    assert set(result["data"][0]) == {"userId", "name", "reportCount", "blockCount", "status", "lastReportedAt", "topReasons", "isDemo"}
     assert "email" not in json.dumps(result) and "district" not in json.dumps(result)
     # The threshold is diagnostic: the highest-count user can still sign in.
     login(gateway_server, "santiago.khan.0502@test.edu")

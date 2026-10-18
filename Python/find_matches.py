@@ -209,6 +209,8 @@ def rank_candidates(student: dict, mentors, question: dict, limit: int = 5):
         matches.append({
             "mentor_id": mentor_id,
             "mentor_name": mentor.get("name"),
+            # The DB reader supplies this marker; matching accepts only a question ID.
+            "isDemo": mentor.get("isDemo") is True,
             "score": score,
             "reason": _build_reason(student, mentor, question),
             "matched_subjects": [subject for subject in requested_subjects
@@ -297,6 +299,8 @@ def find_matches(question_id: int, limit: int = 5):
         "question_id": question_id,
         "student_id": student_id,
         "student_name": student.get("name"),
+        "isDemo": question.get("isDemo") is True,
+        "studentIsDemo": student.get("isDemo") is True,
         "requested_subject": question.get("subject"),
         "requested_topic": question.get("topic"),
         "matches": ranked_matches,

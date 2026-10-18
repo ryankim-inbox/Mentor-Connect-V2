@@ -269,7 +269,7 @@ test("administrator learning routes render their real page", async ({ page }) =>
   const unknownRequests = await interceptApi(page);
   const routes = [
     ["dashboard", "/dashboard", "Welcome back, Classroom"],
-    ["districts", "/districts", "High School District Channels"],
+    ["districts", "/districts", "School District Channels"],
     ["requests", "/requests", "Browse Mentorship Requests"],
     ["matches", "/recommendations", "Question ID"],
     ["practice", "/practice-lab", "Python Practice Lab"],

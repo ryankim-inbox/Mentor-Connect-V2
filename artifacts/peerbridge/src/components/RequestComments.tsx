@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge } from "./DemoBadge";
 
 export default function RequestComments({
   requestId,
@@ -135,8 +136,9 @@ export default function RequestComments({
             key={c.id}
             className={`rounded-lg bg-muted p-3 ${c.parentId ? "ml-5 border-l-2 border-primary/30" : ""}`}
           >
-            <p className="text-sm font-medium">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium break-words">
               {c.authorName}{" "}
+              <DemoBadge isDemo={c.isDemo} kind="profile" />
               <time
                 className="font-normal text-xs text-muted-foreground"
                 dateTime={c.createdAt}
@@ -145,8 +147,9 @@ export default function RequestComments({
               </time>
             </p>
             {c.parentId && (
-              <p className="text-xs text-muted-foreground">
+              <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                 Reply to {c.parentAuthorName ?? "comment"}
+                <DemoBadge isDemo={c.parentAuthorIsDemo} kind="profile" />
               </p>
             )}
             <p className="whitespace-pre-wrap break-words text-sm mt-1">

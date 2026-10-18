@@ -131,6 +131,7 @@ def _normalize_mentor_ranks(result):
             if not math.isfinite(hours) or hours < 0:
                 return None
         mentors.append({"mentorId": mentor_id, "mentorName": str(item["mentorName"]),
+                        "isDemo": item.get("isDemo") is True,
                         "totalMatches": total, "avgTimeToMatchHours": hours})
     return {"trackingStartedAt": result["trackingStartedAt"], "mentors": mentors}
 

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
+import { DemoBadge } from "@/components/DemoBadge";
 
 interface TimeSlotDemand {
   slot: string;
@@ -331,6 +332,7 @@ export default function Analytics() {
                 <div key={m.mentorId} className="flex items-center justify-between gap-3 py-2 px-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{m.mentorName}</p>
+                    <DemoBadge isDemo={m.isDemo} kind="profile" />
                     <p className="text-xs text-muted-foreground">{m.totalMatches} observed matches</p>
                   </div>
                   <span className="text-sm text-muted-foreground tabular-nums">

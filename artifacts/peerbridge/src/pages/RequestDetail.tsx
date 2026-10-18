@@ -14,6 +14,7 @@ import { apiErrorMessage } from "@/lib/api-error-message";
 import { MessageButton } from "@/lib/chat-navigation";
 import RequestComments from "@/components/RequestComments";
 import ReportModal from "@/components/ReportModal";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 
 interface Props {
   id: string;
@@ -137,14 +138,17 @@ export default function RequestDetail({ id }: Props) {
               <p className="text-green-700 text-sm mt-1 mb-3">
                 Agree on your goals and a time to meet.
               </p>
-              <MessageButton
-                userId={isAuthor ? request.matchedUserId! : request.authorId}
-                name={
-                  isAuthor
-                    ? (request.matchedUserName ?? "your connection")
-                    : request.authorName
-                }
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <MessageButton
+                  userId={isAuthor ? request.matchedUserId! : request.authorId}
+                  name={
+                    isAuthor
+                      ? (request.matchedUserName ?? "your connection")
+                      : request.authorName
+                  }
+                />
+                <DemoBadge isDemo={isAuthor ? request.matchedUserIsDemo : request.isDemo} kind="profile" />
+              </div>
             </div>
           </div>
         </div>
@@ -152,8 +156,9 @@ export default function RequestDetail({ id }: Props) {
 
       <div className="bg-card border border-card-border rounded-2xl p-6 mb-4">
         <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <DemoBadge isDemo={request.isDemo} kind="post" />
               <span
                 className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
                   request.authorRole === "mentor"
@@ -177,13 +182,14 @@ export default function RequestDetail({ id }: Props) {
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="break-words text-2xl font-bold text-foreground">
               {request.title}
             </h1>
           </div>
         </div>
 
-        <p className="text-foreground leading-relaxed mb-5 whitespace-pre-wrap">
+        <DemoNotice isDemo={request.isDemo} kind="post" />
+        <p className="text-foreground leading-relaxed mb-5 whitespace-pre-wrap break-words">
           {request.description}
         </p>
 
@@ -211,8 +217,8 @@ export default function RequestDetail({ id }: Props) {
           </div>
         )}
 
-        <div className="border-t border-border pt-4 flex items-center justify-between">
-          <div>
+        <div className="border-t border-border pt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 break-words">
             <span className="font-semibold text-foreground">
               {request.authorName}
             </span>

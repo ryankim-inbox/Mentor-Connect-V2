@@ -107,6 +107,11 @@ export const RegisterResponse = zod.object({
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
+    isDemo: zod
+      .boolean()
+      .describe(
+        "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+      ),
   }),
   message: zod.string(),
 });
@@ -141,6 +146,11 @@ export const LoginResponse = zod.object({
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
+    isDemo: zod
+      .boolean()
+      .describe(
+        "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+      ),
   }),
   message: zod.string(),
 });
@@ -176,6 +186,11 @@ export const GetMeResponse = zod.object({
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -218,6 +233,11 @@ export const GetUserResponse = zod.union([
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
+    isDemo: zod
+      .boolean()
+      .describe(
+        "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+      ),
   }),
   zod
     .object({
@@ -227,6 +247,11 @@ export const GetUserResponse = zod.union([
         .array(zod.string().min(1).max(getUserResponseTwoSubjectsItemMax))
         .max(getUserResponseTwoSubjectsMax),
       createdAt: zod.string().min(1).max(getUserResponseTwoCreatedAtMax),
+      isDemo: zod
+        .boolean()
+        .describe(
+          "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+        ),
     })
     .describe(
       "Minimum profile summary for any signed-in user; PATCH is self only.",
@@ -283,6 +308,11 @@ export const UpdateUserResponse = zod.object({
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -290,7 +320,7 @@ export const UpdateUserResponse = zod.object({
  */
 export const ListDistrictsQueryParams = zod.object({
   type: zod
-    .enum(["high_school", "unified"])
+    .enum(["high_school", "unified", "elementary"])
     .optional()
     .describe(
       "Filter by district type; omit to return all supported districts.",
@@ -389,6 +419,16 @@ export const ListRequestsResponseItem = zod.object({
     .describe(
       "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
     ),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.",
+    ),
+  matchedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the matched user belongs to the approved demo batch; false when there is no matched user.",
+    ),
 });
 export const ListRequestsResponse = zod.array(ListRequestsResponseItem);
 
@@ -466,6 +506,16 @@ export const CreateRequestResponse = zod.object({
     .describe(
       "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
     ),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.",
+    ),
+  matchedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the matched user belongs to the approved demo batch; false when there is no matched user.",
+    ),
 });
 
 /**
@@ -507,6 +557,16 @@ export const GetRequestResponse = zod.object({
     .optional()
     .describe(
       "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
+    ),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.",
+    ),
+  matchedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the matched user belongs to the approved demo batch; false when there is no matched user.",
     ),
 });
 
@@ -575,6 +635,16 @@ export const UpdateRequestResponse = zod.object({
     .describe(
       "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
     ),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.",
+    ),
+  matchedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the matched user belongs to the approved demo batch; false when there is no matched user.",
+    ),
 });
 
 /**
@@ -614,6 +684,11 @@ export const MatchRequestResponse = zod.object({
   status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -670,6 +745,11 @@ export const ListBlocksResponseItem = zod.object({
   blockedUserId: zod.number().int(),
   blockedUserName: zod.string(),
   createdAt: zod.string(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 export const ListBlocksResponse = zod.array(ListBlocksResponseItem);
 
@@ -1280,6 +1360,18 @@ export const GetMatchesResponse = zod.object({
     .max(getMatchesResponseQuestionIdMax),
   limit: zod.number().int().min(1).max(getMatchesResponseLimitMax),
   matches: zod.array(zod.unknown()),
+  isDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  studentIsDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
 });
 
 /**
@@ -1351,6 +1443,18 @@ export const PostMatchesResponse = zod.object({
     .max(postMatchesResponseQuestionIdMax),
   limit: zod.number().int().min(1).max(postMatchesResponseLimitMax),
   matches: zod.array(zod.unknown()),
+  isDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  studentIsDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
 });
 
 /**
@@ -1445,6 +1549,18 @@ export const GetPracticeMatchingResponse = zod.object({
     .max(getPracticeMatchingResponseQuestionIdMax),
   limit: zod.number().int().min(1).max(getPracticeMatchingResponseLimitMax),
   matches: zod.array(zod.unknown()),
+  isDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  studentIsDemo: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
 });
 
 /**
@@ -1847,6 +1963,11 @@ export const GetMentorResponseRatesResponse = zod
                   .describe(
                     "Mean nonnegative creation-to-match interval for observed events. Null means no valid durations; recorded matches are still counted.",
                   ),
+                isDemo: zod
+                  .boolean()
+                  .describe(
+                    "Server-derived approved demo batch marker for the canonical identity or request.",
+                  ),
               }),
             )
             .describe(
@@ -2037,46 +2158,79 @@ export const GetSchedulingSuggestionsQueryParams = zod.object({
   user_b: zod.coerce.number().int().min(1),
 });
 
-export const getSchedulingSuggestionsResponseStudentModuleOneAttemptedFunctionMax = 128;
+export const getSchedulingSuggestionsResponseOneStudentModuleOneAttemptedFunctionMax = 128;
 
-export const getSchedulingSuggestionsResponseStudentModuleOneErrorMax = 128;
+export const getSchedulingSuggestionsResponseOneStudentModuleOneErrorMax = 128;
 
-export const getSchedulingSuggestionsResponseErrorMax = 128;
+export const getSchedulingSuggestionsResponseOneErrorMax = 128;
 
-export const GetSchedulingSuggestionsResponse = zod.object({
-  ok: zod.boolean(),
-  success: zod.boolean().optional(),
-  feature: zod.string().min(1).optional(),
-  source: zod.enum(["python", "student-module", "adapter-fallback"]),
-  student_module: zod.union([
+export const GetSchedulingSuggestionsResponse = zod
+  .object({
+    ok: zod.boolean(),
+    success: zod.boolean().optional(),
+    feature: zod.string().min(1).optional(),
+    source: zod.enum(["python", "student-module", "adapter-fallback"]),
+    student_module: zod.union([
+      zod.object({
+        module: zod.string().min(1),
+        attempted_function: zod
+          .string()
+          .min(1)
+          .max(
+            getSchedulingSuggestionsResponseOneStudentModuleOneAttemptedFunctionMax,
+          )
+          .nullish(),
+        importable: zod.boolean().optional(),
+        called: zod.boolean().optional(),
+        status: zod.string().min(1),
+        error: zod
+          .string()
+          .min(1)
+          .max(getSchedulingSuggestionsResponseOneStudentModuleOneErrorMax)
+          .nullish(),
+        available_functions: zod.array(zod.string().min(1)).optional(),
+      }),
+      zod.null(),
+    ]),
+    error: zod
+      .string()
+      .min(1)
+      .max(getSchedulingSuggestionsResponseOneErrorMax)
+      .nullish(),
+    data: zod.unknown(),
+  })
+  .and(
     zod.object({
-      module: zod.string().min(1),
-      attempted_function: zod
-        .string()
-        .min(1)
-        .max(
-          getSchedulingSuggestionsResponseStudentModuleOneAttemptedFunctionMax,
-        )
-        .nullish(),
-      importable: zod.boolean().optional(),
-      called: zod.boolean().optional(),
-      status: zod.string().min(1),
-      error: zod
-        .string()
-        .min(1)
-        .max(getSchedulingSuggestionsResponseStudentModuleOneErrorMax)
-        .nullish(),
-      available_functions: zod.array(zod.string().min(1)).optional(),
+      data: zod.union([
+        zod.object({
+          userA: zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+            role: zod.string(),
+            available_times: zod.array(zod.string()),
+            isDemo: zod
+              .boolean()
+              .describe(
+                "Server-derived approved demo batch marker for this canonical user.",
+              ),
+          }),
+          userB: zod.object({
+            id: zod.number().int(),
+            name: zod.string(),
+            role: zod.string(),
+            available_times: zod.array(zod.string()),
+            isDemo: zod
+              .boolean()
+              .describe(
+                "Server-derived approved demo batch marker for this canonical user.",
+              ),
+          }),
+          overlap: zod.array(zod.string()),
+        }),
+        zod.null(),
+      ]),
     }),
-    zod.null(),
-  ]),
-  error: zod
-    .string()
-    .min(1)
-    .max(getSchedulingSuggestionsResponseErrorMax)
-    .nullish(),
-  data: zod.unknown(),
-});
+  );
 
 /**
  * @summary getFlaggedUsers
@@ -2150,6 +2304,11 @@ export const GetFlaggedUsersResponse = zod.object({
         .max(getFlaggedUsersResponseDataItemLastReportedAtMax)
         .nullable(),
       topReasons: zod.array(zod.string().min(1)),
+      isDemo: zod
+        .boolean()
+        .describe(
+          "Server-derived approved demo batch marker for the canonical identity or request.",
+        ),
     }),
   ),
 });
@@ -2213,6 +2372,16 @@ export const ListRequestCommentsResponseItem = zod.object({
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
+  parentAuthorIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the parent comment author belongs to the approved demo batch; false for top-level comments.",
+    ),
 });
 export const ListRequestCommentsResponse = zod.array(
   ListRequestCommentsResponseItem,
@@ -2268,6 +2437,16 @@ export const CreateRequestCommentResponse = zod.object({
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
+  parentAuthorIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the parent comment author belongs to the approved demo batch; false for top-level comments.",
+    ),
 });
 
 /**
@@ -2321,6 +2500,11 @@ export const ListRequestApplicationsResponseItem = zod.object({
   status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 export const ListRequestApplicationsResponse = zod.array(
   ListRequestApplicationsResponseItem,
@@ -2353,6 +2537,11 @@ export const ApplyToRequestResponse = zod.object({
   status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -2397,6 +2586,11 @@ export const ActOnRequestApplicationResponse = zod.object({
   status: zod.enum(["pending", "accepted", "rejected", "cancelled"]),
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().datetime({ offset: true }),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -2431,6 +2625,11 @@ export const ListConnectionsResponseItem = zod.object({
   name: zod.string(),
   requestId: zod.number().int().min(1).max(listConnectionsResponseRequestIdMax),
   requestTitle: zod.string(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 export const ListConnectionsResponse = zod.array(ListConnectionsResponseItem);
 
@@ -2489,6 +2688,16 @@ export const ListRequestActivityResponseItem = zod.object({
     .describe(
       "Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00').",
     ),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.",
+    ),
+  matchedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the matched user belongs to the approved demo batch; false when there is no matched user.",
+    ),
 });
 export const ListRequestActivityResponse = zod.array(
   ListRequestActivityResponseItem,
@@ -2540,6 +2749,11 @@ export const ConfirmEmailVerificationResponse = zod.object({
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 
 /**
@@ -2577,6 +2791,11 @@ export const ListMentorsResponseItem = zod.object({
   districtId: zod.number().int().min(1).max(listMentorsResponseDistrictIdMax),
   districtName: zod.string().nullable(),
   bio: zod.string().nullable(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
 });
 export const ListMentorsResponse = zod.array(ListMentorsResponseItem).max(50);
 
@@ -2665,6 +2884,21 @@ export const ListAdminReportsResponseItem = zod.object({
     .nullable()
     .describe(
       "Server-captured title retained for moderation after request deletion.",
+    ),
+  reporterIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  reportedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  requestIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
     ),
 });
 export const ListAdminReportsResponse = zod
@@ -2759,6 +2993,21 @@ export const ModerateReportResponse = zod.object({
     .describe(
       "Server-captured title retained for moderation after request deletion.",
     ),
+  reporterIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  reportedUserIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
+  requestIsDemo: zod
+    .boolean()
+    .describe(
+      "Server-derived approved demo batch marker for the canonical identity or request.",
+    ),
 });
 
 /**
@@ -2816,6 +3065,16 @@ export const EditRequestCommentResponse = zod.object({
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
+  parentAuthorIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the parent comment author belongs to the approved demo batch; false for top-level comments.",
+    ),
 });
 
 /**
@@ -2864,6 +3123,16 @@ export const DeleteRequestCommentResponse = zod.object({
   createdAt: zod.string().datetime({ offset: true }),
   updatedAt: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
+  isDemo: zod
+    .boolean()
+    .describe(
+      "True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.",
+    ),
+  parentAuthorIsDemo: zod
+    .boolean()
+    .describe(
+      "Whether the parent comment author belongs to the approved demo batch; false for top-level comments.",
+    ),
 });
 
 /**

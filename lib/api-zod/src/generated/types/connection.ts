@@ -19,4 +19,6 @@ export interface Connection {
    */
   requestId: number;
   requestTitle: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }

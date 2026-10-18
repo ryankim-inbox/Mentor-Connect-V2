@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 
 from db import db
+from account_policy import is_demo_user
 
 
 def _utc_now() -> datetime:
@@ -46,7 +47,7 @@ def receive_mentor_ranks() -> dict:
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT occurred_at FROM request_events WHERE kind = 'tracking_started'")
         started = cur.fetchone()["occurred_at"].astimezone(timezone.utc)
-        cur.execute("""SELECT u.id, u.name, count(e.id) AS total,
+        cur.execute("""SELECT u.id, u.name, u.password_hash, count(e.id) AS total,
                          avg(extract(epoch FROM (e.occurred_at - e.request_created_at)) / 3600)
                            FILTER (WHERE e.occurred_at >= e.request_created_at) AS hours
                        FROM users u LEFT JOIN request_events e
@@ -55,6 +56,7 @@ def receive_mentor_ranks() -> dict:
                        WHERE u.role IN ('mentor', 'both')
                        GROUP BY u.id ORDER BY total DESC, u.id""", (started, now))
         mentors = [{"mentorId": row["id"], "mentorName": row["name"],
+                    "isDemo": is_demo_user(row),
                     "totalMatches": row["total"],
                     "avgTimeToMatchHours": float(row["hours"]) if row["hours"] is not None else None}
                    for row in cur.fetchall()]

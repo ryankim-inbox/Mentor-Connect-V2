@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useListMentors } from "@workspace/api-client-react";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 export default function Mentors() {
   const { user } = useAuth();
   const [cursors, setCursors] = useState<(number | undefined)[]>([undefined]);
@@ -11,7 +12,7 @@ export default function Mentors() {
     <section className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-2xl font-bold">Find a mentor</h1>
       <p className="my-4 text-muted-foreground">
-        Verified mentors in your district. Connect through a mentorship request.
+        Find peers in your district who offer mentorship. Connect through a mentorship request.
       </p>
       {mentors.isPending && <p role="status">Loading mentors…</p>}
       {mentors.error && (
@@ -23,13 +24,17 @@ export default function Mentors() {
       {mentors.data?.length === 0 && <p>No mentors found.</p>}
       <ul className="space-y-4">
         {mentors.data?.map((m) => (
-          <li key={m.id} className="rounded-xl border p-5">
-            <Link
-              href={`/profile/${m.id}`}
-              className="font-semibold underline text-primary"
-            >
-              {m.name}
-            </Link>
+          <li key={m.id} className="rounded-xl border p-5 break-words">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={`/profile/${m.id}`}
+                className="font-semibold underline text-primary"
+              >
+                {m.name}
+              </Link>
+              <DemoBadge isDemo={m.isDemo} kind="profile" />
+            </div>
+            <DemoNotice isDemo={m.isDemo} kind="profile" />
             <p>
               {m.role === "both" ? "Mentor & mentee" : "Mentor"} ·{" "}
               {m.districtName}

@@ -25,4 +25,6 @@ export interface MentorDirectoryEntry {
   districtName: string | null;
   /** @nullable */
   bio: string | null;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }

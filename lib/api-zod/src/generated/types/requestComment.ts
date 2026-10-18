@@ -34,4 +34,8 @@ export interface RequestComment {
   updatedAt: string | null;
   /** @nullable */
   deletedAt: string | null;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
+  /** Whether the parent comment author belongs to the approved demo batch; false for top-level comments. */
+  readonly parentAuthorIsDemo: boolean;
 }

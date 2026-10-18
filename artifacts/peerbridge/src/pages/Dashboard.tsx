@@ -8,6 +8,7 @@ import {
   useListDistricts,
 } from "@workspace/api-client-react";
 import { RequestCard } from "@/components/RequestCard";
+import { countyLabel } from "@/lib/district-display";
 import { TagBadge } from "@/components/TagBadge";
 import { releaseSurface } from "@/lib/release-flags";
 
@@ -223,7 +224,7 @@ export default function Dashboard({
                             {d.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {d.county} County
+                            {countyLabel(d.county)}
                           </p>
                         </div>
                         <span className="shrink-0 ml-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">

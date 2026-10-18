@@ -1,4 +1,5 @@
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 import { useState } from "react";
 import { Link } from "wouter";
 import { getGetUserQueryKey, useGetUser } from "@workspace/api-client-react";
@@ -90,9 +91,11 @@ export default function MemberProfile({ id }: { id: string }) {
           name={profile.data.name}
           onBlocked={() => setBlockedId(userId)}
         />
-        <h1 className="text-xl font-bold text-foreground">
+        <h1 className="break-words text-xl font-bold text-foreground">
           {profile.data.name}
         </h1>
+        <DemoBadge isDemo={profile.data.isDemo} kind="profile" />
+        <DemoNotice isDemo={profile.data.isDemo} kind="profile" />
         <ActivityBadge userId={userId} />
         {profile.data.subjects.length > 0 && (
           <div className="mt-4">

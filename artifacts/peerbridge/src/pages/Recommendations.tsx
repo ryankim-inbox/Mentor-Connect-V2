@@ -5,8 +5,10 @@ import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { TagBadge } from "@/components/TagBadge";
 import { releaseSurface } from "@/lib/release-flags";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 
 interface MentorMatch {
+  isDemo: boolean;
   rank: number;
   mentorId: number;
   mentorName: string;
@@ -20,6 +22,7 @@ interface MentorMatch {
 }
 
 interface RecommendationResult {
+  isDemo: boolean;
   questionId: number | null;
   studentId: number | null;
   studentName: string;
@@ -48,6 +51,7 @@ interface BlockStatus {
 type PythonRecord = Record<string, unknown>;
 
 const EMPTY_RESULT: RecommendationResult = {
+  isDemo: false,
   questionId: null,
   studentId: null,
   studentName: "Unknown student",
@@ -154,6 +158,7 @@ function normalizeMatch(rawMatch: unknown, index: number): MentorMatch {
 
   return {
     rank: numberField(match, ["rank"], index + 1) ?? index + 1,
+    isDemo: match.isDemo === true,
     mentorId,
     mentorName: stringField(match, ["mentor_name", "mentorName", "name"], `Mentor ${mentorId}`),
     score,
@@ -172,6 +177,7 @@ function normalizeRecommendation(raw: unknown, questionId: number): Recommendati
 
   return {
     questionId: numberField(record, ["question_id", "questionId"], questionId),
+    isDemo: record.isDemo === true,
     studentId: numberField(record, ["student_id", "studentId"]),
     studentName: stringField(record, ["student_name", "studentName"], "Unknown student"),
     requestedSubject: stringField(record, ["requested_subject", "requestedSubject", "subject"], "Unknown subject"),
@@ -359,6 +365,8 @@ export default function Recommendations() {
           Python matching: {matchStatus.endpointStatus}
         </div>
         <h1 className="text-2xl font-bold text-foreground">Top mentors for you</h1>
+        <DemoBadge isDemo={result.isDemo} kind="post" />
+        <DemoNotice isDemo={result.isDemo} kind="post" />
         <p className="text-muted-foreground mt-1">
           Live results for{" "}
           <span className="font-medium text-foreground">{result.requestedTopic}</span> in{" "}
@@ -497,9 +505,11 @@ export default function Recommendations() {
                       #{m.rank}
                     </span>
                     <span className="text-lg font-semibold text-foreground">{m.mentorName}</span>
+                    <DemoBadge isDemo={m.isDemo} kind="profile" />
                     <span className="text-xs text-muted-foreground">- {m.district}</span>
                   </div>
 
+                  <DemoNotice isDemo={m.isDemo} kind="profile" />
                   <div className="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
                     <p className="text-sm text-foreground leading-relaxed">
                       <span className="font-semibold text-primary">Why this match: </span>

@@ -47,7 +47,7 @@ def test_district_type_and_search_intersection(chat_server, chat_database):
 
 def test_district_rejects_unsupported_type(chat_server):
     with chat_server() as base:
-        status, _ = api(build_opener(), base, "GET", "/api/districts?type=elementary")
+        status, _ = api(build_opener(), base, "GET", "/api/districts?type=individual_school")
 
     assert status == 422
 
@@ -65,3 +65,19 @@ def test_gateway_unified_search_and_omitted_type(backend_database, gateway_serve
     status, rows = api(client, gateway_server, "GET", "/api/districts")
     assert status == 200 and {row["id"] for row in rows} == {1, 2, unified_id}
     assert api(client, gateway_server, "GET", "/api/districts?type=all")[0] == 400
+
+
+def test_elementary_filter_and_all_district_types_through_gateway(backend_database, gateway_server):
+    with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO districts(name,county,type) VALUES (%s,%s,%s),(%s,%s,%s) RETURNING id",
+                    ('Sunnyvale School District', 'Santa Clara', 'elementary',
+                     'Santa Clara Unified School District', 'Santa Clara', 'unified'))
+        elementary_id, unified_id = (row[0] for row in cur.fetchall())
+        conn.commit()
+    client = build_opener()
+    status, rows = api(client, gateway_server, 'GET', '/api/districts?type=elementary&search=Sunnyvale')
+    assert status == 200
+    assert [(row['id'], row['type']) for row in rows] == [(elementary_id, 'elementary')]
+    status, rows = api(client, gateway_server, 'GET', '/api/districts')
+    assert status == 200
+    assert {row['id'] for row in rows} == {1, 2, elementary_id, unified_id}

@@ -11,6 +11,7 @@ as arguments to scheduling.time_dict — inputs, never results.
 """
 
 from db import db
+from account_policy import is_demo_user
 
 from api.adapters.probe import probe_student_call, student_envelope, student_status_envelope
 
@@ -48,6 +49,7 @@ def _user_row_to_dict(row):
         "id": row["id"],
         "name": row["name"],
         "role": row["role"],
+        "isDemo": is_demo_user(row),
         "available_times": list(row["available_times"] or []),
     }
 
@@ -63,11 +65,11 @@ def suggest_times(user_a: int, user_b: int):
     with db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, name, role, available_times FROM users WHERE id = %s", (user_a,)
+            "SELECT id, name, role, available_times, password_hash FROM users WHERE id = %s", (user_a,)
         )
         row_a = cur.fetchone()
         cur.execute(
-            "SELECT id, name, role, available_times FROM users WHERE id = %s", (user_b,)
+            "SELECT id, name, role, available_times, password_hash FROM users WHERE id = %s", (user_b,)
         )
         row_b = cur.fetchone()
 

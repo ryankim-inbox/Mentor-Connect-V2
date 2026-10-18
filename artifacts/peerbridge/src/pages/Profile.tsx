@@ -1,4 +1,5 @@
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 
@@ -32,6 +33,7 @@ export default function Profile() {
               <h1 className="break-words text-xl font-bold text-foreground">{user.name}</h1>
               {!user.isAdmin && user.hasMemberAccess && <ActivityBadge userId={user.id} />}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <DemoBadge isDemo={user.isDemo} kind="profile" />
                 <span className={"inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border " + roleColor}>
                   {roleLabel}
                 </span>
@@ -49,6 +51,7 @@ export default function Profile() {
           </Link>
         </div>
 
+        <DemoNotice isDemo={user.isDemo} kind="profile" />
         {user.bio && <p className="mt-4 text-foreground leading-relaxed">{user.bio}</p>}
 
         {user.subjects.length > 0 && (

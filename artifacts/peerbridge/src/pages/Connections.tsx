@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useConnections, useRequestActivity } from "@/lib/journey-queries";
 import { MessageButton } from "@/lib/chat-navigation";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge } from "@/components/DemoBadge";
 
 export default function Connections() {
   const { user } = useAuth();
@@ -40,6 +41,7 @@ function ConnectionsContent({ userId }: { userId: number }) {
           >
             <div>
               <p className="font-medium">{c.name}</p>
+              <DemoBadge isDemo={c.isDemo} kind="profile" />
               <Link
                 href={`/requests/${c.requestId}`}
                 className="text-sm text-primary"
@@ -80,6 +82,7 @@ function ConnectionsContent({ userId }: { userId: number }) {
             className="block border-t py-3"
           >
             <p className="font-medium text-primary">{r.title}</p>
+            <DemoBadge isDemo={r.isDemo} kind="post" />
             <p className="text-sm text-muted-foreground">
               {r.authorId === userId ? "Your request" : `By ${r.authorName}`} ·{" "}
               {r.status}

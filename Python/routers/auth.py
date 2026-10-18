@@ -8,7 +8,7 @@ import hashlib
 import secrets
 from security import require_user
 from member_access import has_member_access, has_admin_access
-from account_policy import is_synthetic_locked
+from account_policy import is_synthetic_locked, is_demo_user
 from email_delivery import deliver_verification, DeliveryUnavailable
 from email_policy import configured_test_recipient, normalize_mailbox
 
@@ -69,6 +69,7 @@ def format_user(user, district_name):
         "isVerified": user["email_verified_at"] is not None,
         "hasMemberAccess": has_member_access(user),
         "isAdmin": has_admin_access(user),
+        "isDemo": is_demo_user(user),
         "createdAt": user["created_at"].isoformat(),
     }
 

@@ -358,6 +358,7 @@ paths:
             enum:
               - high_school
               - unified
+              - elementary
         - name: search
           in: query
           schema:
@@ -1944,7 +1945,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PyEnvelope"
+                $ref: "#/components/schemas/SchedulingSuggestionsEnvelope"
           headers:
             X-Request-Id:
               $ref: "#/components/headers/X-Request-Id"
@@ -2980,6 +2981,10 @@ components:
           type: string
         isAdmin:
           type: boolean
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - id
         - email
@@ -2991,6 +2996,7 @@ components:
         - createdAt
         - subjects
         - isAdmin
+        - isDemo
     UpdateUserBody:
       type: object
       description: Allowlisted self-profile fields. Other fields are rejected by the gateway.
@@ -3106,6 +3112,14 @@ components:
           type: array
           items:
             type: string
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key.
+        matchedUserIsDemo:
+          type: boolean
+          readOnly: true
+          description: Whether the matched user belongs to the approved demo batch; false when there is no matched user.
       required:
         - id
         - authorId
@@ -3119,6 +3133,8 @@ components:
         - tags
         - status
         - createdAt
+        - isDemo
+        - matchedUserIsDemo
     CreateRequestBody:
       type: object
       properties:
@@ -3235,11 +3251,16 @@ components:
           type: string
         createdAt:
           type: string
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - id
         - blockedUserId
         - blockedUserName
         - createdAt
+        - isDemo
     StatsOverview:
       type: object
       properties:
@@ -3484,11 +3505,16 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - id
         - name
         - subjects
         - createdAt
+        - isDemo
     StudentModule:
       type: object
       properties:
@@ -3575,7 +3601,7 @@ components:
             $ref: "#/components/schemas/MentorActivityRow"
     MentorActivityRow:
       type: object
-      required: [ mentorId, mentorName, totalMatches, avgTimeToMatchHours ]
+      required: [ mentorId, mentorName, totalMatches, avgTimeToMatchHours, isDemo ]
       properties:
         mentorId:
           type: integer
@@ -3589,6 +3615,10 @@ components:
           minimum: 0
           description: Mean nonnegative creation-to-match interval for observed events. Null means no valid durations;
             recorded matches are still counted.
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
     WeeklyMatchesEnvelope:
       allOf:
         - $ref: "#/components/schemas/PyEnvelope"
@@ -3669,6 +3699,14 @@ components:
         matches:
           type: array
           items: {}
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
+        studentIsDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
       required:
         - success
         - status
@@ -3702,6 +3740,10 @@ components:
         topReasons:
           type: array
           items: *a1
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
       required:
         - userId
         - name
@@ -3710,6 +3752,7 @@ components:
         - status
         - lastReportedAt
         - topReasons
+        - isDemo
       additionalProperties: false
     AdminEnvelope:
       type: object
@@ -3747,6 +3790,10 @@ components:
           type: string
           format: date-time
         updatedAt: *a12
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - id
         - requestId
@@ -3755,6 +3802,7 @@ components:
         - status
         - createdAt
         - updatedAt
+        - isDemo
     ApplicationAction:
       type: object
       properties:
@@ -3801,6 +3849,14 @@ components:
           type:
             - string
             - "null"
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
+        parentAuthorIsDemo:
+          type: boolean
+          readOnly: true
+          description: Whether the parent comment author belongs to the approved demo batch; false for top-level comments.
       required:
         - id
         - requestId
@@ -3812,6 +3868,8 @@ components:
         - createdAt
         - updatedAt
         - deletedAt
+        - isDemo
+        - parentAuthorIsDemo
     CreateCommentBody:
       type: object
       properties:
@@ -3843,11 +3901,16 @@ components:
           type: string
         requestId: *a11
         requestTitle: *a12
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - userId
         - name
         - requestId
         - requestTitle
+        - isDemo
     ConfirmVerificationBody:
       type: object
       additionalProperties: false
@@ -3886,6 +3949,10 @@ components:
           type:
             - string
             - "null"
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: True only for the approved synthetic demo batch, derived from canonical server-written identity metadata.
       required:
         - id
         - name
@@ -3894,6 +3961,7 @@ components:
         - districtId
         - districtName
         - bio
+        - isDemo
     ModerateReportBody:
       type: object
       additionalProperties: false
@@ -3982,6 +4050,18 @@ components:
             - "null"
           maxLength: 200
           description: Server-captured title retained for moderation after request deletion.
+        reporterIsDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
+        reportedUserIsDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
+        requestIsDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for the canonical identity or request.
       required:
         - id
         - reporterId
@@ -3998,6 +4078,9 @@ components:
         - targetType
         - requestId
         - requestTitle
+        - reporterIsDemo
+        - reportedUserIsDemo
+        - requestIsDemo
     EditCommentBody:
       type: object
       additionalProperties: false
@@ -4050,6 +4133,46 @@ components:
         - distinctPartners
         - rank
         - tier
+    SchedulingUser:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        available_times:
+          type: array
+          items:
+            type: string
+        isDemo:
+          type: boolean
+          readOnly: true
+          description: Server-derived approved demo batch marker for this canonical user.
+      required: [id, name, role, available_times, isDemo]
+    SchedulingSuggestions:
+      type: object
+      properties:
+        userA:
+          $ref: "#/components/schemas/SchedulingUser"
+        userB:
+          $ref: "#/components/schemas/SchedulingUser"
+        overlap:
+          type: array
+          items:
+            type: string
+      required: [userA, userB, overlap]
+    SchedulingSuggestionsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/PyEnvelope"
+        - type: object
+          properties:
+            data:
+              anyOf:
+                - $ref: "#/components/schemas/SchedulingSuggestions"
+                - type: "null"
   securitySchemes:
     cookieAuth:
       type: apiKey
