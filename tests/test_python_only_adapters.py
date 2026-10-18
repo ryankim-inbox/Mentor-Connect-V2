@@ -201,7 +201,7 @@ def test_malformed_numeric_id_is_invalid_output(monkeypatch, mentor_id):
     patch_student_module(
         monkeypatch,
         fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
-            {"mentorId": mentor_id, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None, "debug": {
+            {"mentorId": mentor_id, "mentorName": "Ada", "isDemo": False, "totalMatches": 0, "avgTimeToMatchHours": None, "debug": {
                 "values": (float("inf"), [float("-inf"), {"value": float("nan")}]),
             }}
         ]}),
@@ -237,7 +237,7 @@ def test_zero_subject_count_is_preserved(monkeypatch):
 
 def test_zero_mentor_values_are_preserved(monkeypatch):
     activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [{
-        "mentorId": 0, "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": 0,
+        "mentorId": 0, "mentorName": "Ada", "isDemo": False, "totalMatches": 0, "avgTimeToMatchHours": 0,
     }]}
     patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
     envelope = analysis_adapter.get_mentor_response_rates()
@@ -246,7 +246,7 @@ def test_zero_mentor_values_are_preserved(monkeypatch):
 
 
 def test_empty_activity_and_null_duration_are_successful(monkeypatch):
-    for mentors in [[], [{"mentorId": 1, "mentorName": "Ada", "totalMatches": 2,
+    for mentors in [[], [{"mentorId": 1, "mentorName": "Ada", "isDemo": False, "totalMatches": 2,
                           "avgTimeToMatchHours": None}]]:
         activity = {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": mentors}
         patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: activity))
@@ -268,7 +268,7 @@ def test_weekly_coverage_and_null_gaps_are_preserved(monkeypatch):
 @pytest.mark.parametrize("field,value", [("totalMatches", float("inf")),
     ("avgTimeToMatchHours", float("nan")), ("avgTimeToMatchHours", -1)])
 def test_invalid_activity_numbers_fail_without_fallback(monkeypatch, field, value):
-    row = {"mentorId": 1, "mentorName": "Ada", "totalMatches": 2, "avgTimeToMatchHours": 3}
+    row = {"mentorId": 1, "mentorName": "Ada", "isDemo": False, "totalMatches": 2, "avgTimeToMatchHours": 3}
     row[field] = value
     patch_student_module(monkeypatch, fake_module("analysis", receive_mentor_ranks=lambda: {
         "trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [row]}))
@@ -298,7 +298,7 @@ def test_unexpected_normalizer_failure_remains_visible(monkeypatch):
     patch_student_module(
         monkeypatch,
         fake_module("analysis", receive_mentor_ranks=lambda: {"trackingStartedAt": "2025-01-01T12:00:00Z", "mentors": [
-            {"mentorId": BrokenId(), "mentorName": "Ada", "totalMatches": 0, "avgTimeToMatchHours": None}
+            {"mentorId": BrokenId(), "mentorName": "Ada", "isDemo": False, "totalMatches": 0, "avgTimeToMatchHours": None}
         ]}),
     )
     with pytest.raises(RuntimeError, match="unexpected normalization failure"):
@@ -421,7 +421,8 @@ def test_scheduling_suggestions_preserve_users_and_overlap(monkeypatch, overlap)
     patch_student_module(monkeypatch, fake_module("scheduling", time_dict=lambda student, teacher: overlap))
     envelope = scheduling_adapter.suggest_times(1, 2)
     assert envelope["success"] is True
-    assert envelope["data"] == {"userA": USER_A, "userB": USER_B, "overlap": overlap}
+    assert envelope["data"] == {"userA": {**USER_A, "isDemo": False},
+                                "userB": {**USER_B, "isDemo": False}, "overlap": overlap}
 
 
 # Reports and moderation must never replace module failures with SQL results.

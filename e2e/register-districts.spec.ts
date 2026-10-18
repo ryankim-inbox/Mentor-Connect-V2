@@ -34,7 +34,7 @@ test("districts show loading before options arrive", async ({ page }) => {
     registerCalls++;
     return route.fulfill({ status: 500, json: { error: "unexpected registration" } });
   });
-  await page.route("**/api/districts?**", async (route) => {
+  await page.route("**/api/districts**", async (route) => {
     await response.promise;
     await route.fulfill({ json: [district] });
   });
@@ -50,7 +50,7 @@ test("districts show loading before options arrive", async ({ page }) => {
   }
   await expect(page.getByLabel("District choices")).toBeEnabled();
   await expect(page.getByText("Loading districts...")).toHaveCount(0);
-  await expect(page.getByRole("option", { name: "School A (Test County)" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "School A (Test County · High school)" })).toHaveCount(1);
 });
 
 test("district failure can be retried without losing form data", async ({ page }) => {
@@ -60,7 +60,7 @@ test("district failure can be retried without losing form data", async ({ page }
     registerCalls++;
     return route.fulfill({ status: 500, json: {} });
   });
-  await page.route("**/api/districts?**", (route) => route.fulfill(
+  await page.route("**/api/districts**", (route) => route.fulfill(
     unavailable ? { status: 504, json: { error: "upstream_timeout" } } : { json: [district] },
   ));
   await page.goto("/register");
@@ -71,7 +71,7 @@ test("district failure can be retried without losing form data", async ({ page }
   unavailable = false;
   await page.getByRole("button", { name: "Retry districts" }).click();
   await expect(page.getByLabel("District choices")).toBeEnabled();
-  await expect(page.getByRole("option", { name: "School A (Test County)" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "School A (Test County · High school)" })).toHaveCount(1);
   await expect(page.getByText("Couldn't load school districts. Please try again.")).toHaveCount(0);
   await expect(page.getByLabel("Full name")).toHaveValue("Tester");
   await expect(page.getByLabel("School email")).toHaveValue("tester@school.edu");
@@ -80,7 +80,7 @@ test("district failure can be retried without losing form data", async ({ page }
 });
 
 test("successful empty results distinguish search from unavailable data", async ({ page }) => {
-  await page.route("**/api/districts?**", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/districts**", (route) => route.fulfill({ json: [] }));
   await page.goto("/register");
   await expect(page.getByText("No school districts are available.")).toBeVisible();
   await page.getByLabel("School district", { exact: true }).fill("missing");
@@ -91,7 +91,7 @@ test("successful empty results distinguish search from unavailable data", async 
 });
 
 test("clearing search restores options and permits selection", async ({ page }) => {
-  await page.route("**/api/districts?**", (route) => route.fulfill({
+  await page.route("**/api/districts**", (route) => route.fulfill({
     json: new URL(route.request().url()).searchParams.has("search") ? [] : [district],
   }));
   await page.goto("/register");
@@ -99,14 +99,14 @@ test("clearing search restores options and permits selection", async ({ page }) 
   await page.getByLabel("School district", { exact: true }).fill("missing");
   await expect(page.getByText("No districts match your search.")).toBeVisible();
   await page.getByLabel("School district", { exact: true }).clear();
-  await expect(page.getByRole("option", { name: "School A (Test County)" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "School A (Test County · High school)" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
   await page.getByLabel("District choices").selectOption("1");
   await expect(page.getByRole("button", { name: "Create account" })).toBeEnabled();
 });
 
 test("changing search clears a previous district selection", async ({ page }) => {
-  await page.route("**/api/districts?**", (route) => route.fulfill({ json: [district] }));
+  await page.route("**/api/districts**", (route) => route.fulfill({ json: [district] }));
   await page.goto("/register");
   await fillAccount(page);
   await page.getByLabel("District choices").selectOption("1");
@@ -119,7 +119,7 @@ test("changing search clears a previous district selection", async ({ page }) =>
 test("late search responses cannot replace current choices", async ({ page }) => {
   const older = deferred();
   const delivered = deferred();
-  await page.route("**/api/districts?**", async (route) => {
+  await page.route("**/api/districts**", async (route) => {
     const search = new URL(route.request().url()).searchParams.get("search");
     if (search === "A") {
       await older.promise;
@@ -137,13 +137,13 @@ test("late search responses cannot replace current choices", async ({ page }) =>
   await firstRequest;
   try {
     await page.getByLabel("School district", { exact: true }).fill("B");
-    await expect(page.getByRole("option", { name: "School B (Test County)" })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: "School B (Test County · High school)" })).toHaveCount(1);
   } finally {
     older.resolve();
   }
   await delivered.promise;
-  await expect(page.getByRole("option", { name: "School A (Test County)" })).toHaveCount(0);
-  await expect(page.getByRole("option", { name: "School B (Test County)" })).toHaveCount(1);
+  await expect(page.getByRole("option", { name: "School A (Test County · High school)" })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "School B (Test County · High school)" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
 });
 
@@ -155,7 +155,7 @@ test("background refresh failure prevents submitting a cached selection", async 
     registerCalls++;
     return route.fulfill({ status: 500, json: {} });
   });
-  await page.route("**/api/districts?**", (route) => route.fulfill(
+  await page.route("**/api/districts**", (route) => route.fulfill(
     unavailable ? { status: 504, json: { error: "upstream_timeout" } } : { json: [district] },
   ));
   await page.goto("/register");

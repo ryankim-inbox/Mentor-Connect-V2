@@ -29,4 +29,8 @@ export interface MentorshipRequest {
   createdAt: string;
   /** Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00'). */
   preferredTimes?: string[];
+  /** True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key. */
+  readonly isDemo: boolean;
+  /** Whether the matched user belongs to the approved demo batch; false when there is no matched user. */
+  readonly matchedUserIsDemo: boolean;
 }

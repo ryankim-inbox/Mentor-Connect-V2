@@ -6,6 +6,7 @@ from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional
 from security import require_admin
 from db import db
+from account_policy import is_demo_user, is_demo_request
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 
@@ -88,12 +89,13 @@ def list_blocks(request: Request):
         blocks = cur.fetchall()
         result = []
         for block in blocks:
-            cur.execute("SELECT name FROM users WHERE id = %s", (block["blocked_user_id"],))
+            cur.execute("SELECT name, password_hash FROM users WHERE id = %s", (block["blocked_user_id"],))
             blocked_user = cur.fetchone()
             result.append({
                 "id": block["id"],
                 "blockedUserId": block["blocked_user_id"],
                 "blockedUserName": blocked_user["name"] if blocked_user else "Unknown",
+                "isDemo": is_demo_user(blocked_user),
                 "createdAt": block["created_at"].isoformat(),
             })
         return result
@@ -148,15 +150,22 @@ class ModerateReportBody(BaseModel):
 
 
 def _report(cur, report_id):
-    cur.execute('''SELECT r.*, a.name AS reporter_name,b.name AS reported_user_name
+    cur.execute('''SELECT r.*, a.name AS reporter_name,b.name AS reported_user_name,
+                          a.password_hash AS reporter_password_hash,b.password_hash AS reported_password_hash,
+                          q.request AS request_key,qa.password_hash AS request_author_password_hash
                    FROM reports r JOIN users a ON a.id=r.reporter_id JOIN users b ON b.id=r.reported_user_id
+                   LEFT JOIN requests q ON q.id=r.request_id LEFT JOIN users qa ON qa.id=q.author_id
                    WHERE r.id=%s''',(report_id,))
     row=cur.fetchone()
     if not row:
         raise HTTPException(404,'Report not found')
     return {'id':row['id'],'reporterId':row['reporter_id'],'reporterName':row['reporter_name'],
+            'reporterIsDemo':is_demo_user({'password_hash':row['reporter_password_hash']}),
             'reportedUserId':row['reported_user_id'],'reportedUserName':row['reported_user_name'],
+            'reportedUserIsDemo':is_demo_user({'password_hash':row['reported_password_hash']}),
             'targetType':row['target_type'],'requestId':row['request_id'],'requestTitle':row['request_title'],
+            'requestIsDemo':is_demo_request({'request':row['request_key']},
+                                           {'password_hash':row['request_author_password_hash']}),
             'reason':row['reason'],'description':row['description'],'status':row['status'],
             'note':row['note'],'reviewedBy':row['reviewed_by'],
             'reviewedAt':row['reviewed_at'].isoformat() if row['reviewed_at'] else None,

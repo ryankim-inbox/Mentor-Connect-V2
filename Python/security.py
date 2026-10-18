@@ -2,7 +2,7 @@
 from fastapi import HTTPException, Request
 from db import db
 from member_access import has_member_access, has_admin_access, has_student_access
-from account_policy import is_synthetic_locked
+from account_policy import is_synthetic_locked, is_demo_user
 
 
 def current_user(request):
@@ -59,4 +59,4 @@ def require_admin(request: Request):
 def public_user(user):
     return {'id':user['id'], 'name':user['name'], 'role':user['role'],
             'subjects':user['subjects'] or [], 'districtId':user['district_id'],
-            'districtName':user['district_name'], 'bio':user['bio']}
+            'districtName':user['district_name'], 'bio':user['bio'], 'isDemo':is_demo_user(user)}

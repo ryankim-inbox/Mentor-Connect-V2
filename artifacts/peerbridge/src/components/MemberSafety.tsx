@@ -9,6 +9,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import ReportModal from "./ReportModal";
+import { DemoBadge } from "./DemoBadge";
 
 export function MemberSafety({
   userId,
@@ -39,7 +40,7 @@ export function MemberSafety({
   )
     return null;
   return (
-    <div className="mt-5 space-x-3">
+    <div className="my-4 flex flex-wrap gap-3">
       <button
         onClick={() => setReport(true)}
         className="rounded-lg border px-3 py-2"
@@ -105,7 +106,10 @@ export function BlockedMembers() {
             key={b.id}
             className="my-3 flex items-center justify-between gap-4"
           >
-            <span>{b.blockedUserName}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              {b.blockedUserName}
+              <DemoBadge isDemo={b.isDemo} kind="profile" />
+            </span>
             <button
               disabled={unblock.isPending}
               onClick={() => unblock.mutate(b.blockedUserId)}

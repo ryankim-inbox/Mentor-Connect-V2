@@ -42,4 +42,8 @@ export interface MatchingResult {
    */
   limit: number;
   matches: unknown[];
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo?: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly studentIsDemo?: boolean;
 }

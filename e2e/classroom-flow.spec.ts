@@ -25,7 +25,7 @@ test("administrator learning routes load their required APIs through the built g
   await signIn(page,"admin");
   const routes = [
     ["/dashboard", "Welcome back, Classroom", ["/api/stats/overview", "/api/requests", "/api/districts"]],
-    ["/districts", "High School District Channels", ["/api/districts"]],
+    ["/districts", "School District Channels", ["/api/districts"]],
     ["/requests", "Browse Mentorship Requests", ["/api/requests", "/api/tags"]],
     ["/recommendations", "Top mentors for you", ["/api/practice/matching/1", "/api/practice/blocks/status"]],
     ["/practice-lab", "Python Practice Lab", ["/api/practice/status", "/api/practice/locations/status", "/api/practice/blocks/status"]],

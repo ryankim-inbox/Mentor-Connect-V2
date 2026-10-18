@@ -17,4 +17,6 @@ export interface MentorActivityRow {
    * @nullable
    */
   avgTimeToMatchHours: number | null;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo: boolean;
 }

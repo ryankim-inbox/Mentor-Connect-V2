@@ -103,14 +103,14 @@ const server = createServer(async (req, res) => {
         const prior = comments.find(c => c.clientCommentId === body.clientCommentId && c.authorId === user.id && c.requestId === item.id);
         if (prior) return send(201, prior);
         const parent = comments.find(c => c.id === body.parentId);
-        const comment = { id: comments.length+1, requestId:item.id, authorId:user.id, authorName:user.name, parentId:body.parentId??null, parentAuthorName:parent?.authorName??null, body:body.body, clientCommentId:body.clientCommentId, updatedAt:null, deletedAt:null, createdAt:new Date().toISOString() };
+        const comment = { id: comments.length+1, requestId:item.id, authorId:user.id, authorName:user.name, isDemo:false, parentId:body.parentId??null, parentAuthorName:parent?.authorName??null, parentAuthorIsDemo:false, body:body.body, clientCommentId:body.clientCommentId, updatedAt:null, deletedAt:null, createdAt:new Date().toISOString() };
         comments.push(comment); return send(201,comment);
       }
       if (req.method === 'GET') return send(200, applications.filter(a => a.requestId === item.id && (item.authorId === user.id || a.applicantId === user.id)).reverse());
       if (req.method === 'POST') {
         let application = applications.find(a => a.requestId === item.id && a.applicantId === user.id);
         if (application?.status === 'cancelled') application.status = 'pending';
-        if (!application) { application = {id:applications.length+1,requestId:item.id,applicantId:user.id,applicantName:user.name,status:'pending',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; applications.push(application); }
+        if (!application) { application = {id:applications.length+1,requestId:item.id,applicantId:user.id,applicantName:user.name,isDemo:false,status:'pending',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}; applications.push(application); }
         return send(200,application);
       }
       const application = applications.find(a => a.id === Number(interaction[3]));
@@ -122,7 +122,7 @@ const server = createServer(async (req, res) => {
       application.status={accept:'accepted',reject:'rejected',cancel:'cancelled'}[body.action];
       return send(200,application);
     }
-    if(path==='/api/connections') return send(200,requests.filter(r=>r.status==='matched'&&(r.authorId===user.id||r.matchedUserId===user.id)).map(r=>({userId:r.authorId===user.id?r.matchedUserId:r.authorId,name:r.authorId===user.id?r.matchedUserName:r.authorName,requestId:r.id,requestTitle:r.title})));
+    if(path==='/api/connections') return send(200,requests.filter(r=>r.status==='matched'&&(r.authorId===user.id||r.matchedUserId===user.id)).map(r=>({userId:r.authorId===user.id?r.matchedUserId:r.authorId,name:r.authorId===user.id?r.matchedUserName:r.authorName,isDemo:false,requestId:r.id,requestTitle:r.title})));
     if(path==='/api/request-activity') return send(200,requests.filter(r=>r.authorId===user.id||r.matchedUserId===user.id||applications.some(a=>a.requestId===r.id&&a.applicantId===user.id)));
     const requestMatch = path.match(/^\/api\/requests\/(\d+)(\/match)?$/);
     if (requestMatch) {

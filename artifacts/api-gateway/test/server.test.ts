@@ -101,6 +101,7 @@ test("forwards one valid request from every REST family with exact method, targe
           id: 2,
           email: "private@example.edu",
           name: "Student Two",
+          isDemo: false,
           bio: "private",
           subjects: ["Science"],
           createdAt: "2026-08-27T00:00:00+00:00",

@@ -11,4 +11,6 @@ export interface BlockedUser {
   blockedUserId: number;
   blockedUserName: string;
   createdAt: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }

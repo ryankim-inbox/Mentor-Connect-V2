@@ -1,109 +1,199 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useListDistricts, getListDistrictsQueryKey } from "@workspace/api-client-react";
+import {
+  useListDistricts,
+  getListDistrictsQueryKey,
+  type District,
+  type ListDistrictsParams,
+} from "@workspace/api-client-react";
+import { countyLabel, districtTypeLabel } from "@/lib/district-display";
 
 export default function Districts() {
   const [search, setSearch] = useState("");
-
+  const [type, setType] = useState<
+    NonNullable<ListDistrictsParams["type"]> | "all"
+  >("all");
+  const trimmedSearch = search.trim();
+  const hasFilters = !!trimmedSearch || type !== "all";
   const params = {
-    type: "high_school" as const,
-    ...(search ? { search } : {}),
+    ...(type !== "all" ? { type } : {}),
+    ...(trimmedSearch ? { search: trimmedSearch } : {}),
   };
-
-  const { data: districts, isLoading } = useListDistricts(params, {
-    query: { queryKey: getListDistrictsQueryKey(params) }
+  const {
+    data: districts,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useListDistricts(params, {
+    query: { queryKey: getListDistrictsQueryKey(params) },
   });
-
-  const santaClaraDistricts = districts?.filter(d => d.county === "Santa Clara") ?? [];
-  const alamedaDistricts = districts?.filter(d => d.county === "Alameda") ?? [];
+  const groups = new Map<string, District[]>();
+  for (const district of districts ?? []) {
+    const county = countyLabel(district.county);
+    const group = groups.get(county) ?? [];
+    group.push(district);
+    groups.set(county, group);
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">High School District Channels</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          School District Channels
+        </h1>
         <p className="text-muted-foreground mt-1">
-          Bay Area school districts near Cupertino and Fremont — find yours to connect with nearby students.
+          Browse districts by county to connect with nearby students. Channels
+          represent districts, not individual schools.
         </p>
       </div>
-
-      <input
-        type="search"
-        placeholder="Search districts by name..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-md px-4 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition mb-8"
-      />
-
+      <div className="flex flex-col gap-4 sm:flex-row mb-8">
+        <div className="w-full sm:max-w-md">
+          <label
+            htmlFor="district-search"
+            className="block text-sm font-medium mb-2"
+          >
+            Search districts
+          </label>
+          <input
+            id="district-search"
+            type="search"
+            placeholder="Search districts by name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-4 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="district-type"
+            className="block text-sm font-medium mb-2"
+          >
+            District type
+          </label>
+          <select
+            id="district-type"
+            value={type}
+            onChange={(e) => setType(e.target.value as typeof type)}
+            className="w-full px-4 py-2.5 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            <option value="all">All district types</option>
+            <option value="high_school">High school</option>
+            <option value="unified">Unified</option>
+            <option value="elementary">TK–8</option>
+          </select>
+        </div>
+      </div>
       {isLoading && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-24 bg-card border border-card-border rounded-xl animate-pulse" />
-          ))}
+        <div role="status">
+          <p className="text-sm text-muted-foreground mb-4">
+            Loading districts…
+          </p>
+          <div
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
+            aria-hidden="true"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-32 bg-card border border-card-border rounded-xl animate-pulse"
+              />
+            ))}
+          </div>
         </div>
       )}
-
-      {!isLoading && districts && (
+      {isError && (
+        <div
+          role="alert"
+          className="rounded-xl border border-card-border bg-card p-5"
+        >
+          <p>Couldn't load school districts. Please try again.</p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="mt-3 text-primary underline disabled:opacity-50"
+          >
+            Retry districts
+          </button>
+        </div>
+      )}
+      {!isLoading && !isError && districts && (
         <>
-          {!search && (
-            <>
-              <DistrictGroup title="Santa Clara County" subtitle="Cupertino, Sunnyvale, San Jose, Palo Alto area" districts={santaClaraDistricts} />
-              <DistrictGroup title="Alameda County" subtitle="Fremont, Newark, Hayward, Castro Valley area" districts={alamedaDistricts} />
-            </>
+          <p className="text-sm text-muted-foreground mb-4" role="status">
+            {districts.length} district{districts.length !== 1 ? "s" : ""} found
+          </p>
+          {districts.length === 0 && (
+            <div className="rounded-xl border border-card-border bg-card p-6 text-center">
+              <p className="text-muted-foreground">
+                {hasFilters
+                  ? "No districts match your filters."
+                  : "No school districts are available."}
+              </p>
+              {hasFilters && (
+                <button
+                  type="button"
+                  className="mt-3 text-primary underline"
+                  onClick={() => {
+                    setSearch("");
+                    setType("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
           )}
-          {search && (
-            <>
-              <p className="text-sm text-muted-foreground mb-4">{districts.length} district{districts.length !== 1 ? "s" : ""} found</p>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {districts.map((d) => <DistrictCard key={d.id} district={d} />)}
-              </div>
-            </>
-          )}
+          {[...groups]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([county, rows]) => (
+              <section key={county} className="mb-10">
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  {county}
+                </h2>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {rows.map((district) => (
+                    <DistrictCard key={district.id} district={district} />
+                  ))}
+                </div>
+              </section>
+            ))}
         </>
       )}
     </div>
   );
 }
 
-function DistrictGroup({ title, subtitle, districts }: {
-  title: string;
-  subtitle: string;
-  districts: { id: number; name: string; county: string; type: string; memberCount: number; openRequestCount: number }[];
-}) {
-  if (districts.length === 0) return null;
+function DistrictCard({ district: d }: { district: District }) {
   return (
-    <div className="mb-10">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+    <Link
+      href={`/districts/${d.id}`}
+      className="block bg-card border border-card-border rounded-xl p-5 hover:shadow-md transition-shadow group"
+    >
+      <div className="flex flex-wrap items-start gap-2 mb-2">
+        <h3 className="min-w-0 flex-1 basis-36 font-semibold text-foreground group-hover:text-primary transition-colors text-sm leading-snug break-words">
+          {d.name}
+        </h3>
+        <span className="shrink-0 text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
+          {districtTypeLabel(d.type)}
+        </span>
       </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {districts.map((d) => <DistrictCard key={d.id} district={d} />)}
-      </div>
-    </div>
-  );
-}
-
-function DistrictCard({ district: d }: { district: { id: number; name: string; county: string; type: string; memberCount: number; openRequestCount: number } }) {
-  return (
-    <Link href={`/districts/${d.id}`}>
-      <div className="bg-card border border-card-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer group">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors text-sm leading-snug flex-1">
-            {d.name}
-          </h3>
-          <span className="shrink-0 ml-2 text-xs bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full">
-            HS
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">{d.county} County</p>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>
-            <span className="font-semibold text-foreground">{d.memberCount}</span> members
-          </span>
-          <span>
-            <span className="font-semibold text-primary">{d.openRequestCount}</span> open
-          </span>
-        </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        {countyLabel(d.county)}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          <span className="font-semibold text-foreground tabular-nums">
+            {d.memberCount.toLocaleString()}
+          </span>{" "}
+          members
+        </span>
+        <span>
+          <span className="font-semibold text-primary tabular-nums">
+            {d.openRequestCount.toLocaleString()}
+          </span>{" "}
+          open
+        </span>
       </div>
     </Link>
   );

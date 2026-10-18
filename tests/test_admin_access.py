@@ -28,8 +28,8 @@ def test_private_profile_safe_mentor_directory_and_blocks(backend_database,backe
         assert api(build_opener(),base,'GET','/api/users/501')[0] == 401
         status,peer=api(student,base,'GET','/api/users/501')
         assert status == 200
-        public={'id','name','role','subjects','districtId','districtName','bio'}
-        assert set(peer) == {"id","name","subjects","createdAt"}
+        public={'id','name','role','subjects','districtId','districtName','bio','isDemo'}
+        assert set(peer) == {"id","name","subjects","createdAt","isDemo"}
         status,mentors=api(student,base,'GET','/api/mentors')
         assert status == 200
         assert [m['id'] for m in mentors] == [501]

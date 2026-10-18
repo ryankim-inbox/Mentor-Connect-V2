@@ -1,4 +1,5 @@
 import { trimDisplayName } from "@/lib/display-name";
+import { countyLabel, districtTypeLabel } from "@/lib/district-display";
 import { useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useRegister, useListDistricts } from "@workspace/api-client-react";
@@ -62,9 +63,9 @@ export default function Register() {
     isFetching: districtsFetching,
     refetch: retryDistricts,
   } = useListDistricts(
-    { type: "high_school", search: districtSearch || undefined },
+    { search: districtSearch || undefined },
     {
-      query: { queryKey: ["listDistricts", "high_school", districtSearch] },
+      query: { queryKey: ["listDistricts", districtSearch] },
     },
   );
   const districtsUnavailable = districtsPending || districtsFetching || districtsError;
@@ -252,7 +253,7 @@ export default function Register() {
                 </option>
                 {districts?.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.name} ({d.county} County)
+                    {d.name} ({countyLabel(d.county)} · {districtTypeLabel(d.type)})
                   </option>
                 ))}
               </select>

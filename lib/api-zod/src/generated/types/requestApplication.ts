@@ -27,4 +27,6 @@ export interface RequestApplication {
   status: RequestApplicationStatus;
   createdAt: string;
   updatedAt: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }

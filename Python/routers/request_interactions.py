@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from security import require_member_user, require_student_user
 from member_access import has_admin_access
+from account_policy import is_demo_user
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 from db import db
@@ -45,11 +46,12 @@ def _request(cur, request_id, *, lock=False):
 
 
 def _application(cur, app_id):
-    cur.execute("""SELECT a.*, u.name FROM request_applications a
+    cur.execute("""SELECT a.*, u.name, u.password_hash FROM request_applications a
                    JOIN users u ON u.id=a.applicant_id WHERE a.id=%s""", (app_id,))
     a = cur.fetchone()
     return {"id": a["id"], "requestId": a["request_id"], "applicantId": a["applicant_id"],
             "applicantName": a["name"], "status": a["status"],
+            "isDemo": is_demo_user(a),
             "createdAt": a["created_at"].isoformat(), "updatedAt": a["updated_at"].isoformat()}
 
 
@@ -123,13 +125,16 @@ def act_on_application(request_id: PositiveInt, application_id: PositiveInt, bod
 
 
 def _comment(cur, comment_id):
-    cur.execute("""SELECT c.*, u.name, p.author_id AS parent_author_id, pu.name AS parent_author_name
+    cur.execute("""SELECT c.*, u.name, u.password_hash, p.author_id AS parent_author_id,
+                          pu.name AS parent_author_name, pu.password_hash AS parent_password_hash
                    FROM request_comments c JOIN users u ON u.id=c.author_id
                    LEFT JOIN request_comments p ON p.id=c.parent_id LEFT JOIN users pu ON pu.id=p.author_id
                    WHERE c.id=%s""", (comment_id,))
     c = cur.fetchone()
     return {"id": c["id"], "requestId": c["request_id"], "authorId": c["author_id"], "authorName": c["name"],
+            "isDemo": is_demo_user(c),
             "parentId": c["parent_id"], "parentAuthorName": c["parent_author_name"],
+            "parentAuthorIsDemo": is_demo_user({'password_hash': c['parent_password_hash']}),
             "body": "" if c["deleted_at"] else c["body"], "createdAt": c["created_at"].isoformat(),
             "updatedAt": c["updated_at"].isoformat() if c["updated_at"] else None,
             "deletedAt": c["deleted_at"].isoformat() if c["deleted_at"] else None}
@@ -185,7 +190,7 @@ def list_connections(request: Request, limit: PageLimit = 50, beforeId: BeforeId
     user_id = _require_user(request)
     with db() as conn:
         cur = conn.cursor()
-        cur.execute("""SELECT DISTINCT ON (u.id) u.id, u.name, r.id AS request_id, r.title
+        cur.execute("""SELECT DISTINCT ON (u.id) u.id, u.name, u.password_hash, r.id AS request_id, r.title
                        FROM requests r JOIN users u ON u.id=CASE WHEN r.author_id=%s THEN r.matched_user_id ELSE r.author_id END
                        WHERE r.status='matched' AND (r.author_id=%s OR r.matched_user_id=%s)
                        AND (%s IS NULL OR u.id < %s) AND u.id<>%s
@@ -193,7 +198,7 @@ def list_connections(request: Request, limit: PageLimit = 50, beforeId: BeforeId
                          (b.blocker_id=%s AND b.blocked_user_id=u.id) OR (b.blocker_id=u.id AND b.blocked_user_id=%s))
                        ORDER BY u.id DESC, r.id DESC LIMIT %s""",
                     (user_id, user_id, user_id, beforeId, beforeId, user_id, user_id, user_id, limit))
-        return [{"userId": c["id"], "name": c["name"], "requestId": c["request_id"], "requestTitle": c["title"]} for c in cur.fetchall()]
+        return [{"userId": c["id"], "name": c["name"], "isDemo": is_demo_user(c), "requestId": c["request_id"], "requestTitle": c["title"]} for c in cur.fetchall()]
 
 
 @router.get("/request-activity", dependencies=[Depends(require_student_user)])

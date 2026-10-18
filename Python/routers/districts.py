@@ -27,7 +27,7 @@ def list_districts(type: Optional[str] = None, search: Optional[str] = None):
     conditions = []
     params = []
     if type is not None:
-        if type not in ("high_school", "unified"):
+        if type not in ("high_school", "unified", "elementary"):
             raise HTTPException(status_code=422, detail="Invalid district type")
         conditions.append("type = %s")
         params.append(type)

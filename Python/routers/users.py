@@ -5,6 +5,7 @@ from db import db
 from routers.auth import normalize_display_name, format_user
 from security import require_user, member
 from member_access import has_admin_access
+from account_policy import is_demo_user
 from routers.chat import _require_unblocked_pair
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -48,7 +49,7 @@ def get_user(user_id: int, request: Request):
         if not has_admin_access(viewer):
             with db() as conn:
                 _require_unblocked_pair(conn.cursor(),viewer["id"],user_id)
-        return {"id":user["id"],"name":user["name"],"subjects":user["subjects"] or [],"createdAt":user["created_at"].isoformat()}
+        return {"id":user["id"],"name":user["name"],"subjects":user["subjects"] or [],"createdAt":user["created_at"].isoformat(),"isDemo":is_demo_user(user)}
     return format_user(user, user["district_name"])
 
 @router.patch("/users/{user_id}")

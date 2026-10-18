@@ -77,6 +77,7 @@ import type {
   RequestApplication,
   RequestComment,
   ScaffoldTodo,
+  SchedulingSuggestionsEnvelope,
   SendChatMessageBody,
   StartDmBody,
   StatsOverview,
@@ -5677,11 +5678,14 @@ export const getGetSchedulingSuggestionsUrl = (
 export const getSchedulingSuggestions = async (
   params: GetSchedulingSuggestionsParams,
   options?: Parameters<typeof customFetch>[1],
-): Promise<PyEnvelope> => {
-  return customFetch<PyEnvelope>(getGetSchedulingSuggestionsUrl(params), {
-    ...options,
-    method: "GET",
-  });
+): Promise<SchedulingSuggestionsEnvelope> => {
+  return customFetch<SchedulingSuggestionsEnvelope>(
+    getGetSchedulingSuggestionsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 };
 
 export const getGetSchedulingSuggestionsQueryKey = (

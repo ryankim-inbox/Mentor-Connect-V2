@@ -34,8 +34,8 @@ def test_gateway_verification_flow_and_current_authority(request, backend_databa
     assert api(student, base, 'POST', '/api/auth/verification/confirm', {'token': token})[0] == 400
     status, mentors = api(student, base, 'GET', '/api/mentors?limit=50')
     assert status == 200 and [m['id'] for m in mentors] == [501]
-    assert set(mentors[0]) == {'id', 'name', 'role', 'subjects', 'districtId', 'districtName', 'bio'}
-    assert set(api(student, base, 'GET', '/api/users/501')[1]) == {'id', 'name', 'subjects', 'createdAt'}
+    assert set(mentors[0]) == {'id', 'name', 'role', 'subjects', 'districtId', 'districtName', 'bio', 'isDemo'}
+    assert set(api(student, base, 'GET', '/api/users/501')[1]) == {'id', 'name', 'subjects', 'createdAt', 'isDemo'}
     unverify(backend_database)
     assert api(student, base, 'GET', '/api/mentors')[0] == 403
 

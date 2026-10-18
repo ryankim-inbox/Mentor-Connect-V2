@@ -12,6 +12,7 @@ import {
   type ApplicationAction,
 } from "@workspace/api-client-react";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge } from "./DemoBadge";
 
 export default function ConnectAction({
   requestId,
@@ -107,6 +108,7 @@ export default function ConnectAction({
             >
               <div>
                 <p className="font-medium">{a.applicantName}</p>
+                <DemoBadge isDemo={a.isDemo} kind="profile" />
                 <p className="text-sm text-muted-foreground">
                   {label(a.status)}
                 </p>

@@ -2,6 +2,7 @@
 from collections import Counter
 
 from db import db
+from account_policy import is_demo_user
 
 
 def receive_block_data() -> list[tuple[int, int]]:
@@ -43,6 +44,7 @@ def get_flagged_users() -> list[dict]:
             SELECT
                 u.id AS user_id,
                 u.name,
+                u.password_hash,
                 u.email,
                 COALESCE(d.name, '-') AS district,
                 COALESCE(ra.report_count, 0) AS report_count,
@@ -82,6 +84,7 @@ def get_flagged_users() -> list[dict]:
         {
             "userId": row["user_id"],
             "name": row["name"],
+            "isDemo": is_demo_user(row),
             "email": row["email"],
             "district": row["district"],
             "reportCount": row["report_count"],

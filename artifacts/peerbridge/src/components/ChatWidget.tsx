@@ -2,7 +2,7 @@ import { useChatNavigation, MessageButton } from "@/lib/chat-navigation";
 import { useConnections } from "@/lib/journey-queries";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { syncChatHistory, type ChatConnectionState } from "@/lib/chat-socket";
-// Floating messenger popup (bottom-right) with Global / My School / DMs tabs.
+// Floating messenger popup (bottom-right) with Global / My District / DMs tabs.
 //
 // The UI is finished, but the chat backend is a Python practice task: while
 // Python/routers/chat.py still returns {"status": "todo"} envelopes, each tab
@@ -136,7 +136,7 @@ function ChatPanel({
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList className="mx-3 mt-2 grid grid-cols-3">
           <TabsTrigger value="global">Global</TabsTrigger>
-          <TabsTrigger value="school">My School</TabsTrigger>
+          <TabsTrigger value="school">My District</TabsTrigger>
           <TabsTrigger value="dms">DMs</TabsTrigger>
         </TabsList>
 
@@ -237,7 +237,7 @@ interface SendMutationLike {
 }
 
 // ---------------------------------------------------------------------------
-// Room chat (Global / My School)
+// Room chat (Global / My District)
 // ---------------------------------------------------------------------------
 
 function RoomPane({
