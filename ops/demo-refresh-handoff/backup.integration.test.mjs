@@ -44,6 +44,9 @@ integration('fresh schema8 backup restores all rows/passwords/current QA, catalo
     await client.query('GRANT UPDATE(title) ON public.requests TO mentor_connect_app');
     await client.query('GRANT USAGE ON SEQUENCE public.requests_id_seq TO mentor_connect_app');
     await client.query('GRANT CONNECT ON DATABASE neondb TO mentor_connect_app');
+    // Materialize built-in owner defaults: pg_dump restores these as NULL.
+    // The verifier must compare their complete ACL meaning, not storage form.
+    await client.query('REVOKE ALL ON TABLE public.mentor_connect_schema_migrations FROM mentor_connect_readiness; REVOKE ALL ON SEQUENCE public.users_id_seq,public.districts_id_seq FROM mentor_connect_app');
     const expectedTarget=(await client.query('SELECT current_database() AS database,current_user AS user,inet_server_addr()::text AS "serverAddress",inet_server_port() AS "serverPort"')).rows[0];
     const preview=await reviseSyntheticClassroom({client,receipt,expectedTarget,releaseSha:'a'.repeat(40)});
     const before=await fullRowProof(client,assets);

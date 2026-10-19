@@ -8,6 +8,7 @@ import { readSyntheticRevisionBaseline } from '../revise-synthetic-classroom.mjs
 import { verifySchemaAssets } from '../../lib/db/tools/schema-assets.mjs';
 import { validateAppliedMigrations } from '../../lib/db/tools/migration-ledger.mjs';
 import { diffCatalog } from '../../lib/db/tools/catalog.mjs';
+import { prepareRestoreComparison } from '../restore-relation-acls.mjs';
 import { TARGET,digest, same, requireThat, durableCreate, privateDirectory } from './protocol.mjs';
 
 const quote=value=>'"'+String(value).replaceAll('"','""')+'"';
@@ -130,7 +131,12 @@ export async function backupAndRestore({client,connectionEnv,receipt,preview,man
     requireThat(await fileChecksum(dumpPath)===sha256);
     await run(path.join(manifest.pgBin,'pg_restore'),['--no-password','--exit-on-error','--single-transaction','--dbname','neondb',dumpPath],cluster.env);
     const restored=cluster.client('neondb','neondb_owner');await restored.connect();
-    try{await restored.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await restored.query("SET LOCAL search_path TO public,pg_catalog; SET LOCAL timezone='UTC'");compareRestoreProof(proof,await fullRowProof(restored,assets));await restored.query('ROLLBACK');}finally{await restored.end();}
+    try{
+      await restored.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await restored.query("SET LOCAL search_path TO public,pg_catalog; SET LOCAL timezone='UTC'");
+      const actual=await fullRowProof(restored,assets);
+      compareRestoreProof(await prepareRestoreComparison(restored,proof),await prepareRestoreComparison(restored,actual));
+      await restored.query('ROLLBACK');
+    }finally{await restored.end();}
   }finally{await cluster.close();}
   const result={backup:{sha256,createdAt,targetDigest:preview.evidence.targetDigest,baselineDigest:preview.evidence.baselineDigest},restore:{backupSha256:sha256,verifiedAt:new Date().toISOString(),baselineDigest:preview.evidence.baselineDigest}};
   await durableCreate(path.join(manifest.directory,'restore-evidence.json'),{...result.restore,verified:['full-rows','password-hashes','ledger','sequences','catalog','owners','grants','database-locale']});
