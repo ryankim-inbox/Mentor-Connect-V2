@@ -5,6 +5,7 @@ const id = z.number().int().positive().safe();
 const text = z.string().min(1);
 const timestamp = z.string().min(1).max(128);
 export const profileSummarySchema = z.object({
+  isDemo: z.boolean(),
   id,
   name: text.max(120),
   subjects: z.array(text.max(80)).max(20),
@@ -70,6 +71,7 @@ const dm = z.object({
   readAt: timestamp.nullable(),
 });
 const adminRow = z.object({
+  isDemo: z.boolean(),
   userId: id,
   name: text,
   reportCount: z.number().int().nonnegative(),
@@ -82,6 +84,7 @@ const adminRow = z.object({
 const integer = z.number().int();
 const string = z.string();
 const user = z.object({
+  isDemo: z.boolean(),
   id,
   email: string,
   name: string,
@@ -128,6 +131,7 @@ const tag = z.object({
   requestCount: integer,
 });
 const mentorshipRequest = z.object({
+  isDemo: z.boolean(),
   id: integer,
   authorId: integer,
   authorName: string,
@@ -141,10 +145,12 @@ const mentorshipRequest = z.object({
   status: z.enum(["open", "matched", "closed"]),
   matchedUserId: integer.nullable().optional(),
   matchedUserName: string.nullable().optional(),
+  matchedUserIsDemo: z.boolean(),
   createdAt: string,
   preferredTimes: string.array().optional(),
 });
 const application = z.object({
+  isDemo: z.boolean(),
   id,
   requestId: id,
   applicantId: id,
@@ -154,18 +160,21 @@ const application = z.object({
   updatedAt: timestamp,
 });
 const comment = z.object({
+  isDemo: z.boolean(),
   id,
   requestId: id,
   authorId: id,
   authorName: text,
   parentId: id.nullable(),
   parentAuthorName: text.nullable(),
+  parentAuthorIsDemo: z.boolean(),
   body: z.string().refine((v) => hasAtMostCodePoints(v, 2000)),
   createdAt: timestamp,
   updatedAt: timestamp.nullable(),
   deletedAt: timestamp.nullable(),
 });
 const mentor = z.object({
+  isDemo: z.boolean(),
   id,
   name: text,
   role: z.enum(["mentor", "both"]),
@@ -218,11 +227,14 @@ const report = z.object({
   id,
   reporterId: id,
   reporterName: text,
+  reporterIsDemo: z.boolean(),
   reportedUserId: id,
   reportedUserName: text,
+  reportedUserIsDemo: z.boolean(),
   targetType: z.enum(["profile", "request"]),
   requestId: id.max(2147483647).nullable(),
   requestTitle: z.string().max(200).nullable(),
+  requestIsDemo: z.boolean(),
   reason: z.enum([
     "spam",
     "harassment",
@@ -242,12 +254,14 @@ const report = z.object({
   createdAt: timestamp,
 });
 const connection = z.object({
+  isDemo: z.boolean(),
   userId: id,
   name: text,
   requestId: id,
   requestTitle: text,
 });
 const blockedUser = z.object({
+  isDemo: z.boolean(),
   id: integer,
   blockedUserId: integer,
   blockedUserName: string,
@@ -296,7 +310,8 @@ const envelope = z
   .refine((value) => Object.hasOwn(value, "data"));
 const practice = z.object({ success: z.boolean(), status: text }).passthrough();
 const matching = practice.extend({
-  question_id: id,
+  isDemo: z.boolean().optional(),
+  studentIsDemo: z.boolean().optional(),  question_id: id,
   limit: z.number().int().min(1).max(20),
   matches: z.array(z.unknown()),
 });

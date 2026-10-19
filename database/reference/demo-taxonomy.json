@@ -1,0 +1,304 @@
+{
+  "version": 1,
+  "reviewedOn": "2026-10-18",
+  "provenance": "Public district names, counties and interest labels from the approved metadata-only snapshot. Types and high-school coverage checked against official district sources. No local numeric IDs, accounts, messages, or individual-school affiliations.",
+  "demoDisclosure": "Fictional demo profiles and posts illustrate district and interest filters. They do not represent real students, enrollment, or school endorsement.",
+  "districts": [
+    {
+      "name": "Fremont Union High School District",
+      "county": "Santa Clara",
+      "type": "high_school",
+      "servesHighSchool": true,
+      "scope": "Secondary schools",
+      "source": "https://www.fuhsd.org/our-schools"
+    },
+    {
+      "name": "East Side Union High School District",
+      "county": "Santa Clara",
+      "type": "high_school",
+      "servesHighSchool": true,
+      "scope": "Secondary schools",
+      "source": "https://www.esuhsd.org/Schools/"
+    },
+    {
+      "name": "Campbell Union High School District",
+      "county": "Santa Clara",
+      "type": "high_school",
+      "servesHighSchool": true,
+      "scope": "Secondary schools",
+      "source": "https://www.cuhsd.org/"
+    },
+    {
+      "name": "Los Gatos-Saratoga Joint Union High School District",
+      "county": "Santa Clara",
+      "type": "high_school",
+      "servesHighSchool": true,
+      "scope": "Secondary schools",
+      "source": "https://www.lgsuhsd.org/"
+    },
+    {
+      "name": "Mountain View-Los Altos Union High School District",
+      "county": "Santa Clara",
+      "type": "high_school",
+      "servesHighSchool": true,
+      "scope": "Secondary schools",
+      "source": "https://www.mvla.net/"
+    },
+    {
+      "name": "Palo Alto Unified School District",
+      "county": "Santa Clara",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.pausd.org/schools"
+    },
+    {
+      "name": "Santa Clara Unified School District",
+      "county": "Santa Clara",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.santaclarausd.org/"
+    },
+    {
+      "name": "Milpitas Unified School District",
+      "county": "Santa Clara",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.musd.org/"
+    },
+    {
+      "name": "Gilroy Unified School District",
+      "county": "Santa Clara",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.gilroyunified.org/schools"
+    },
+    {
+      "name": "Morgan Hill Unified School District",
+      "county": "Santa Clara",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.mhusd.org/"
+    },
+    {
+      "name": "Sunnyvale School District",
+      "county": "Santa Clara",
+      "type": "elementary",
+      "servesHighSchool": false,
+      "scope": "TK–8",
+      "source": "https://www.sesd.org/about-usnew"
+    },
+    {
+      "name": "Saratoga Union School District",
+      "county": "Santa Clara",
+      "type": "elementary",
+      "servesHighSchool": false,
+      "scope": "TK–8",
+      "source": "https://www.saratogausd.org/about-us"
+    },
+    {
+      "name": "Fremont Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://fremontunified.org/surf"
+    },
+    {
+      "name": "Newark Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.newarkunified.org/"
+    },
+    {
+      "name": "New Haven Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://mynhusd.org/"
+    },
+    {
+      "name": "Hayward Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.husd.us/"
+    },
+    {
+      "name": "San Leandro Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.slusd.us/"
+    },
+    {
+      "name": "Castro Valley Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.cv.k12.ca.us/"
+    },
+    {
+      "name": "Livermore Valley Joint Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.livermoreschools.org/"
+    },
+    {
+      "name": "Pleasanton Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.pleasantonusd.net/"
+    },
+    {
+      "name": "Dublin Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.dublinusd.org/"
+    },
+    {
+      "name": "San Lorenzo Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.slzusd.org/"
+    },
+    {
+      "name": "Alameda Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.alamedaunified.org/"
+    },
+    {
+      "name": "Berkeley Unified School District",
+      "county": "Alameda",
+      "type": "unified",
+      "servesHighSchool": true,
+      "scope": "Elementary and secondary schools",
+      "source": "https://www.berkeleyschools.net/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Math",
+      "color": "#3b82f6"
+    },
+    {
+      "name": "Science",
+      "color": "#10b981"
+    },
+    {
+      "name": "English",
+      "color": "#f59e0b"
+    },
+    {
+      "name": "History",
+      "color": "#8b5cf6"
+    },
+    {
+      "name": "Computer Science",
+      "color": "#06b6d4"
+    },
+    {
+      "name": "College Prep",
+      "color": "#ec4899"
+    },
+    {
+      "name": "SAT/ACT",
+      "color": "#f97316"
+    },
+    {
+      "name": "AP Courses",
+      "color": "#14b8a6"
+    },
+    {
+      "name": "Spanish",
+      "color": "#a855f7"
+    },
+    {
+      "name": "Arts",
+      "color": "#e11d48"
+    },
+    {
+      "name": "Music",
+      "color": "#7c3aed"
+    },
+    {
+      "name": "Sports",
+      "color": "#16a34a"
+    },
+    {
+      "name": "Mental Health",
+      "color": "#0ea5e9"
+    },
+    {
+      "name": "Career Guidance",
+      "color": "#d97706"
+    },
+    {
+      "name": "Engineering",
+      "color": "#059669"
+    },
+    {
+      "name": "Biology",
+      "color": "#65a30d"
+    },
+    {
+      "name": "Chemistry",
+      "color": "#dc2626"
+    },
+    {
+      "name": "Physics",
+      "color": "#2563eb"
+    },
+    {
+      "name": "Writing",
+      "color": "#c2410c"
+    },
+    {
+      "name": "Research",
+      "color": "#0891b2"
+    }
+  ],
+  "primarySubjectDistribution": {
+    "Math": 80,
+    "Science": 50,
+    "English": 45,
+    "History": 30,
+    "Computer Science": 80,
+    "College Prep": 55,
+    "SAT/ACT": 55,
+    "AP Courses": 50,
+    "Spanish": 25,
+    "Arts": 25,
+    "Music": 25,
+    "Sports": 20,
+    "Mental Health": 22,
+    "Career Guidance": 35,
+    "Engineering": 30,
+    "Biology": 30,
+    "Chemistry": 35,
+    "Physics": 35,
+    "Writing": 35,
+    "Research": 20
+  }
+}

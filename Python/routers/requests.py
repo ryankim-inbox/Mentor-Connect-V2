@@ -13,6 +13,7 @@ from psycopg2.errors import ForeignKeyViolation
 from typing import Annotated, Literal, Optional, List
 from db import db
 from auto_match import auto_match_request
+from account_policy import is_demo_user, is_demo_request
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 
@@ -128,7 +129,7 @@ def parse_request_cursor(value: str) -> tuple[datetime, int]:
 
 
 def build_request_response(cur, req, *, preview=False):
-    cur.execute("SELECT id, name FROM users WHERE id = %s", (req["author_id"],))
+    cur.execute("SELECT id, name, password_hash FROM users WHERE id = %s", (req["author_id"],))
     author = cur.fetchone()
     cur.execute("SELECT name FROM districts WHERE id = %s", (req["district_id"],))
     district = cur.fetchone()
@@ -138,15 +139,18 @@ def build_request_response(cur, req, *, preview=False):
     )
     tags = cur.fetchall()
     matched_user_name = None
+    matched_user_is_demo = False
     if req["matched_user_id"]:
-        cur.execute("SELECT name FROM users WHERE id = %s", (req["matched_user_id"],))
+        cur.execute("SELECT name, password_hash FROM users WHERE id = %s", (req["matched_user_id"],))
         mu = cur.fetchone()
         matched_user_name = mu["name"] if mu else None
+        matched_user_is_demo = is_demo_user(mu)
 
     return {
         "id": req["id"],
         "authorId": req["author_id"],
         "authorName": author["name"] if author else "Unknown",
+        "isDemo": is_demo_request(req, author),
         "authorRole": req["role"],
         "districtId": req["district_id"],
         "districtName": district["name"] if district else "Unknown",
@@ -157,6 +161,7 @@ def build_request_response(cur, req, *, preview=False):
         "status": req["status"],
         "matchedUserId": req["matched_user_id"],
         "matchedUserName": matched_user_name,
+        "matchedUserIsDemo": matched_user_is_demo,
         "createdAt": req["created_at"].isoformat(),
         # tolerate databases that predate the preferred_times migration
         "preferredTimes": req.get("preferred_times") or [],

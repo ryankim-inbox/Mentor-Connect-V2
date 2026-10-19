@@ -712,7 +712,7 @@ function validateQuery(
     } else if (key === "search") {
       if (Buffer.byteLength(value, "utf8") > 200) invalidQuery();
     } else if (key === "type") {
-      if (value !== "high_school" && value !== "unified") invalidQuery();
+      if (!["high_school", "unified", "elementary"].includes(value)) invalidQuery();
     }
   }
 

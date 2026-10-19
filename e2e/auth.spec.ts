@@ -146,8 +146,8 @@ test("login and registration block double submits until session confirmation fin
       await accepted.promise;
       await route.fulfill({ json: { user: accountA, message: "ok" } });
     });
-    await page.route("**/api/districts?**", (route) =>
-      route.fulfill({ json: [{ id: 1, name: "School", county: "Test" }] }),
+    await page.route("**/api/districts**", (route) =>
+      route.fulfill({ json: [{ id: 1, name: "School", county: "Test", type: "high_school", memberCount: 0, openRequestCount: 0 }] }),
     );
     await page.goto(`/${mode}?returnTo=%2Fsettings`);
     await expect.poll(() => meCalls).toBe(1);
@@ -188,8 +188,8 @@ test("registration validates name bytes before sending and trims a valid name", 
   await page.route("**/api/auth/me", (route) =>
     route.fulfill({ status: 401, json: {} }),
   );
-  await page.route("**/api/districts?**", (route) =>
-    route.fulfill({ json: [{ id: 1, name: "School", county: "Test" }] }),
+  await page.route("**/api/districts**", (route) =>
+    route.fulfill({ json: [{ id: 1, name: "School", county: "Test", type: "high_school", memberCount: 0, openRequestCount: 0 }] }),
   );
   await page.route("**/api/auth/register", (route) => {
     submissions++;

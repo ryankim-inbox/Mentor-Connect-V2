@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { TagBadge } from "@/components/TagBadge";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { DemoBadge, DemoNotice } from "@/components/DemoBadge";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -16,6 +17,7 @@ interface EngineStatus {
 }
 
 interface MentorMatch {
+  isDemo: boolean;
   rank: number;
   mentorId: number;
   mentorName: string;
@@ -124,6 +126,7 @@ function normalizeMatches(value: unknown): MentorMatch[] {
     const match = asRecord(item);
     const mentorId = getNumber(match, ["mentor_id", "mentorId", "id", "user_id"], index + 1);
     return {
+      isDemo: match.isDemo === true,
       rank: getNumber(match, ["rank"], index + 1),
       mentorId,
       mentorName: getString(match, ["mentor_name", "mentorName", "name"], `Mentor ${mentorId}`),
@@ -199,11 +202,13 @@ function MatchCard({ match }: { match: MentorMatch }) {
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">#{match.rank}</div>
           <span className="mt-1 block text-lg font-semibold text-foreground">{match.mentorName}</span>
+          <DemoBadge isDemo={match.isDemo} kind="profile" />
         </div>
         <div className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
           {match.score}
         </div>
       </div>
+      <DemoNotice isDemo={match.isDemo} kind="profile" />
       <p className="mt-3 rounded-xl border border-primary/10 bg-primary/5 p-3 text-sm text-foreground">
         {match.reason}
       </p>
@@ -274,6 +279,7 @@ export default function PracticeLab() {
   const locationEngine = useMemo(() => normalizeEngine(locationsStatusRaw), [locationsStatusRaw]);
   const blockEngine = useMemo(() => normalizeEngine(blocksRaw), [blocksRaw]);
   const matches = useMemo(() => normalizeMatches(matchingRaw), [matchingRaw]);
+  const questionIsDemo = asRecord(matchingRaw).isDemo === true;
 
   const refreshStatus = useCallback(async () => {
     setIsLoadingStatus(true);
@@ -480,6 +486,10 @@ export default function PracticeLab() {
           </label>
         </div>
 
+        {questionIsDemo && <div className="mt-4">
+          <DemoBadge isDemo={questionIsDemo} kind="post" />
+          <DemoNotice isDemo={questionIsDemo} kind="post" />
+        </div>}
         <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
           <p>
             <span className="font-medium text-foreground">Matches returned:</span> {matches.length}

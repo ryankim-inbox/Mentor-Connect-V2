@@ -4,8 +4,10 @@ import { Link } from "wouter";
 import { SourceBadge } from "@/components/SourceBadge";
 import { apiErrorMessage } from "@/lib/api-error-message";
 import { getPythonApi, type PyEnvelope } from "@/lib/pythonApi";
+import { DemoBadge } from "@/components/DemoBadge";
 
 type FlaggedUser = {
+  isDemo?: boolean;
   userId: number;
   name: string;
   reportCount: number;
@@ -138,6 +140,7 @@ export default function AdminReports() {
                       <Link href={`/profile/${user.userId}`} className="text-primary hover:underline">
                         {user.name}
                       </Link>
+                      <DemoBadge isDemo={user.isDemo} kind="profile" />
                     </td>
                     <td className="px-3 py-3 tabular-nums">{user.reportCount}</td>
                     <td className="px-3 py-3 tabular-nums">{user.blockCount}</td>

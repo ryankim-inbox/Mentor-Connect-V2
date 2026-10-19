@@ -24,4 +24,6 @@ export interface User {
   readonly hasMemberAccess: boolean;
   createdAt: string;
   isAdmin: boolean;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }

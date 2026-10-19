@@ -21,6 +21,7 @@ export const userFixture = {
   bio: null,
   subjects: ["Math"],
   isVerified: true, hasMemberAccess: true,
+  isDemo: false,
   isAdmin: false,
   createdAt: "2026-01-01T00:00:00",
 } satisfies User;
@@ -42,6 +43,7 @@ export const requestFixture = {
   id: 1,
   authorId: 1,
   authorName: "Student One",
+  isDemo: false,
   authorRole: "mentee",
   districtId: 1,
   districtName: "School",
@@ -52,6 +54,7 @@ export const requestFixture = {
   status: "open",
   matchedUserId: null,
   matchedUserName: null,
+  matchedUserIsDemo: false,
   createdAt: "2026-01-01T00:00:00",
   preferredTimes: [],
 } satisfies MentorshipRequest;
@@ -59,6 +62,7 @@ export const blockFixture = {
   id: 1,
   blockedUserId: 2,
   blockedUserName: "Other",
+  isDemo: false,
   createdAt: "2026-01-01T00:00:00",
 } satisfies BlockedUser;
 export const overviewFixture = {
@@ -97,4 +101,4 @@ export const dmMessageFixture = {
   readAt: null,
 } satisfies DmMessage;
 
-export const applicationFixture = { id: 1, requestId: 2, applicantId: 1, applicantName: "Student One", status: "pending", createdAt: "2026-10-16T00:00:00Z", updatedAt: "2026-10-16T00:00:00Z" };
+export const applicationFixture = { id: 1, requestId: 2, applicantId: 1, applicantName: "Student One", isDemo: false, status: "pending", createdAt: "2026-10-16T00:00:00Z", updatedAt: "2026-10-16T00:00:00Z" };

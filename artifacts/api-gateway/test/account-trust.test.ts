@@ -26,6 +26,7 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
               ? {
                   id: Number(req.url!.split("/").at(-1)),
                   name: "Student",
+                  isDemo: false,
                   subjects: [],
                   createdAt: "2026-01-01T00:00:00Z",
                 }
@@ -195,8 +196,10 @@ test("new projections retain trust, moderation and tombstones while stripping se
     requestId: 1,
     authorId: 1,
     authorName: "A",
+    isDemo: false,
     parentId: null,
     parentAuthorName: null,
+    parentAuthorIsDemo: false,
     body: "",
     createdAt: "today",
     updatedAt: null,
@@ -219,6 +222,7 @@ test("new projections retain trust, moderation and tombstones while stripping se
     districtId: 1,
     districtName: "School",
     bio: null,
+    isDemo: false,
     email: "secret",
     isAdmin: true,
   };
@@ -227,7 +231,7 @@ test("new projections retain trust, moderation and tombstones while stripping se
     "/api/mentors",
     "GET",
   ) as Record<string, unknown>[];
-  assert.equal(Object.keys(directory[0]!).length, 7);
+  assert.equal(Object.keys(directory[0]!).length, 8);
   assert.equal(directory[0]!.email, undefined);
 });
 
@@ -269,16 +273,20 @@ test("generated trust schemas match gateway public models and enforce bounded fi
     districtId: 1,
     districtName: "School",
     bio: null,
+    isDemo: false,
   };
   const report = {
     id: 1,
     reporterId: 1,
     reporterName: "Student",
+    reporterIsDemo: false,
     reportedUserId: 501,
     reportedUserName: "Mentor",
+    reportedUserIsDemo: false,
     targetType: "profile",
     requestId: null,
     requestTitle: null,
+    requestIsDemo: false,
     reason: "other",
     description: null,
     status: "open",
@@ -292,8 +300,10 @@ test("generated trust schemas match gateway public models and enforce bounded fi
     requestId: 1,
     authorId: 1,
     authorName: "Student",
+    isDemo: false,
     parentId: null,
     parentAuthorName: null,
+    parentAuthorIsDemo: false,
     body: "",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: null,

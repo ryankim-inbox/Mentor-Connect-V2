@@ -114,7 +114,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     call(student, "PATCH", profile_path, {"bio": ""})
     assert call(student, "GET", "/api/auth/me")["bio"] == ""
     assert sql("SELECT bio FROM users WHERE id = %s", (student_id,)) == [("",)]
-    assert set(call(mentor, "GET", profile_path)) == {"id", "name", "subjects", "createdAt"}
+    assert set(call(mentor, "GET", profile_path)) == {"id", "name", "subjects", "createdAt", "isDemo"}
     call(mentor, "PATCH", profile_path, {"bio": "Forbidden"}, expected=404)
 
     # Controlled actual database inputs for the learning algorithms, not success doubles.
@@ -161,7 +161,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     assert module("/api/scheduling/overview") == {"topSlots": slots}
     suggestion = module(f"/api/scheduling/suggest?user_a={student_id}&user_b={mentor_id}")
     assert suggestion["overlap"] == ["Mon 17:00", "Wed 19:00"]
-    assert set(suggestion["userA"]) == {"id", "name", "role", "available_times"}
+    assert set(suggestion["userA"]) == {"id", "name", "role", "available_times", "isDemo"}
     ranks = module("/api/analytics/mentor-response-rates")
     activity = next(row for row in ranks["mentors"] if row["mentorId"] == mentor_id)
     assert activity["totalMatches"] == 1 and activity["avgTimeToMatchHours"] >= 0
@@ -185,7 +185,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     flagged = module("/api/admin/flagged-users", "student-module")
     row = next(row for row in flagged if row["userId"] == mentor_id)
     assert row["reportCount"] == 1 and row["blockCount"] == 1 and row["status"] == "warned"
-    assert set(row) == {"userId", "name", "reportCount", "blockCount", "status", "lastReportedAt", "topReasons"}
+    assert set(row) == {"userId", "name", "reportCount", "blockCount", "status", "lastReportedAt", "topReasons", "isDemo"}
     assert "email" not in str(flagged) and "district" not in str(flagged)
     assert call(student, "GET", "/api/blocks")[-1]["blockedUserId"] == mentor_id
     for endpoint in ("/api/matches/1", "/api/practice/matching/1"):

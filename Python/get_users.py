@@ -3,6 +3,7 @@ Gets user/account data from PostgreSQL.
 """
 
 from database import get_connection
+from account_policy import with_demo_marker
 
 
 def get_all_users():
@@ -34,12 +35,13 @@ def get_all_users():
                     available_times,
                     languages,
                     grade_level,
-                    teaching_style
+                    teaching_style,
+                    password_hash
                 FROM users
                 ORDER BY id;
                 """
             )
-            return cur.fetchall()
+            return [with_demo_marker(row) for row in cur.fetchall()]
 
 
 def get_user_by_id(user_id: int):
@@ -61,13 +63,14 @@ def get_user_by_id(user_id: int):
                     available_times,
                     languages,
                     grade_level,
-                    teaching_style
+                    teaching_style,
+                    password_hash
                 FROM users
                 WHERE id = %s;
                 """,
                 (user_id,),
             )
-            return cur.fetchone()
+            return with_demo_marker(cur.fetchone())
 
 
 def get_all_mentors():
@@ -88,13 +91,14 @@ def get_all_mentors():
                     available_times,
                     languages,
                     grade_level,
-                    teaching_style
+                    teaching_style,
+                    password_hash
                 FROM users
                 WHERE role = 'mentor'
                 ORDER BY id;
                 """
             )
-            return cur.fetchall()
+            return [with_demo_marker(row) for row in cur.fetchall()]
 
 def get_all_mentees():
     """
@@ -114,13 +118,14 @@ def get_all_mentees():
                     available_times,
                     languages,
                     grade_level,
-                    teaching_style
+                    teaching_style,
+                    password_hash
                 FROM users
                 WHERE role = 'mentee'
                 ORDER BY id;
                 """
             )
-            return cur.fetchall()
+            return [with_demo_marker(row) for row in cur.fetchall()]
 
 def get_all_both():
     """
@@ -140,10 +145,11 @@ def get_all_both():
                     available_times,
                     languages,
                     grade_level,
-                    teaching_style
+                    teaching_style,
+                    password_hash
                 FROM users
                 WHERE role = 'both'
                 ORDER BY id;
                 """
             )
-            return cur.fetchall()
+            return [with_demo_marker(row) for row in cur.fetchall()]

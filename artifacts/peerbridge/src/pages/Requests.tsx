@@ -29,7 +29,7 @@ export default function Requests() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Browse Mentorship Requests</h1>
           <p className="text-muted-foreground mt-1">Find a mentor or connect with someone to mentor</p>
@@ -44,7 +44,7 @@ export default function Requests() {
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6 p-4 bg-card border border-card-border rounded-xl">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">Role:</span>
           {(["all", "mentor", "mentee"] as const).map((r) => (
             <button
@@ -71,7 +71,7 @@ export default function Requests() {
           >
             All
           </button>
-          {tags?.slice(0, 10).map((tag) => (
+          {tags?.map((tag) => (
             <button
               key={tag.id}
               onClick={() => { setTagId(tagId === tag.id ? undefined : tag.id); setCursors([]); }}

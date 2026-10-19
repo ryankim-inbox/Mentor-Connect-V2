@@ -250,7 +250,7 @@ for (const [type, accepted] of [
   ["high_school", true],
   ["unified", true],
   ["all", false],
-  ["elementary", false],
+  ["elementary", true],
 ] as const) {
   test(`generated and gateway district filters agree for ${type ?? "omitted"}`, () => {
     const query = type === undefined ? {} : { type };

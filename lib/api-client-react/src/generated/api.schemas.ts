@@ -107,6 +107,8 @@ export interface User {
   readonly hasMemberAccess: boolean;
   createdAt: string;
   isAdmin: boolean;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export interface AuthResponse {
@@ -198,6 +200,10 @@ export interface MentorshipRequest {
   createdAt: string;
   /** Weekly slots the author prefers, as 'Ddd HH:00' 24-hour strings (e.g. 'Mon 17:00'). */
   preferredTimes?: string[];
+  /** True only when the canonical author belongs to the approved demo batch and the request has its reserved batch key. */
+  readonly isDemo: boolean;
+  /** Whether the matched user belongs to the approved demo batch; false when there is no matched user. */
+  readonly matchedUserIsDemo: boolean;
 }
 
 export type CreateRequestBodyRole =
@@ -295,6 +301,8 @@ export interface BlockedUser {
   blockedUserId: number;
   blockedUserName: string;
   createdAt: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export interface StatsOverview {
@@ -482,6 +490,8 @@ export interface ProfileSummary {
    * @maxLength 128
    */
   createdAt: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export interface StudentModule {
@@ -575,6 +585,8 @@ export interface MentorActivityRow {
    * @nullable
    */
   avgTimeToMatchHours: number | null;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo: boolean;
 }
 
 export interface MentorActivity {
@@ -660,6 +672,10 @@ export interface MatchingResult {
    */
   limit: number;
   matches: unknown[];
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo?: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly studentIsDemo?: boolean;
 }
 
 export interface MatchRequest {
@@ -703,6 +719,8 @@ export interface FlaggedUser {
   lastReportedAt: string | null;
   /** @items.minLength 1 */
   topReasons: string[];
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly isDemo: boolean;
 }
 
 export type AdminEnvelopeSource =
@@ -760,6 +778,8 @@ export interface RequestApplication {
   status: RequestApplicationStatus;
   createdAt: string;
   updatedAt: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export type ApplicationActionAction =
@@ -803,6 +823,10 @@ export interface RequestComment {
   updatedAt: string | null;
   /** @nullable */
   deletedAt: string | null;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
+  /** Whether the parent comment author belongs to the approved demo batch; false for top-level comments. */
+  readonly parentAuthorIsDemo: boolean;
 }
 
 export interface CreateCommentBody {
@@ -832,6 +856,8 @@ export interface Connection {
    */
   requestId: number;
   requestTitle: string;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export interface ConfirmVerificationBody {
@@ -869,6 +895,8 @@ export interface MentorDirectoryEntry {
   districtName: string | null;
   /** @nullable */
   bio: string | null;
+  /** True only for the approved synthetic demo batch, derived from canonical server-written identity metadata. */
+  readonly isDemo: boolean;
 }
 
 export type ModerateReportBodyStatus =
@@ -972,6 +1000,12 @@ export interface ModerationReport {
    * @nullable
    */
   requestTitle: string | null;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly reporterIsDemo: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly reportedUserIsDemo: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly requestIsDemo: boolean;
 }
 
 export interface EditCommentBody {
@@ -1026,6 +1060,25 @@ export interface ActivityRank {
    */
   tier: ActivityRankTier;
 }
+
+export interface SchedulingUser {
+  id: number;
+  name: string;
+  role: string;
+  available_times: string[];
+  /** Server-derived approved demo batch marker for this canonical user. */
+  readonly isDemo: boolean;
+}
+
+export interface SchedulingSuggestions {
+  userA: SchedulingUser;
+  userB: SchedulingUser;
+  overlap: string[];
+}
+
+export type SchedulingSuggestionsEnvelope = PyEnvelope & {
+  data?: SchedulingSuggestions | null;
+};
 
 /**
  * Invalid input
@@ -1091,6 +1144,7 @@ export type ListDistrictsType =
 export const ListDistrictsType = {
   high_school: "high_school",
   unified: "unified",
+  elementary: "elementary",
 } as const;
 
 export type ListRequestsParams = {

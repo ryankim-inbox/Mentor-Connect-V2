@@ -170,6 +170,7 @@ test("profile and admin projections remove private fields and reject malformed s
   const profile = {
     id: 2,
     name: "Other",
+    isDemo: false,
     subjects: ["Math"],
     createdAt: "2026-01-01T00:00:00",
     email: "audit-canary",
@@ -178,6 +179,7 @@ test("profile and admin projections remove private fields and reject malformed s
   assert.deepEqual(projectProfile(profile, 2), {
     id: 2,
     name: "Other",
+    isDemo: false,
     subjects: ["Math"],
     createdAt: "2026-01-01T00:00:00",
   });
@@ -195,6 +197,7 @@ test("profile and admin projections remove private fields and reject malformed s
           name: "Other",
           email: "audit-canary",
           district: "audit-canary",
+          isDemo: false,
           reportCount: 1,
           blockCount: 0,
           status: "warned",
@@ -261,6 +264,7 @@ test("gateway and generated response schemas agree on wire timestamp fixtures", 
   const good = {
     id: 2,
     name: "Other",
+    isDemo: false,
     subjects: ["Math"],
     createdAt: "2026-01-01T00:00:00",
   };
@@ -593,6 +597,7 @@ test("consent and discussion projections expose only their public fields", () =>
     requestId: 11,
     applicantId: 2,
     applicantName: "Mentee",
+    isDemo: false,
     status: "pending",
     createdAt: "2026-10-16T00:00:00Z",
     updatedAt: "2026-10-16T00:00:00Z",
@@ -602,8 +607,10 @@ test("consent and discussion projections expose only their public fields", () =>
     requestId: 11,
     authorId: 2,
     authorName: "Mentee",
+    isDemo: false,
     parentId: null,
     parentAuthorName: null,
+    parentAuthorIsDemo: false,
     body: "Plain text",
     createdAt: app.createdAt,
     updatedAt: null,
@@ -612,6 +619,7 @@ test("consent and discussion projections expose only their public fields", () =>
   const contact = {
     userId: 2,
     name: "Mentee",
+    isDemo: false,
     requestId: 11,
     requestTitle: "Study",
   };
@@ -724,5 +732,22 @@ test("profile activity gateway rejects wrong target and unexpected successful st
   for (const unexpected of [201, 204]) {
     status = unexpected;
     assert.equal((await get()).status, 502);
+  }
+});
+
+
+test("demo markers are strict server booleans and survive public projection", async () => {
+  const { requestFixture } = await import("./contract-fixtures.ts");
+  for (const isDemo of [true, false]) {
+    const profile = { id: 2, name: "[Synthetic] Natural Name", subjects: [],
+      createdAt: "2026-01-01T00:00:00Z", isDemo };
+    assert.deepEqual(projectProfile({ ...profile, password_hash: "private-sentinel" }, 2), profile);
+    const row = { ...requestFixture, isDemo, matchedUserIsDemo: !isDemo };
+    assert.deepEqual(projectPublicPayload([{ ...row, password_hash: "private-sentinel" }], "/api/requests", "GET"), [row]);
+  }
+  for (const isDemo of [undefined, null, 1, "true"]) {
+    assert.throws(() => projectProfile({ id: 2, name: "Maya Chen", subjects: [],
+      createdAt: "2026-01-01T00:00:00Z", isDemo }, 2));
+    assert.throws(() => projectPublicPayload([{ ...requestFixture, isDemo }], "/api/requests", "GET"));
   }
 });

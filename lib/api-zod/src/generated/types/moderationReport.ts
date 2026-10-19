@@ -61,4 +61,10 @@ export interface ModerationReport {
    * @nullable
    */
   requestTitle: string | null;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly reporterIsDemo: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly reportedUserIsDemo: boolean;
+  /** Server-derived approved demo batch marker for the canonical identity or request. */
+  readonly requestIsDemo: boolean;
 }

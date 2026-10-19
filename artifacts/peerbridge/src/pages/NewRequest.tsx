@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { countyLabel, districtTypeLabel } from "@/lib/district-display";
 import { Link, useLocation } from "wouter";
 import {
   useCreateRequest,
@@ -225,7 +226,7 @@ export default function NewRequest() {
               </option>
               {districts?.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.name} ({d.county} County)
+                  {d.name} ({countyLabel(d.county)} · {districtTypeLabel(d.type)})
                 </option>
               ))}
             </select>

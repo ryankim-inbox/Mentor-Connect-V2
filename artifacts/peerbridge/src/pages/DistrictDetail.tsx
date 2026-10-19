@@ -4,6 +4,7 @@ import { useGetDistrict, useListRequests, useGetDistrictStats, getGetDistrictQue
 import { RequestCard } from "@/components/RequestCard";
 import { TagBadge } from "@/components/TagBadge";
 import { useAuth } from "@/lib/auth-context";
+import { countyLabel, districtTypeLabel } from "@/lib/district-display";
 
 interface Props {
   id: string;
@@ -55,10 +56,10 @@ export default function DistrictDetail({ id }: Props) {
       </div>
 
       <div className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{district.name}</h1>
-            <p className="text-muted-foreground mt-1">{district.county} County · {district.type.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())} District</p>
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold text-foreground">{district.name}</h1>
+            <p className="text-muted-foreground mt-1">{countyLabel(district.county)} · {districtTypeLabel(district.type)}</p>
           </div>
           {user && !user.isAdmin && (
             <Link href={`/requests/new?districtId=${districtId}`}>

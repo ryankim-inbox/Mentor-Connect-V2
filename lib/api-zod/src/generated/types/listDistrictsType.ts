@@ -12,4 +12,5 @@ export type ListDistrictsType =
 export const ListDistrictsType = {
   high_school: "high_school",
   unified: "unified",
+  elementary: "elementary",
 } as const;

@@ -22,6 +22,7 @@ const authenticatedUser = {
   bio: "Private free-form bio",
   subjects: ["Math", "Science"],
   isVerified: true, hasMemberAccess: true,
+  isDemo: false,
   isAdmin: false,
   createdAt: "2026-08-26T00:00:00+00:00",
 };
@@ -128,7 +129,7 @@ test("an invalid session is rejected before the profile endpoint is called", asy
   assert.equal(harness.calls.user, 0);
 });
 
-test("a session sees another user's four-field public profile", async (context) => {
+test("a session sees another user's public profile and demo marker", async (context) => {
   const harness = await createHarness();
   context.after(harness.close);
 
@@ -140,6 +141,7 @@ test("a session sees another user's four-field public profile", async (context) 
   assert.deepEqual(await response.json(), {
     id: 2,
     name: "Student Two",
+    isDemo: false,
     subjects: ["Art"],
     createdAt: "2026-08-27T00:00:00+00:00",
   });

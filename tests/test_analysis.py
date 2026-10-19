@@ -57,9 +57,9 @@ def test_analytics_observation_coverage_and_latency(analytics_db):
     ]
     activity = analysis.receive_mentor_ranks()
     assert activity == {"trackingStartedAt": "2025-01-01T12:00:00+00:00", "mentors": [
-        {"mentorId": 501, "mentorName": "Sophia Lee", "totalMatches": 2, "avgTimeToMatchHours": 3.0},
-        {"mentorId": 951, "mentorName": "Jordan Park", "totalMatches": 1, "avgTimeToMatchHours": None},
-        {"mentorId": 502, "mentorName": "Marcus Chen", "totalMatches": 0, "avgTimeToMatchHours": None},
+        {"mentorId": 501, "mentorName": "Sophia Lee", "isDemo": False, "totalMatches": 2, "avgTimeToMatchHours": 3.0},
+        {"mentorId": 951, "mentorName": "Jordan Park", "isDemo": False, "totalMatches": 1, "avgTimeToMatchHours": None},
+        {"mentorId": 502, "mentorName": "Marcus Chen", "isDemo": False, "totalMatches": 0, "avgTimeToMatchHours": None},
     ]}
     assert analysis.response_time_analysis() == activity
 
