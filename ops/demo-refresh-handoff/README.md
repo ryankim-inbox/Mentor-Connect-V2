@@ -163,12 +163,17 @@ table/column/sequence/schema/database grants, and exact server version/locale.
 Global role definitions/passwords/memberships are not restored; the core binds
 and preserves source role authority separately in its baseline digest.
 
-Only two portable representations differ: PostgreSQL regenerates internal FK
+The verifier handles portable representations explicitly: PostgreSQL regenerates internal FK
 trigger names containing catalog OIDs, so those are compared by function,
 constraint, timing, enabled state, arguments and full structural properties;
-the original source schema is retained. ACL entry order is canonicalized after
-PostgreSQL decodes `aclitem[]`; every entry, grantor and grant option is preserved.
-Null ACLs and explicit ACLs remain distinct. User trigger definitions and every
+the original source schema is retained. Table/sequence ACLs are decoded by
+PostgreSQL into complete grantor/grantee/privilege/grant-option tuples for
+comparison only. `NULL` expands through `acldefault` for the relation kind and
+owner; explicit empty ACLs remain empty. This accepts the confirmed explicit
+built-in default versus `NULL` representation change without excluding ACLs.
+Owners, other relation fields, relation order and all nonrelation ACLs retain
+their existing exact checks. Raw source evidence is never rewritten. Invalid
+metadata, ACL parsing errors or absent roles fail closed. User trigger definitions and every
 other schema/catalog property remain checked; the core rejects user triggers.
 
 After a COMMIT acknowledgement, the writer connection closes. A **new read-only
@@ -188,3 +193,21 @@ fixture supports PostgreSQL 16 for existing CI and PostgreSQL 18.6 locally;
 source/destination versions must match exactly. Production freeze is restricted
 to 18.6. Set `PYTHON_BIN` when using the repository's configured Python runtime.
 These tests do not access Neon, Render, Keychain, a browser, or real credentials.
+
+## Preparing a new attempt after the ACL diagnosis
+
+The consumed 45741cce attempt and all its gate, backup, audit and frozen files
+remain historical evidence. They must not be edited, reset or reused. The user
+completed v3 diagnostic confirms exactly three default-equivalent `relacl`
+representations; no ownership, privilege, identity, order or other proof drift.
+
+Commit and review this comparison fix, then create a new frozen checkout and
+handoff directory using the process above. A code-only freeze is not permission
+to run: the new commit must be deployed and independently observed on the exact
+Render service, with writers suspended, before a new deployment gate can exist.
+The user then launches the new hash-pinned handoff once in their own terminal,
+enters the current owner credential privately, and confirms the fresh preview.
+The existing initial/prewrite/precommit observations, fresh backup/local restore,
+current-data validation, permanent one-use claim and postcommit read-only checks
+all remain required. Resume and two-account public verification follow only
+after a confirmed commit and separate authorization.
