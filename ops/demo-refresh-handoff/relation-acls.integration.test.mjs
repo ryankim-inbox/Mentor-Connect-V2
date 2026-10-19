@@ -15,7 +15,11 @@ integration('semantic relation comparison preserves complete grants, owners, sha
     client=cluster.client('postgres');await client.connect();
     await client.query('CREATE ROLE fixture_owner; CREATE ROLE fixture_app; CREATE ROLE fixture_other; CREATE ROLE "PUBLIC"; CREATE ROLE "FixtureOwner"; CREATE ROLE fixtureowner');
     await client.query('BEGIN READ ONLY');
-    const source=proof([relation('fixture_table','r',['fixture_owner=arwdDxtm/fixture_owner']),relation('fixture_sequence','S',['fixture_owner=rwU/fixture_owner']),relation('fixture_index','i')]);
+    // Use this server's complete defaults: PostgreSQL 16 lacks the later
+    // MAINTAIN privilege. Production comparison still validates every tuple.
+    const defaultTableAcl=async role=>(await client.query("SELECT acldefault('r',$1::regrole)::text[] AS acl",[role])).rows[0].acl;
+    const ownerTableAcl=await defaultTableAcl('fixture_owner');
+    const source=proof([relation('fixture_table','r',ownerTableAcl),relation('fixture_sequence','S',['fixture_owner=rwU/fixture_owner']),relation('fixture_index','i')]);
     const restored=proof([relation('fixture_table'),relation('fixture_sequence','S'),relation('fixture_index','i')]);
     const originalSource=structuredClone(source),originalRestored=structuredClone(restored);
     assert.throws(()=>compareRestoreProof(source,restored),/RESTORE_SCHEMA_MISMATCH_relations/);
@@ -27,7 +31,7 @@ integration('semantic relation comparison preserves complete grants, owners, sha
       rows=>{rows[0].owner='fixture_other';},rows=>{rows[0].relkind='S';},rows=>{rows[0].relname='renamed';},
       rows=>{rows[0].relrowsecurity=true;},rows=>{rows[0].relforcerowsecurity=true;},rows=>{rows[0].reloptions=['fillfactor=70'];},
       rows=>{rows[0].relacl=[];},rows=>{rows[0].relacl=['fixture_owner=r/fixture_owner'];},
-      rows=>{rows[0].relacl=['fixture_owner=arwdDxtm/fixture_owner','fixture_app=r/fixture_owner'];},
+      rows=>{rows[0].relacl=[...ownerTableAcl,'fixture_app=r/fixture_owner'];},
       rows=>{rows.pop();},rows=>{rows.push(relation('extra'));},rows=>{rows.reverse();},
     ];
     for(const mutate of mutations){
@@ -36,7 +40,7 @@ integration('semantic relation comparison preserves complete grants, owners, sha
       assert.throws(()=>compareRestoreProof(a,canonical),/RESTORE_SCHEMA_MISMATCH_relations/);
       assert.deepEqual(compareProofs(a,canonical),['schema.relations']);
     }
-    const withGrant=proof([relation('fixture_table','r',['fixture_owner=arwdDxtm/fixture_owner','fixture_app=r/fixture_owner'])]);
+    const withGrant=proof([relation('fixture_table','r',[...ownerTableAcl,'fixture_app=r/fixture_owner'])]);
     const withGrantCanonical=await prepareRestoreComparison(client,withGrant);
     for(const entry of ['fixture_app=r*/fixture_owner','fixture_app=r/fixture_other','fixture_other=r/fixture_owner']){
       const changed=structuredClone(withGrant);changed.portableSchema.relations[0].relacl[1]=entry;
@@ -49,9 +53,9 @@ integration('semantic relation comparison preserves complete grants, owners, sha
     assert.throws(()=>compareRestoreProof(publicCanonical,namedPublicCanonical),/RESTORE_SCHEMA_MISMATCH_relations/);
     const mixedCaseDefault=proof([{...relation('fixture_case_table'),owner:'FixtureOwner'}]);
     const mixedCaseExplicit=structuredClone(mixedCaseDefault);
-    mixedCaseExplicit.portableSchema.relations[0].relacl=['"FixtureOwner"=arwdDxtm/"FixtureOwner"'];
+    mixedCaseExplicit.portableSchema.relations[0].relacl=await defaultTableAcl('"FixtureOwner"');
     const lowercaseExplicit=structuredClone(mixedCaseDefault);
-    lowercaseExplicit.portableSchema.relations[0].relacl=['fixtureowner=arwdDxtm/fixtureowner'];
+    lowercaseExplicit.portableSchema.relations[0].relacl=await defaultTableAcl('fixtureowner');
     const mixedCaseCanonical=await prepareRestoreComparison(client,mixedCaseDefault);
     const lowercaseCanonical=await prepareRestoreComparison(client,lowercaseExplicit);
     assert.throws(()=>compareRestoreProof(mixedCaseCanonical,lowercaseCanonical),/RESTORE_SCHEMA_MISMATCH_relations/);
@@ -61,7 +65,7 @@ integration('semantic relation comparison preserves complete grants, owners, sha
       assert.throws(()=>compareRestoreProof(a,changed),/RESTORE_PROOF_MISMATCH/);
     }
     await client.query('ROLLBACK');
-    for(const alter of [row=>{row.extra='PRIVATE_CANARY';},row=>{row.relacl=['INVALID_PRIVATE_CANARY'];},...[null,[],['fixture_owner=arwdDxtm/fixture_owner']].map(acl=>row=>{row.owner='missing_fixture_role';row.relacl=acl;})]){
+    for(const alter of [row=>{row.extra='PRIVATE_CANARY';},row=>{row.relacl=['INVALID_PRIVATE_CANARY'];},...[null,[],ownerTableAcl].map(acl=>row=>{row.owner='missing_fixture_role';row.relacl=acl;})]){
       const invalid=structuredClone(source);alter(invalid.portableSchema.relations[0]);
       await client.query('BEGIN READ ONLY');
       await assert.rejects(prepareRestoreComparison(client,invalid),error=>error.message==='RESTORE_RELATION_ACL_COMPARISON_FAILED'&&!String(error.stack).includes('PRIVATE_CANARY'));
