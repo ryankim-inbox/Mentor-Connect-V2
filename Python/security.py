@@ -34,7 +34,7 @@ def require_verified_user(request: Request):
 
 def member(user):
     if not has_member_access(user):
-        raise HTTPException(403, 'Email verification required')
+        raise HTTPException(403, 'Member access required')
     return user
 
 

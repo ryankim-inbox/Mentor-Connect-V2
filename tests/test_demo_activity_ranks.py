@@ -162,6 +162,10 @@ def test_ineligible_authors_and_peers_receive_and_contribute_no_credit(activity_
         }
         cur.execute(f"UPDATE users SET {updates[excluded]} WHERE id=%s", (excluded_id,))
         conn.commit()
+    if excluded == 'unverified':
+        assert ranks().get_activity_rank(excluded_id)['distinctPartners'] == 1
+        assert ranks().get_activity_rank(501 if excluded_id == 1 else 1)['distinctPartners'] == 1
+        return
     assert ranks().get_activity_rank(excluded_id) is None
     other_id = 501 if excluded_id == 1 else 1
     assert ranks().get_activity_rank(other_id) == {
@@ -200,7 +204,7 @@ def test_current_eligibility_is_rechecked_after_admin_promotion(activity_databas
     assert ranks().get_activity_rank(1)["distinctPartners"] == 0
 
 
-def test_exact_enabled_test_members_follow_current_member_policy(activity_database, monkeypatch):
+def test_unverified_members_rank_independently_of_legacy_test_configuration(activity_database, monkeypatch):
     for key, value in {
         "TEST_MEMBER_ACCESS_ENABLED": "true",
         "APP_ORIGIN": "https://mentor-connect-test.onrender.com",
@@ -214,9 +218,11 @@ def test_exact_enabled_test_members_follow_current_member_policy(activity_databa
         conn.commit()
     assert ranks().get_activity_rank(1)["distinctPartners"] == 1
     assert ranks().get_activity_rank(501)["distinctPartners"] == 1
-    assert ranks().get_activity_rank(951) is None
+    assert ranks().get_activity_rank(951) == {
+        "userId": 951, "distinctPartners": 0, "rank": None, "tier": None,
+    }
     monkeypatch.setenv("TEST_MEMBER_ACCESS_ENABLED", "false")
-    assert ranks().get_activity_rank(1) is None
+    assert ranks().get_activity_rank(1)["distinctPartners"] == 1
 
 
 @pytest.mark.parametrize("user_id", [0, -1, True, "1", None, 2147483648])

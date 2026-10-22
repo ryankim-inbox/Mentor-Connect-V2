@@ -67,7 +67,7 @@ test("unverified test member receives the notification badge and reads its own l
       .first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Test member access · Email ownership unverified"),
+    page.getByText("Email ownership unverified · Verification is optional for member access."),
   ).toBeVisible();
 });
 
@@ -114,7 +114,7 @@ test("ordinary unverified identity cannot fetch notifications via direct URL or 
   });
   await page.goto("/notifications");
   await expect(
-    page.getByRole("heading", { name: "Verify your email" }),
+    page.getByRole("heading", { name: "Member access unavailable" }),
   ).toBeVisible();
   await expect(
     page.getByRole("navigation").getByRole("link", { name: /Notifications/ }),
@@ -190,7 +190,7 @@ test("revoked member access removes the open notification page and stops read at
     window.dispatchEvent(new Event("visibilitychange")),
   );
   await expect(
-    page.getByRole("heading", { name: "Verify your email" }),
+    page.getByRole("heading", { name: "Member access unavailable" }),
   ).toBeVisible();
   await expect(page.getByText(item.message, { exact: true })).toHaveCount(0);
   expect(reads).toBe(0);

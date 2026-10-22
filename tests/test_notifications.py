@@ -66,7 +66,7 @@ def test_notifications_work_without_runtime_ddl_or_admin_writes(notification_sch
         assert execute(notification_schema, 'SELECT count(*) FROM dm_conversations')[0][0] == before_dm
 
 
-def test_two_test_members_receive_notifications_but_synthetic_and_unverified_candidates_do_not(notification_schema, backend_server):
+def test_unverified_members_receive_notifications_but_locked_and_admin_candidates_do_not(notification_schema, backend_server):
     unverify(notification_schema, 1)
     unverify(notification_schema, 501)
     unverify(notification_schema, 502)
@@ -80,12 +80,12 @@ def test_two_test_members_receive_notifications_but_synthetic_and_unverified_can
         status, inbox = api(mentor, base, 'GET', '/api/notifications')
         assert status == 200, inbox
         assert any(item['requestId'] == request['id'] for item in inbox['items'])
-        assert execute(notification_schema, 'SELECT count(*) FROM notifications WHERE user_id IN (502,951)')[0][0] == 0
+        assert execute(notification_schema, 'SELECT count(*) FROM notifications WHERE user_id=951')[0][0] == 0
         unverify(notification_schema, 501)
-        execute(notification_schema, "UPDATE users SET role='both' WHERE id=501")
+        execute(notification_schema, "UPDATE users SET is_admin=true WHERE id IN (501,502)")
         assert api(mentor, base, 'GET', '/api/notifications')[0] == 403
         create_request(student, base, 'No currently eligible mentor')
-        assert execute(notification_schema, "SELECT count(*) FROM notifications WHERE kind='request_match'")[0][0] == 1
+        assert execute(notification_schema, "SELECT count(*) FROM notifications WHERE kind='request_match'")[0][0] == 2
 
 
 def test_inboxes_are_self_only_bounded_and_mark_only_the_current_user(notification_schema, backend_server):
@@ -128,5 +128,8 @@ def test_notification_contract_through_real_gateway(notification_schema, gateway
     assert api(mentor, gateway_server, 'POST', '/api/notifications/read') == (204, '')
     assert api(mentor, gateway_server, 'GET', '/api/notifications')[1]['unreadCount'] == 0
     unverify(notification_schema, 501)
+    assert api(mentor, gateway_server, 'GET', '/api/notifications')[0] == 200
+    assert api(mentor, gateway_server, 'POST', '/api/notifications/read')[0] == 204
+    execute(notification_schema, 'UPDATE users SET is_admin=true WHERE id=501')
     assert api(mentor, gateway_server, 'GET', '/api/notifications')[0] == 403
     assert api(mentor, gateway_server, 'POST', '/api/notifications/read')[0] == 403

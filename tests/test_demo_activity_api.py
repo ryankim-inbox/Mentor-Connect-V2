@@ -19,12 +19,12 @@ def test_activity_badge_has_member_gate_and_private_target_filter(backend_databa
         })
         assert api(client, base, 'GET', '/api/users/999999/activity-rank')[0] == 404
         execute(backend_database, 'UPDATE users SET email_verified_at=NULL,is_verified=false WHERE id=1')
-        assert api(client, base, 'GET', path)[0] == 403
+        assert api(client, base, 'GET', path)[0] == 200
         execute(backend_database, 'UPDATE users SET email_verified_at=now(),is_verified=true,is_admin=true WHERE id=1')
         assert api(client, base, 'GET', path)[0] == 200  # moderation may inspect public badges
         assert api(client, base, 'GET', '/api/users/1/activity-rank')[0] == 404
         execute(backend_database, 'UPDATE users SET email_verified_at=NULL,is_verified=false WHERE id=501')
-        assert api(client, base, 'GET', path)[0] == 404
+        assert api(client, base, 'GET', path)[0] == 200
         execute(backend_database, 'UPDATE users SET email_verified_at=now(),is_verified=true WHERE id=501')
         for blocker, blocked in [(1,501),(501,1)]:
             execute(backend_database, 'INSERT INTO blocks (blocker_id,blocked_user_id) VALUES (%s,%s)', (blocker,blocked))

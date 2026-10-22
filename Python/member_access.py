@@ -1,4 +1,4 @@
-"""Server-only, two-account exception for the fixed test deployment.
+"""Server-owned member access, independent of mailbox ownership.
 
 Ownership is persisted separately. This policy never writes verification state,
 accepts a client claim, or turns a student role into an administrator.
@@ -6,9 +6,6 @@ accepts a client claim, or turns a student role into an administrator.
 import os
 import re
 from account_policy import is_synthetic_locked
-
-
-TEST_ORIGIN = 'https://mentor-connect-test.onrender.com'
 
 
 def configured_test_members():
@@ -22,22 +19,10 @@ def configured_test_members():
     return {mentor: 'mentor', mentee: 'mentee'}
 
 
-def enabled_test_members():
-    """No local, staging, suffix, case-folded, or trailing-slash origin aliases."""
-    if (os.environ.get('TEST_MEMBER_ACCESS_ENABLED') != 'true'
-            or os.environ.get('APP_ORIGIN') != TEST_ORIGIN
-            or os.environ.get('GATEWAY_PUBLIC_ORIGIN') != TEST_ORIGIN):
-        return {}
-    return configured_test_members()
-
-
 def has_member_access(user):
     if is_synthetic_locked(user):
         return False
-    if user['email_verified_at'] is not None:
-        return user['is_admin'] is False or has_admin_access(user)
-    return (user['is_admin'] is False
-            and enabled_test_members().get(user['id']) == user['role'])
+    return user['is_admin'] is False or has_admin_access(user)
 
 
 def has_admin_access(user):

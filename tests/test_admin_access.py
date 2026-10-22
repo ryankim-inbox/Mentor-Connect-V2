@@ -36,6 +36,8 @@ def test_private_profile_safe_mentor_directory_and_blocks(backend_database,backe
         assert all(set(m)==public for m in mentors)
         assert api(student,base,'GET','/api/users/502')[0] == 403
         execute(backend_database,'UPDATE users SET email_verified_at=NULL,is_verified=false WHERE id=501')
+        assert [m['id'] for m in api(student,base,'GET','/api/mentors')[1]] == [501]
+        execute(backend_database,'UPDATE users SET is_admin=true WHERE id=501')
         assert api(student,base,'GET','/api/mentors')[1] == []
 
 
@@ -80,7 +82,7 @@ def test_district_list_is_public_and_details_require_membership(backend_database
         assert api(anonymous,base,'GET','/api/districts')[0]==200
         assert api(anonymous,base,'GET','/api/districts/1')[0]==401
         student,_=login(base,'student001@test.edu')
-        assert api(student,base,'GET','/api/districts/1')[0]==403
+        assert api(student,base,'GET','/api/districts/1')[0]==200
         for email in ['mentor501@test.edu','both951@test.edu']:
             verified,_=login(base,email)
             assert api(verified,base,'GET','/api/districts/1')[0]==200

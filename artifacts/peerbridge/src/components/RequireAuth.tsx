@@ -88,9 +88,9 @@ export function RequireAuth({
 export function VerificationNotice() {
   return (
     <section className="mx-auto max-w-xl px-4 py-12">
-      <h1 className="text-2xl font-bold">Verify your email</h1>
+      <h1 className="text-2xl font-bold">Member access unavailable</h1>
       <p className="my-4">
-        Confirm email ownership to discover mentors, post requests and use chat.
+        This account does not currently have access to member features.
       </p>
       <Link href="/verify-email" className="text-primary underline">
         Verify email

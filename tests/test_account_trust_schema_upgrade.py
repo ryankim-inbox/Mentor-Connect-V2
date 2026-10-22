@@ -34,4 +34,5 @@ def test_0005_upgrade_preserves_content_resets_legacy_trust_and_never_promotes_a
     with backend_server() as base:
         client,_=login(base,'student001@test.edu')
         assert api(client,base,'GET','/api/auth/me')[1]['isVerified'] is False
-        assert api(client,base,'GET','/api/requests')[0]==403
+        assert api(client,base,'GET','/api/requests')[0]==200
+        assert api(client,base,'GET','/api/admin/reports')[0]==403

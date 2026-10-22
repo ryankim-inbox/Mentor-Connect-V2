@@ -22,8 +22,9 @@ def test_gateway_verification_flow_and_current_authority(request, backend_databa
     status, own = api(student, base, 'GET', '/api/users/1')
     assert status == 200 and own['isVerified'] is False and own['isAdmin'] is False
     assert api(student, base, 'PATCH', '/api/users/1', {'bio': 'Own settings'})[0] == 200
-    for path in ['/api/mentors', '/api/users/501', '/api/tags', '/api/districts/1', '/api/stats/district/1']:
-        assert api(student, base, 'GET', path)[0] == 403, path
+    for path in ['/api/mentors', '/api/users/501', '/api/tags', '/api/districts/1']:
+        assert api(student, base, 'GET', path)[0] == 200, path
+    assert api(student, base, 'GET', '/api/stats/district/1')[0] == 403
     status, result = api(student, base, 'POST', '/api/auth/verification/request')
     assert status == 202 and 'token' not in json.dumps(result)
     token = token_from(tmp_path / 'outbox')
@@ -37,7 +38,7 @@ def test_gateway_verification_flow_and_current_authority(request, backend_databa
     assert set(mentors[0]) == {'id', 'name', 'role', 'subjects', 'districtId', 'districtName', 'bio', 'isDemo'}
     assert set(api(student, base, 'GET', '/api/users/501')[1]) == {'id', 'name', 'subjects', 'createdAt', 'isDemo'}
     unverify(backend_database)
-    assert api(student, base, 'GET', '/api/mentors')[0] == 403
+    assert api(student, base, 'GET', '/api/mentors')[0] == 200
 
 
 def test_gateway_report_moderation_and_admin_revocation(gateway_server, backend_database):
@@ -123,13 +124,13 @@ def test_gateway_comment_edit_delete_tombstone_and_replay(gateway_server):
 
 
 @pytest.mark.parametrize('path', ['/ws/chat/rooms/1', '/ws/dms/1'])
-def test_gateway_websocket_handshake_denies_revoked_ownership(gateway_server, backend_database, path):
+def test_gateway_websocket_handshake_denies_admin_promoted_student(gateway_server, backend_database, path):
     _, cookie = login(gateway_server, 'student001@test.edu')
-    unverify(backend_database)
+    execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=1')
     with pytest.raises(InvalidStatus) as error:
         with connect(gateway_server.replace('http://', 'ws://') + path,
                      origin='http://127.0.0.1:14200', additional_headers={'Cookie': cookie}, open_timeout=3):
-            pytest.fail('Revoked ownership accepted at gateway handshake')
+            pytest.fail('Administrator accepted at student gateway handshake')
     assert error.value.response.status_code == 403
 
 

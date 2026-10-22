@@ -60,7 +60,7 @@ for (const role of ["mentor", "mentee", "both"] as const)
     }
     expect(protectedCalls).toEqual([]);
   });
-test("unverified own settings remain available and member queries and chat stay disabled", async ({
+test("server-denied membership keeps own settings available and member queries and chat disabled", async ({
   page,
 }) => {
   await setup(page, { ...member, isVerified: false, hasMemberAccess: false });
@@ -76,7 +76,7 @@ test("unverified own settings remain available and member queries and chat stay 
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
   await page.goto("/requests");
   await expect(
-    page.getByRole("heading", { name: "Verify your email" }),
+    page.getByRole("heading", { name: "Member access unavailable" }),
   ).toBeVisible();
   expect(memberCalls).toEqual([]);
 });

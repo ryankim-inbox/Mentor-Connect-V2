@@ -210,10 +210,10 @@ def test_existing_duplicate_audit_rows_are_preserved_and_resolved_targets_can_be
     ]
 
 
-def test_report_actor_authentication_and_live_verification_are_required(backend_database, backend_server):
+def test_unverified_authenticated_member_can_report(backend_database, backend_server):
     with backend_server() as base:
         assert api(build_opener(), base, "POST", "/api/reports", report_body())[0] == 401
         client, _ = login(base, "student001@test.edu")
         execute(backend_database, "UPDATE users SET email_verified_at=NULL,is_verified=false WHERE id=1")
-        assert api(client, base, "POST", "/api/reports", report_body())[0] == 403
-    assert execute(backend_database, "SELECT count(*) FROM reports") == [(0,)]
+        assert api(client, base, "POST", "/api/reports", report_body())[0] == 201
+    assert execute(backend_database, "SELECT count(*) FROM reports") == [(1,)]

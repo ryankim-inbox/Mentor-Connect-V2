@@ -91,7 +91,7 @@ export function Navbar() {
       {user && !user.isVerified && (
         <p className="px-4 py-2 text-sm">
           {user.hasMemberAccess
-            ? "Test member access · Email ownership unverified"
+            ? "Email ownership unverified · Verification is optional for member access."
             : "Email ownership pending."}{" "}
           <Link href="/verify-email" className="underline">
             Verify email

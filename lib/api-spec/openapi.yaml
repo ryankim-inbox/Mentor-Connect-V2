@@ -2971,11 +2971,11 @@ components:
             type: string
         isVerified:
           type: boolean
-          description: Actual persisted email ownership. Test member access never sets this flag.
+          description: Actual persisted email ownership. Member access does not require or set this flag.
         hasMemberAccess:
           type: boolean
           readOnly: true
-          description: Server-computed member access from actual ownership or the two-account test-site policy. Does not
+          description: Server-computed member access independent of email ownership for ordinary accounts. Does not
             grant administrator access.
         createdAt:
           type: string

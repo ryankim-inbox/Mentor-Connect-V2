@@ -7,7 +7,7 @@ const testMember = {
   name: "Email Test Member",
   email: "approved-test@example.com",
   role: "mentee",
-  isVerified: false, hasMemberAccess: false,
+  isVerified: false, hasMemberAccess: true,
   isAdmin: false,
 };
 const acceptedMessage =
@@ -74,7 +74,7 @@ test("non-.edu signup reaches the server once and a rejection preserves the form
   ]);
 });
 
-test("server-accepted test signup stays unverified and opens verification without administrator access", async ({
+test("server-accepted signup keeps ownership unverified, opens member features and denies administrator access", async ({
   page,
 }) => {
   await setup(page);
@@ -98,7 +98,7 @@ test("server-accepted test signup stays unverified and opens verification withou
     sends++;
     return route.fulfill({ json: { message: "accepted" } });
   });
-  await page.goto("/register?returnTo=%2Fadmin%2Freports");
+  await page.goto("/register?returnTo=%2Frequests");
   await fillRegistration(page, testMember.email);
   await expect(
     page.getByRole("button", { name: "Create account", exact: true }),
@@ -106,21 +106,15 @@ test("server-accepted test signup stays unverified and opens verification withou
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/verify-email$/);
-  await expect(
-    page.getByRole("heading", { name: "Verify your email", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Email ownership pending\./)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Send verification email", exact: true }),
-  ).toBeEnabled();
-  await expect(
-    page.getByText("Your email is verified.", { exact: true }),
-  ).toHaveCount(0);
-  for (const label of ["Reports", "Analytics", "Scheduling", "Mentors"])
-    await expect(
-      page.getByRole("link", { name: label, exact: true }),
-    ).toHaveCount(0);
+  await expect(page).toHaveURL(/\/requests$/);
+  await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
+  await expect(page.getByText("Email ownership unverified · Verification is optional for member access.")).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("link", { name: "Mentors", exact: true })).toBeVisible();
+  await expect(page.getByText("Your email is verified.", { exact: true })).toHaveCount(0);
+  await page.goto("/admin/reports");
+  await expect(page.getByText("Administrator access required", { exact: true })).toBeVisible();
+  for (const label of ["Reports", "Analytics", "Scheduling"])
+    await expect(page.getByRole("navigation").getByRole("link", { name: label, exact: true })).toHaveCount(0);
   expect(registrationCalls).toBe(1);
   expect(sends).toBe(0);
 });

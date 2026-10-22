@@ -103,7 +103,7 @@ def test_top_five_filters_all_ineligible_candidates_before_limiting(matching_db)
         FROM generate_series(2000,2982) n""")
     request = committed_request(matching_db)
     assert auto_match.auto_match_request(request) == 5
-    assert recipient_ids(matching_db, request['id']) == [10, 11, 12, 13, 14]
+    assert recipient_ids(matching_db, request['id']) == [5, 10, 11, 12, 13]
     assert len(deliveries(matching_db, request['id'])) == 6
     assert execute(matching_db, 'SELECT count(*) FROM request_applications')[0][0] == 0
     assert execute(matching_db, "SELECT count(*) FROM request_events WHERE kind='matched'")[0][0] == 0
@@ -180,9 +180,10 @@ def test_delivery_rechecks_recipient_after_ranking(matching_db, monkeypatch, cha
         return result
 
     monkeypatch.setattr(auto_match, 'find_matches_for_request', rank_then_revoke)
-    assert auto_match.auto_match_request(request) == 0
-    assert recipient_ids(matching_db, request['id']) == []
-    assert [row[1] for row in deliveries(matching_db, request['id'])] == ['request_match_summary']
+    assert auto_match.auto_match_request(request) == (1 if change == 'unverified' else 0)
+    assert recipient_ids(matching_db, request['id']) == ([10] if change == 'unverified' else [])
+    assert [row[1] for row in deliveries(matching_db, request['id'])] == (
+        ['request_match', 'request_match_summary'] if change == 'unverified' else ['request_match_summary'])
 
 
 def test_completed_delivery_never_adds_replacements_on_retry(matching_db):

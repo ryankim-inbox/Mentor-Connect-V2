@@ -98,12 +98,12 @@ export const RegisterResponse = zod.object({
     isVerified: zod
       .boolean()
       .describe(
-        "Actual persisted email ownership. Test member access never sets this flag.",
+        "Actual persisted email ownership. Member access does not require or set this flag.",
       ),
     hasMemberAccess: zod
       .boolean()
       .describe(
-        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+        "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
@@ -137,12 +137,12 @@ export const LoginResponse = zod.object({
     isVerified: zod
       .boolean()
       .describe(
-        "Actual persisted email ownership. Test member access never sets this flag.",
+        "Actual persisted email ownership. Member access does not require or set this flag.",
       ),
     hasMemberAccess: zod
       .boolean()
       .describe(
-        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+        "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
@@ -177,12 +177,12 @@ export const GetMeResponse = zod.object({
   isVerified: zod
     .boolean()
     .describe(
-      "Actual persisted email ownership. Test member access never sets this flag.",
+      "Actual persisted email ownership. Member access does not require or set this flag.",
     ),
   hasMemberAccess: zod
     .boolean()
     .describe(
-      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
@@ -224,12 +224,12 @@ export const GetUserResponse = zod.union([
     isVerified: zod
       .boolean()
       .describe(
-        "Actual persisted email ownership. Test member access never sets this flag.",
+        "Actual persisted email ownership. Member access does not require or set this flag.",
       ),
     hasMemberAccess: zod
       .boolean()
       .describe(
-        "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+        "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
       ),
     createdAt: zod.string(),
     isAdmin: zod.boolean(),
@@ -299,12 +299,12 @@ export const UpdateUserResponse = zod.object({
   isVerified: zod
     .boolean()
     .describe(
-      "Actual persisted email ownership. Test member access never sets this flag.",
+      "Actual persisted email ownership. Member access does not require or set this flag.",
     ),
   hasMemberAccess: zod
     .boolean()
     .describe(
-      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),
@@ -2740,12 +2740,12 @@ export const ConfirmEmailVerificationResponse = zod.object({
   isVerified: zod
     .boolean()
     .describe(
-      "Actual persisted email ownership. Test member access never sets this flag.",
+      "Actual persisted email ownership. Member access does not require or set this flag.",
     ),
   hasMemberAccess: zod
     .boolean()
     .describe(
-      "Server-computed member access from actual ownership or the two-account test-site policy. Does not grant administrator access.",
+      "Server-computed member access independent of email ownership for ordinary accounts. Does not grant administrator access.",
     ),
   createdAt: zod.string(),
   isAdmin: zod.boolean(),

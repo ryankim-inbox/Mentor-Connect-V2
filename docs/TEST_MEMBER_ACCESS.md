@@ -1,82 +1,72 @@
-# Two-account test member access
+# Demo member access without email ownership verification
 
-The test deployment can grant ordinary member access to exactly one designated
-mentor and one designated mentee without claiming that either owns their email.
-This is a server policy, disabled by default. It does not create accounts, change
-signup eligibility, send mail, set `is_verified` / `email_verified_at`, or grant
-administrator access. Actual account IDs and credentials are not stored here.
+Ordinary registered accounts can use member features without verifying mailbox
+ownership. This is the approved contest-demo policy. It does not establish
+school enrollment, age, identity or mailbox ownership. The application still
+requires a valid login, the existing signup email eligibility rule, and current
+server-side authority for each protected operation.
 
-## Private server configuration
+## Separate facts and privileges
 
-After the two accounts have been identified, configure all of these together on
-the test deployment:
+- `User.hasMemberAccess` is computed from the current database row. Ordinary,
+  unlocked accounts have member access independently of email ownership.
+- `User.isVerified` represents only actual `email_verified_at` proof. Registering,
+  logging in, posting or chatting does not write a verification timestamp.
+- `User.isAdmin` still requires actual ownership and the database administrator
+  flag. It is never inferred from email, mentor/mentee/both role or client input.
+  Administrators cannot participate in student posting, applications or chat.
+- Synthetic seed identities remain locked by the server-written
+  `!mentor-connect-synthetic:` password sentinel. They cannot authenticate,
+  retain a session, receive messages or acquire member/administrator authority.
 
-| Setting | Required value |
-| --- | --- |
-| `TEST_MEMBER_ACCESS_ENABLED` | Literal `true` |
-| `TEST_MEMBER_MENTOR_ID` | The existing mentor's exact positive integer account ID |
-| `TEST_MEMBER_MENTEE_ID` | The existing mentee's different positive integer account ID |
-| `APP_ORIGIN` | `https://mentor-connect-test.onrender.com` |
-| `GATEWAY_PUBLIC_ORIGIN` | `https://mentor-connect-test.onrender.com` |
+Signup retains the `.edu` format restriction and the existing private exact
+non-.edu test-recipient exception. Neither is evidence of school enrollment.
+Registration does not send mail automatically. Users may deliberately request
+optional ownership verification; the existing expiry, resend limits, protected
+local test outbox and disabled/failed delivery behavior remain unchanged.
 
-Both IDs must be canonical decimal integers between 1 and 2147483647. Missing,
-duplicate, whitespace-padded, leading-zero, comma-separated, or malformed IDs
-disable the exception. Origins must match literally, without a trailing slash.
-There is no localhost override. Local regression tests supply the exact origin
-configuration only to synthetic disposable servers; they make no remote calls.
+## Existing configuration and live authorization
 
-The fresh database row must have the exact bound role (`mentor` or `mentee`) and
-`is_admin=false`. `both`, changed roles, an admin flag, or any third account cannot
-receive this exception. Registration fields, browser storage, email patterns,
-signed-session privilege attributes, and profile updates cannot add account IDs.
-The policy is independent of `EMAIL_TEST_ALLOWLIST_ENABLED` and
-`EMAIL_TEST_RECIPIENT`; those existing settings only govern signup eligibility.
+`TEST_MEMBER_ACCESS_ENABLED` no longer gates ordinary membership. No origin or
+pair of account IDs is required for ordinary member access. Disabling that
+retired switch does not revoke ordinary users.
 
-The account emails/IDs remain pending until supplied or established through an
-authorized account-creation workflow. The user enters their own passwords
-directly in the service; the operator must not generate, read, transmit, commit,
-or log those credentials.
+A valid pair in `TEST_MEMBER_MENTOR_ID` and `TEST_MEMBER_MENTEE_ID` remains excluded
+from administrator authority, even with a database admin flag and actual email
+proof. Preserve those reserved IDs; deleting their configuration is not a way to
+revoke a mistaken administrator grant. IDs must remain distinct canonical positive
+32-bit integers. This patch does not edit any deployed environment variables.
 
-## Authority and revocation
+HTTP and WebSocket checks reload current database authority. Synthetic locks,
+admin promotion, room/DM membership, bilateral blocks, self-only settings and
+consent-based matching remain enforced. Mentor discovery excludes administrator
+and locked seed accounts. The browser follows `hasMemberAccess` while honestly
+displaying unverified ownership. Operational routes retain separate admin checks.
 
-`User.hasMemberAccess` is the computed member decision. `User.isVerified` still
-means actual persisted email ownership. `User.isAdmin` is effective admin
-authority, requiring actual ownership and the database admin flag, and excluding
-the two reserved IDs. A valid configured pair remains excluded from admin even
-when the member feature is disabled. This also protects gateway-owned operational
-endpoints, which consume the fresh Python session response.
+## Administrator preparation
 
-Synthetic seed identities are separately locked by the database password sentinel
-`!mentor-connect-synthetic:`. They cannot log in, retain sessions, request email,
-or receive member/admin authority, even if accidentally listed in the two-account
-configuration. The marker is never inferred from an email address or client field.
+The requested demo address `admin@test.edu` does not prove ownership. This patch
+neither creates that account nor grants a verification exception. The supported
+registration form accepts a password entered directly by its user; it requires a
+display name, student-role value and district, so those values must be deliberately
+chosen rather than inferred as real student identity. Registration creates only
+an ordinary account and sends no email automatically.
 
-HTTP member checks load the current database row. Chat and DM WebSockets check at
-handshake, send, and recipient broadcast. Room membership, DM membership, blocks,
-self-only profile changes, and consent-based matching restrictions still apply.
-Mentor discovery admits the designated mentor only while the same policy is valid.
-The browser uses `hasMemberAccess` for member routes, navigation, safety controls,
-and chat, and displays “Test member access · Email ownership unverified”. It keeps
-actual ownership and admin checks for operational pages.
+Any demo administrator exception requires a separately reviewed exact numeric
+account ID, exact email, server configuration, and audited role-grant approval.
+Do not fill `email_verified_at`, widen general administrator access, send mail to
+the demo address, or generate a password in chat to make it usable. Keep student
+access denied once the account becomes an administrator.
 
-Set `TEST_MEMBER_ACCESS_ENABLED=false` and restart/redeploy every application
-instance to revoke the exception; environment changes must reach running workers.
-The next HTTP/socket authorization then denies an unverified test account. Role
-or admin-flag changes take effect from the fresh database check without restart.
-Existing socket recipients are checked again before message delivery. Removing
-the private ID configuration also removes the reserved-ID admin exclusion, so do
-not remove it as a substitute for revoking an accidental database admin grant.
+## Verification and rollout
 
-Normal users verify email ownership at signup. The persisted timestamp survives
-logout and future logins. The 30-minute expiry applies only to an unused email
-link; expiration or replay of an old token does not revoke already established
-ownership. This feature adds no new database columns or migrations.
+Regression coverage includes new registration with no email delivery, truthful
+ownership state, mentor discovery, notification/matching eligibility, HTTP and
+WebSocket authorization, ownership token protections, blocked peers, synthetic
+locks, admin separation and browser return destinations. Tests use disposable
+local databases only. No schema migration is introduced by this policy change.
 
-## Verification
-
-`tests/test_test_member_access.py` covers fail-closed configuration, role binding,
-third accounts, client/session forgery, actual ownership persistence, member chat,
-mentor discovery, consent matching, gateway HTTP/WebSockets, admin exclusion, and
-revocation with synthetic accounts. Gateway authority tests and
-`e2e/test-member-access.spec.ts` cover the wire boundary, direct browser URLs,
-login return destinations, honest ownership presentation, and admin denial.
+Deploy Python, generated API contracts and UI together after exact-commit CI and
+explicit deployment approval. Local validation does not prove the live site has
+this behavior. Reverting to the previous code restores the ownership gate without
+changing persisted ownership facts or deleting data.

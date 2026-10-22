@@ -13,17 +13,17 @@ async function setup(page: Page, identity: () => unknown) {
   });
 }
 
-for (const role of ["mentor", "mentee"]) {
-  test(`${role} test member opens member URLs and chat without claiming ownership`, async ({ page }) => {
+for (const role of ["mentor", "mentee", "both"]) {
+  test(`${role} unverified member opens member URLs and chat without claiming ownership`, async ({ page }) => {
     await setup(page, () => ({ ...testMember, role }));
     await page.goto("/requests");
-    await expect(page.getByRole("heading", { name: "Verify your email" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Member access unavailable" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
-    await expect(page.getByText("Test member access · Email ownership unverified")).toBeVisible();
+    await expect(page.getByText("Email ownership unverified · Verification is optional for member access.")).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Mentors", exact: true })).toBeVisible();
     for (const path of ["/mentors", "/connections", "/requests/new", "/users/2"]) {
       await page.goto(path);
-      await expect(page.getByRole("heading", { name: "Verify your email" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Member access unavailable" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
     }
     await page.goto("/admin/reports");
@@ -31,7 +31,7 @@ for (const role of ["mentor", "mentee"]) {
   });
 }
 
-test("test-member login follows return path and revoked access blocks direct URLs", async ({ page }) => {
+test("unverified-member login follows return path and revoked access blocks direct URLs", async ({ page }) => {
   let identity: unknown = null;
   await setup(page, () => identity);
   await page.route("**/api/auth/login", (route) => {
@@ -45,7 +45,7 @@ test("test-member login follows return path and revoked access blocks direct URL
   await expect(page).toHaveURL(/\/requests$/);
   identity = { ...testMember, hasMemberAccess: false };
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Member access unavailable" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
 });
 
@@ -57,7 +57,7 @@ test("an inconsistent unverified admin claim grants neither operations nor stude
   });
   await page.goto("/dashboard");
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Verify your email" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Member access unavailable" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Python Practice Lab" })).toHaveCount(0);
   for (const path of ["/admin/reports", "/practice-lab", "/analytics", "/scheduling", "/recommendations"]) {
     await page.goto(path);

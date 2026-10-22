@@ -116,7 +116,7 @@ def test_allowlist_cannot_be_selected_or_grant_privilege_in_body(monkeypatch, ch
 
 
 @pytest.mark.parametrize('entrypoint', ['backend', 'gateway'])
-def test_exact_test_signup_still_requires_ownership_and_never_grants_admin(
+def test_exact_test_signup_keeps_ownership_separate_from_membership_and_never_grants_admin(
         request, backend_database, monkeypatch, tmp_path, entrypoint):
     configure(monkeypatch, recipient='Owner+Test@Example.COM')
     monkeypatch.setenv('EMAIL_DELIVERY_MODE', 'development-file')
@@ -138,12 +138,12 @@ def test_exact_test_signup_still_requires_ownership_and_never_grants_admin(
     assert execute(backend_database, 'SELECT email_verified_at,is_verified,is_admin FROM users WHERE id=%s', (user_id,)) == [(None, False, False)]
     assert execute(backend_database, 'SELECT count(*) FROM email_verification_tokens WHERE user_id=%s', (user_id,)) == [(0,)]
     assert api(client, base, 'GET', '/api/auth/me')[0] == 200
-    assert api(client, base, 'GET', '/api/mentors')[0] == 403
+    assert api(client, base, 'GET', '/api/mentors')[0] == 200
     assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
     status, response = api(client, base, 'POST', '/api/auth/verification/request')
     assert status == 202, response
     assert 'accepted for delivery' in response['message']
-    assert api(client, base, 'GET', '/api/mentors')[0] == 403
+    assert api(client, base, 'GET', '/api/mentors')[0] == 200
     status, own = api(client, base, 'POST', '/api/auth/verification/confirm', {'token': token_from(tmp_path / 'outbox')})
     assert status == 200 and own['isVerified'] is True and own['isAdmin'] is False
     assert api(client, base, 'GET', '/api/mentors')[0] == 200

@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 // Called only with the protected outbox of this disposable HTTPS test process.
@@ -16,18 +16,28 @@ export async function runAccountTrustJourney({ origin, outbox }, browser) {
     await page
       .getByRole("button", { name: "Create account", exact: true })
       .click();
-    await expect(page).toHaveURL(/\/verify-email$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
     const before = await context.request.get(origin + "/api/auth/me");
-    expect((await before.json()).isVerified).toBe(false);
+    const member = await before.json();
+    expect(member.isVerified).toBe(false);
+    expect(member.hasMemberAccess).toBe(true);
+    expect(member.isAdmin).toBe(false);
     expect((await context.request.get(origin + "/api/mentors")).status()).toBe(
-      403,
+      200,
     );
     expect(
       (await context.request.get(origin + "/api/chat/rooms")).status(),
-    ).toBe(403);
-    await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(
-      0,
-    );
+    ).toBe(200);
+    await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
+    expect((await context.request.get(origin + "/api/admin/reports")).status()).toBe(403);
+    expect(existsSync(outbox) ? readdirSync(outbox).filter((f) => f.endsWith(".json")) : []).toHaveLength(0);
+    const posted = await context.request.post(origin + "/api/requests", {
+      headers: { Origin: origin },
+      data: { districtId: 1, title: "E2E TEST unverified demo post", description: "No ownership claim", role: "mentee" },
+    });
+    expect(posted.status()).toBe(201);
+    await page.goto(origin + "/verify-email");
+    await expect(page.getByText("Email verification is optional for member features.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Send verification email" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Verification email accepted for delivery." }),
@@ -138,7 +148,8 @@ export async function runAccountTrustJourney({ origin, outbox }, browser) {
         result: "PASS",
         checks: [
           "real-registration-unverified",
-          "member-and-chat-denial",
+          "unverified-member-chat-and-post-access",
+          "no-automatic-email-delivery",
           "explicit-dev-delivery",
           "protected-outbox",
           "fragment-scrub",

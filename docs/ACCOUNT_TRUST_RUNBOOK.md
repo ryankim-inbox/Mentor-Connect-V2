@@ -1,5 +1,11 @@
 # Account ownership and administrator rollout
 
+Current contest-demo member policy: ordinary authenticated accounts no longer need
+mailbox ownership proof to use member features. See [demo member access](TEST_MEMBER_ACCESS.md).
+The administrator and actual ownership-proof requirements below remain in force.
+Migration-era member-gating statements below describe the older rollout, not the
+current member policy. This policy change needs no new schema migration.
+
 This branch implements account ownership and an explicitly enabled, single-recipient Resend test adapter. It is not ready for deployment: delivery defaults to disabled, actual inbox proof is pending and no administrator has been provisioned. The user authorized PR work, native AMD64 CI and scoped mail/DB/redeployment preparation. Resend testing and one exact recipient were selected privately; see [mail setup and limits](MAIL_PROVIDER_OPTIONS.md). No remote migration, actual mail or deployment step below has been performed. Do not merge main or broaden the targets beyond existing Neon `purple-pond-78194407/neondb` and Free Render `mentor-connect-test`.
 
 ## Before any future deployment

@@ -15,7 +15,9 @@ ORIGIN = 'http://127.0.0.1:14200'
     ('both','both951@test.edu',951,2,1),
 ])
 def test_each_student_role_preserves_global_chat_and_denies_foreign_room_and_dm(gateway_server,backend_database,role,email,user_id,forbidden_room,forbidden_dm):
+    unverify(backend_database, user_id)
     client,cookie=login(gateway_server,email)
+    assert api(client,gateway_server,'GET','/api/auth/me')[1]['isVerified'] is False
     assert api(client,gateway_server,'GET','/api/auth/me')[1]['role']==role
     if forbidden_dm is None:
         forbidden_dm=execute(backend_database,'INSERT INTO dm_conversations (user_a_id,user_b_id) VALUES (501,951) RETURNING id')[0][0]
@@ -30,15 +32,15 @@ def test_each_student_role_preserves_global_chat_and_denies_foreign_room_and_dm(
         message=json.loads(socket.recv(timeout=3))
         assert message['senderId']==user_id and message['body']==f'E2E TEST verified {role} global message'
 
-@pytest.mark.parametrize('identity',['anonymous','unverified'])
+@pytest.mark.parametrize('identity',['anonymous','admin'])
 @pytest.mark.parametrize('path',['/ws/chat/rooms/1','/ws/dms/1'])
-def test_no_socket_authority_without_ownership(gateway_server,backend_database,identity,path):
+def test_anonymous_and_admin_identities_cannot_use_student_sockets(gateway_server,backend_database,identity,path):
     headers={}
-    if identity=='unverified':
+    if identity=='admin':
         _,cookie=login(gateway_server,'student001@test.edu')
-        unverify(backend_database)
+        execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=1')
         headers={'Cookie':cookie}
     with pytest.raises(InvalidStatus) as error:
         with connect(gateway_server.replace('http://','ws://')+path,origin=ORIGIN,additional_headers=headers,open_timeout=3):
-            pytest.fail('Socket accepted without current ownership')
+            pytest.fail('Socket accepted without student authority')
     assert error.value.response.status_code==403

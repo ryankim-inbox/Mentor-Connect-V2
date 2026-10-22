@@ -124,6 +124,9 @@ export default function VerifyEmail() {
             Confirm ownership of {user?.email}. Email links expire after 30
             minutes and work once.
           </p>
+          {user?.hasMemberAccess && (
+            <p>Email verification is optional for member features.</p>
+          )}
           {user?.isVerified && !token ? (
             <p>Your email is verified.</p>
           ) : (
@@ -146,7 +149,7 @@ export default function VerifyEmail() {
               </button>
             </>
           )}
-          {user?.isVerified && (
+          {user?.hasMemberAccess && (
             <Link href="/mentors" className="block my-4 underline text-primary">
               Find mentors
             </Link>

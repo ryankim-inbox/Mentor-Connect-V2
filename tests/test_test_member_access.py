@@ -1,4 +1,4 @@
-"""Only two explicitly designated synthetic accounts may skip ownership for members."""
+"""Legacy test-member settings never limit ordinary members or grant administrators."""
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -59,13 +59,13 @@ def test_two_bound_accounts_have_member_access_without_ownership(enabled_policy,
     ('GATEWAY_PUBLIC_ORIGIN', None), ('GATEWAY_PUBLIC_ORIGIN', 'https://production.example'),
     ('GATEWAY_PUBLIC_ORIGIN', 'http://localhost:5173'),
 ])
-def test_invalid_or_disabled_configuration_fails_closed(enabled_policy, monkeypatch, key, value):
+def test_member_access_does_not_depend_on_legacy_test_configuration(enabled_policy, monkeypatch, key, value):
     if value is None:
         monkeypatch.delenv(key)
     else:
         monkeypatch.setenv(key, value)
     for user in (row(), row(501, 'mentor')):
-        assert format_user(user, 'Synthetic district').get('hasMemberAccess') is False
+        assert format_user(user, 'Synthetic district').get('hasMemberAccess') is True
 
 
 @pytest.mark.parametrize('user_id,role,is_admin', [
@@ -73,10 +73,10 @@ def test_invalid_or_disabled_configuration_fails_closed(enabled_policy, monkeypa
     (501, 'mentee', False), (1, 'both', False), (501, 'admin', False),
     (1, 'mentee', True), (501, 'mentor', True),
 ])
-def test_third_account_wrong_role_or_admin_cannot_use_exception(enabled_policy, user_id, role, is_admin):
+def test_ordinary_members_are_allowed_but_unverified_admins_are_not(enabled_policy, user_id, role, is_admin):
     user = row(user_id, role)
     user['is_admin'] = is_admin
-    assert format_user(user, 'Synthetic district').get('hasMemberAccess') is False
+    assert format_user(user, 'Synthetic district').get('hasMemberAccess') is (not is_admin)
 
 
 def test_designated_ids_never_gain_admin_even_with_actual_ownership(enabled_policy):
@@ -85,10 +85,10 @@ def test_designated_ids_never_gain_admin_even_with_actual_ownership(enabled_poli
         assert format_user(user, 'Synthetic district')['isAdmin'] is False
 
 
-def test_disable_is_recomputed_without_cached_authority(enabled_policy, monkeypatch):
+def test_legacy_exception_switch_does_not_revoke_ordinary_member_access(enabled_policy, monkeypatch):
     assert format_user(row(), 'Synthetic district').get('hasMemberAccess') is True
     monkeypatch.setenv('TEST_MEMBER_ACCESS_ENABLED', 'false')
-    assert format_user(row(), 'Synthetic district').get('hasMemberAccess') is False
+    assert format_user(row(), 'Synthetic district').get('hasMemberAccess') is True
 
 
 def test_test_members_chat_discovery_matching_and_revocation(backend_database, backend_server):
@@ -105,7 +105,7 @@ def test_test_members_chat_discovery_matching_and_revocation(backend_database, b
             for path in ('/api/chat/rooms', '/api/requests', '/api/tags', '/api/blocks'):
                 assert api(client, base, 'GET', path)[0] == 200, path
             assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
-        assert api(third, base, 'GET', '/api/chat/rooms')[0] == 403
+        assert api(third, base, 'GET', '/api/chat/rooms')[0] == 200
         assert [u['id'] for u in api(mentee, base, 'GET', '/api/mentors')[1]] == [501]
         assert api(mentee, base, 'GET', '/api/users/501')[0] == 200
         status, request = api(mentee, base, 'POST', '/api/requests', {
@@ -121,7 +121,7 @@ def test_test_members_chat_discovery_matching_and_revocation(backend_database, b
         with connect(socket_url, additional_headers={'Cookie': cookie}) as socket:
             socket.send('Synthetic exempt member message')
             assert json.loads(socket.recv(timeout=3))['senderId'] == 1
-            execute(backend_database, "UPDATE users SET role='both' WHERE id=1")
+            execute(backend_database, "UPDATE users SET is_admin=true WHERE id=1")
             assert api(mentee, base, 'GET', '/api/chat/rooms')[0] == 403
             socket.send('Revoked test access')
             with pytest.raises(ConnectionClosed):
@@ -132,11 +132,11 @@ def test_test_members_chat_discovery_matching_and_revocation(backend_database, b
         assert api(mentor, base, 'GET', '/api/auth/me')[1]['isAdmin'] is False
         assert api(mentor, base, 'GET', '/api/admin/reports')[0] == 403
     assert execute(backend_database, 'SELECT email_verified_at,is_verified FROM users WHERE id=1') == [(None, False)]
-    # A restart with disabled configuration revokes the still-signed account session.
-    execute(backend_database, "UPDATE users SET role='mentee' WHERE id=1")
+    # Disabling the retired member exception does not revoke ordinary membership.
+    execute(backend_database, "UPDATE users SET is_admin=false WHERE id=1")
     with backend_server(environment={**CONFIG, 'TEST_MEMBER_ACCESS_ENABLED': 'false'}) as base:
         mentee.addheaders = [('Cookie', cookie)]
-        assert api(mentee, base, 'GET', '/api/chat/rooms')[0] == 403
+        assert api(mentee, base, 'GET', '/api/chat/rooms')[0] == 200
 
 
 def test_verified_normal_account_keeps_ownership_after_login_and_token_expiry(backend_database, backend_server):
@@ -180,7 +180,7 @@ def test_gateway_test_member_sockets_recheck_database_and_admin_stays_denied(
         assert api(mentor, base, 'GET', operation)[0] == 403, operation
 
 
-def test_client_fields_and_session_claims_cannot_obtain_test_member_access(backend_database, backend_server):
+def test_client_fields_and_session_claims_cannot_falsify_ownership_or_admin_access(backend_database, backend_server):
     from base64 import b64encode
     from itsdangerous import TimestampSigner
     from urllib.request import build_opener
@@ -199,10 +199,11 @@ def test_client_fields_and_session_claims_cannot_obtain_test_member_access(backe
         cookie = TimestampSigner('chat-integration-test').sign(b64encode(json.dumps(claims).encode())).decode()
         client = build_opener()
         client.addheaders = [('Cookie', 'peerbridge_session=' + cookie)]
-        assert api(client, base, 'GET', '/api/auth/me')[1]['hasMemberAccess'] is False
-        assert api(client, base, 'GET', '/api/chat/rooms')[0] == 403
+        assert api(client, base, 'GET', '/api/auth/me')[1]['hasMemberAccess'] is True
+        assert api(client, base, 'GET', '/api/auth/me')[1]['isVerified'] is False
+        assert api(client, base, 'GET', '/api/chat/rooms')[0] == 200
         assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
-        # The policy does not alter signup eligibility or grant new registrations access.
+        # Signup eligibility remains separate; valid registrations get member access.
         assert api(client, base, 'POST', '/api/auth/register', {
             'email': 'synthetic-new@example.com', 'name': 'Synthetic member',
             'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1,
@@ -212,5 +213,5 @@ def test_client_fields_and_session_claims_cannot_obtain_test_member_access(backe
             'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1,
         })
         assert status == 201
-        assert payload['user']['hasMemberAccess'] is False
+        assert payload['user']['hasMemberAccess'] is True
         assert payload['user']['isVerified'] is False and payload['user']['isAdmin'] is False

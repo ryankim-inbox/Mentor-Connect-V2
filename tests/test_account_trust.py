@@ -30,27 +30,41 @@ def token_from(outbox):
     return parse_qs(urlsplit(item['confirmationUrl']).fragment)['token'][0]
 
 
-def test_registration_cannot_prove_ownership_or_grant_privilege(backend_server):
+def test_registration_cannot_prove_ownership_or_grant_privilege(backend_database, backend_server):
+    from http.cookiejar import CookieJar
+    from urllib.request import HTTPCookieProcessor
+
     with backend_server() as base:
-        client = build_opener()
+        client = build_opener(HTTPCookieProcessor(CookieJar()))
         body = {'email':'new@test.edu','name':'New','password':'Password123!','role':'both','districtId':1}
         status, payload = api(client,base,'POST','/api/auth/register',body)
         assert status == 201
         assert payload['user']['isVerified'] is False
         assert payload['user']['isAdmin'] is False
+        assert payload['user']['hasMemberAccess'] is True
+        user_id = payload['user']['id']
+        assert api(client,base,'GET','/api/chat/rooms')[0] == 200
+        assert api(client,base,'GET','/api/admin/reports')[0] == 403
+        assert api(client,base,'POST','/api/requests', {
+            'districtId':1, 'title':'Unverified demo member',
+            'description':'Member access without an email delivery', 'role':'mentee',
+        })[0] == 201
+        assert execute(backend_database, 'SELECT email_verified_at,is_verified,is_admin FROM users WHERE id=%s', (user_id,)) == [(None, False, False)]
+        assert execute(backend_database, 'SELECT count(*) FROM email_verification_requests WHERE user_id=%s', (user_id,)) == [(0,)]
         for field in ('isAdmin','isVerified','email_verified_at','user_id'):
             assert api(client,base,'POST','/api/auth/register',{**body,'email':field+'@test.edu',field:True})[0] == 422
 
 
-def test_unverified_denied_members_and_operations_but_can_manage_self(backend_database, backend_server):
+def test_unverified_members_can_participate_but_cannot_use_admin_operations(backend_database, backend_server):
     unverify(backend_database)
     with backend_server() as base:
         client,_ = login(base,'student001@test.edu')
         assert api(client,base,'GET','/api/auth/me')[0] == 200
         assert api(client,base,'GET','/api/users/1')[0] == 200
         assert api(client,base,'PATCH','/api/users/1',{'bio':'Own settings'})[0] == 200
-        for path in ('/api/users/501','/api/requests','/api/mentors','/api/chat/rooms','/api/blocks','/api/analytics/weekly-matches'):
-            assert api(client,base,'GET',path)[0] == 403, path
+        for path in ('/api/users/501','/api/requests','/api/mentors','/api/chat/rooms','/api/blocks'):
+            assert api(client,base,'GET',path)[0] == 200, path
+        assert api(client,base,'GET','/api/analytics/weekly-matches')[0] == 403
         for field in ('isAdmin','isVerified','email','districtId'):
             assert api(client,base,'PATCH','/api/users/1',{field:True})[0] == 422
         assert api(client,base,'PATCH','/api/users/1',{'role':'admin'})[0] == 422
@@ -168,7 +182,7 @@ def test_verification_hourly_ceiling_and_stale_sessions(backend_database,backend
 
 
 @pytest.mark.parametrize('socket_path,send_path',[('/ws/chat/rooms/1','/api/chat/rooms/1/messages'),('/ws/dms/1','/api/dms/1/messages')])
-def test_websocket_ownership_at_handshake_send_and_recipient_broadcast(backend_database,backend_server,socket_path,send_path):
+def test_websocket_member_authority_at_handshake_send_and_recipient_broadcast(backend_database,backend_server,socket_path,send_path):
     from websockets.sync.client import connect
     from websockets.exceptions import ConnectionClosed, InvalidStatus
     with backend_server() as base:
@@ -176,11 +190,11 @@ def test_websocket_ownership_at_handshake_send_and_recipient_broadcast(backend_d
         mentor,mentor_cookie=login(base,'mentor501@test.edu')
         url=base.replace('http://','ws://')+socket_path
         with connect(url,additional_headers={'Cookie':cookie},open_timeout=3) as sender, connect(url,additional_headers={'Cookie':mentor_cookie},open_timeout=3) as recipient:
-            unverify(backend_database,501)
+            execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=501')
             sender.send('not for revoked recipient')
             assert json.loads(sender.recv(timeout=3))['body']=='not for revoked recipient'
             with pytest.raises(ConnectionClosed): recipient.recv(timeout=3)
-            unverify(backend_database,1)
+            execute(backend_database, 'UPDATE users SET is_admin=true WHERE id=1')
             sender.send('revoked sender')
             with pytest.raises(ConnectionClosed): sender.recv(timeout=3)
         with pytest.raises(InvalidStatus):
