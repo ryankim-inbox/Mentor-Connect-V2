@@ -15,11 +15,11 @@
 - Library reference was resolved with exact ID libfile_c9166695043881918ba7e8e24af15256 but official transfer helper failed on this Mac. Use current bottom-right widget; pixel match remains unverified.
 
 ## Work and ownership
-- [ ] Signup: auth.py, Register.tsx and validation/tests; update existing synthetic signup fixtures.
-- [ ] Audience/alerts: request_access.py, request routes/interactions, auto_match.py, notifications and related data exposures; adversarial synthetic tests.
-- [ ] DM: chat.py and widget/client hooks, real unread state and dedicated integration/browser tests.
-- [ ] Integration: additive migration 0009, Drizzle/catalog/ledger; OpenAPI/generated clients/gateway routes; title/audience UI and tests.
-- [ ] Full checks: typecheck/release build, Python synthetic PostgreSQL regressions, gateway, schema/migration, generated contracts, browser suite, independent whole-diff review and fix confirmed findings.
+- [x] Signup: auth.py, Register.tsx and validation/tests; update existing synthetic signup fixtures.
+- [x] Audience/alerts: request_access.py, request routes/interactions, auto_match.py, notifications and related data exposures; adversarial synthetic tests.
+- [x] DM: chat.py and widget/client hooks, real unread state and dedicated integration/browser tests.
+- [x] Integration: additive migration 0009, Drizzle/catalog/ledger; OpenAPI/generated clients/gateway routes; title/audience UI and tests.
+- [x] Full checks: typecheck/release build, Python synthetic PostgreSQL regressions, gateway, schema/migration, generated contracts, browser suite, independent whole-diff review and fix confirmed findings. See [release evidence](student-privacy-notifications-results.md).
 
 ## Review focus
 - Unauthorized audience data through secondary APIs/counts/notifications.
