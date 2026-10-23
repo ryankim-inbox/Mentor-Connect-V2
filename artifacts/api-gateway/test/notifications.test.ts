@@ -5,6 +5,7 @@ import { createGatewayServer } from "../src/gateway.ts";
 import { projectPublicPayload } from "../src/public-contract.ts";
 import { requiredAuthority, resolvePublicRoute } from "../src/route-policy.ts";
 import { userFixture } from "./contract-fixtures.ts";
+import { validateSensitiveBody } from "../src/request-controls.ts";
 
 const origin = "https://test.invalid";
 const item = {
@@ -68,8 +69,13 @@ test("notification response contract projects only public fields and bounds ever
   );
   const generated = await import("../../../lib/api-zod/src/generated/api.ts");
   assert.ok(generated.ListNotificationsResponse.safeParse(fixture).success);
-  assert.ok(generated.MarkNotificationsReadResponse.safeParse(undefined).success);
-  assert.equal(generated.MarkNotificationsReadResponse.safeParse({}).success, false);
+  assert.ok(
+    generated.MarkNotificationsReadResponse.safeParse(undefined).success,
+  );
+  assert.equal(
+    generated.MarkNotificationsReadResponse.safeParse({}).success,
+    false,
+  );
   const unicode = {
     unreadCount: 1,
     items: [{ ...item, message: "😀".repeat(1000) }],
@@ -91,14 +97,15 @@ test("notification response contract projects only public fields and bounds ever
   }
 });
 
-test("notification routes are bodyless student operations with no caller-selected identity", () => {
+test("notification routes allow only the optional observed IDs and no caller-selected identity", () => {
   for (const [method, path] of [
     ["GET", "/api/notifications"],
     ["POST", "/api/notifications/read"],
   ]) {
     const route = resolvePublicRoute(method, path)!;
     assert.equal(requiredAuthority(route), "student");
-    assert.equal(route.allowsBody, false);
+    assert.equal(route.allowsBody, method === "POST");
+    assert.equal(route.requiresJson, method === "POST");
     assert.deepEqual(route.queryKeys, []);
     assert.throws(
       () => resolvePublicRoute(method, path + "?userId=2"),
@@ -107,6 +114,52 @@ test("notification routes are bodyless student operations with no caller-selecte
   }
   assert.equal(resolvePublicRoute("POST", "/api/notifications"), undefined);
   assert.equal(resolvePublicRoute("GET", "/api/notifications/read"), undefined);
+});
+
+test("notification observed ID body is optional but strictly validated when supplied", () => {
+  for (const body of [
+    undefined,
+    Buffer.alloc(0),
+    Buffer.from('{"ids":[1]}'),
+    Buffer.from('{"ids":[9007199254740991]}'),
+    Buffer.from(
+      JSON.stringify({
+        ids: Array.from({ length: 50 }, (_, index) => index + 1),
+      }),
+    ),
+  ]) {
+    assert.equal(
+      validateSensitiveBody("/api/notifications/read", "POST", body),
+      body,
+    );
+  }
+  for (const payload of [
+    {},
+    null,
+    [],
+    { ids: [] },
+    { ids: [1, 1] },
+    { ids: [0] },
+    { ids: [-1] },
+    { ids: [1.5] },
+    { ids: ["1"] },
+    { ids: [true] },
+    { ids: [Number.MAX_SAFE_INTEGER + 1] },
+    { ids: [1], userId: 2 },
+    { ids: null },
+    { ids: 1 },
+    { ids: Array.from({ length: 51 }, (_, index) => index + 1) },
+    { throughId: 1 },
+    { ids: [1], throughId: 1 },
+  ]) {
+    assert.throws(() =>
+      validateSensitiveBody(
+        "/api/notifications/read",
+        "POST",
+        Buffer.from(JSON.stringify(payload)),
+      ),
+    );
+  }
 });
 
 test("gateway validates both notification operations, errors and fresh member authority", async (t) => {
@@ -119,8 +172,14 @@ test("gateway validates both notification operations, errors and fresh member au
   let notificationStatus = 200;
   let readStatus = 204;
   const calls: string[] = [];
-  const upstream = createServer((req, res) => {
+  const readBodies: string[] = [];
+  const upstream = createServer(async (req, res) => {
     calls.push(req.method + " " + req.url);
+    if (req.url === "/api/notifications/read") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      readBodies.push(Buffer.concat(chunks).toString());
+    }
     const status =
       req.url === "/api/auth/me"
         ? 200
@@ -170,6 +229,11 @@ test("gateway validates both notification operations, errors and fresh member au
   assert.equal(read.status, 204);
   assert.equal(await read.text(), "");
   assert.ok(read.headers.get("x-request-id"));
+  assert.equal(
+    (await call("POST", "/api/notifications/read", '{"ids":[2]}')).status,
+    204,
+  );
+  assert.deepEqual(readBodies, ["", '{"ids":[2]}']);
   for (const value of invalid) {
     payload = value;
     const response = await call("GET", "/api/notifications");
@@ -212,7 +276,7 @@ test("gateway validates both notification operations, errors and fresh member au
         JSON.stringify({ userId: 2 }),
       )
     ).status,
-    400,
+    422,
   );
   assert.equal(
     calls.filter((entry) => entry.includes("/api/notifications")).length,

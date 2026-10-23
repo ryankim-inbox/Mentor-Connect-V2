@@ -9,8 +9,8 @@ import {
   resolvePublicRoute,
 } from "../src/route-policy.js";
 
-test("registers the complete 65-operation REST contract", () => {
-  assert.equal(publicRoutes.length, 65);
+test("registers the complete 67-operation REST contract", () => {
+  assert.equal(publicRoutes.length, 67);
   assert.equal(
     publicRoutes.filter((route) => route.authentication === "cookie").length,
     1,
@@ -60,6 +60,8 @@ test("resolves every operation in the approved REST contract", () => {
     ["POST", "/api/chat/rooms/1/messages"],
     ["GET", "/api/dms"],
     ["POST", "/api/dms/start"],
+    ["GET", "/api/dms/unread"],
+    ["POST", "/api/dms/1/read"],
     ["GET", "/api/dms/1/messages"],
     ["POST", "/api/dms/1/messages"],
     ["GET", "/api/practice/status"],
@@ -97,8 +99,8 @@ test("resolves every operation in the approved REST contract", () => {
     assert.ok(route, `${method} ${target}`);
     resolved.add(`${route.method} ${route.template}`);
   }
-  assert.equal(operations.length, 65);
-  assert.equal(resolved.size, 65);
+  assert.equal(operations.length, 67);
+  assert.equal(resolved.size, 67);
   assert.deepEqual(
     resolved,
     new Set(publicRoutes.map((route) => `${route.method} ${route.template}`)),

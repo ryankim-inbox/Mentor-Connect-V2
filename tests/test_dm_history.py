@@ -21,7 +21,7 @@ def empty_conversation(backend_database):
     return conversation_id
 
 
-def test_dm_history_bounded_visible_and_read_window(gateway_server, backend_database, empty_conversation):
+def test_dm_history_bounded_visible_and_does_not_change_read_state(gateway_server, backend_database, empty_conversation):
     conversation_id = empty_conversation
     prior_read = datetime(2020, 1, 1, tzinfo=timezone.utc)
     ids = []
@@ -52,13 +52,12 @@ def test_dm_history_bounded_visible_and_read_window(gateway_server, backend_data
         after = dict(cur.fetchall())
 
     expected_ids = ids[220:]
-    expected_read_ids = set(ids[220::2]) - {ids[252]}
     changed_ids = {message_id for message_id in before if before[message_id] != after[message_id]}
-    assert status == 200, f"Gateway status {status}; marked {len(changed_ids)} messages read instead of 24"
+    assert status == 200
     assert len(rows) == 50
     assert [row["id"] for row in rows] == expected_ids
     assert deleted_id not in expected_ids
-    assert changed_ids == expected_read_ids
+    assert changed_ids == set()
     assert after[ids[2]] == after[ids[252]] == prior_read
     assert after[deleted_id] is None
     assert set(after) == set(before)
@@ -96,9 +95,9 @@ def test_dm_history_short_windows_and_unseen_read_receipts(gateway_server, backe
     status, rows = api(member, gateway_server, "GET", path)
     assert status == 200
     assert [row["id"] for row in rows] == ids[-50:]
-    assert all(row["readAt"] is not None for row in rows)
+    assert all(row["readAt"] is None for row in rows)
     with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM dm_messages WHERE conversation_id = %s AND read_at IS NULL ORDER BY id", (empty_conversation,))
-        assert [row[0] for row in cur.fetchall()] == ids[:-50]
+        assert [row[0] for row in cur.fetchall()] == ids
         cur.execute("SELECT count(*) FROM dm_messages WHERE conversation_id = %s", (empty_conversation,))
         assert cur.fetchone()[0] == count

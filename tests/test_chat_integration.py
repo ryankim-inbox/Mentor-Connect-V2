@@ -279,6 +279,9 @@ def test_rest_missions_privacy_validation_and_persistence(chat_server):
         _, own_view = api(student, base, "GET", "/api/dms/1/messages")
         assert next(m for m in own_view if m["id"] == sent["id"])["readAt"] is None
         _, recipient_view = api(mentor, base, "GET", "/api/dms/1/messages")
+        assert next(m for m in recipient_view if m["id"] == sent["id"])["readAt"] is None
+        assert api(mentor, base, "POST", "/api/dms/1/read", {"messageIds": [sent["id"]]})[0] == 200
+        _, recipient_view = api(mentor, base, "GET", "/api/dms/1/messages")
         saved_read_at = next(m for m in recipient_view if m["id"] == sent["id"])["readAt"]
         assert saved_read_at is not None
         status, room_sent = api(student, base, "POST", "/api/chat/rooms/1/messages", {"body": "  persistent room message  "})
@@ -389,7 +392,7 @@ def test_registration_names_cannot_poison_room_history(chat_server, chat_databas
     with chat_server() as base:
         client = build_opener(HTTPCookieProcessor(CookieJar()))
         registration = {"email": "new-student@test.edu", "password": "Password123!",
-                        "role": "mentee", "districtId": 1}
+                        "role": "mentee", "districtId": 1, "gender": "female", "dateOfBirth": "2008-02-29"}
         with closing(psycopg2.connect(chat_database)) as conn, conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM users")
             users_before = cur.fetchone()[0]

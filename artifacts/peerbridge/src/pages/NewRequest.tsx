@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { requestTitleError, requestTitleLength } from "@/lib/request-title";
 import { countyLabel, districtTypeLabel } from "@/lib/district-display";
 import { Link, useLocation } from "wouter";
 import {
@@ -22,6 +23,7 @@ export default function NewRequest() {
 
   const [form, setForm] = useState({
     title: "",
+    audience: "both" as "female" | "male" | "both",
     description: "",
     districtId: user?.districtId ?? 0,
     role: "mentee" as "mentor" | "mentee",
@@ -67,11 +69,9 @@ export default function NewRequest() {
     if (busy.current || user.isAdmin) return;
     setError("");
 
-    if (
-      !form.title.trim() ||
-      new TextEncoder().encode(form.title).length > 200
-    ) {
-      setError("Title must contain text and be at most 200 UTF-8 bytes.");
+    const titleError = requestTitleError(form.title);
+    if (titleError) {
+      setError(titleError);
       return;
     }
     if (
@@ -96,7 +96,7 @@ export default function NewRequest() {
 
     const data = {
       ...form,
-      title: form.title.trim(),
+      title: form.title,
       description: form.description.trim(),
       tagIds: [...form.tagIds].sort((a, b) => a - b),
       preferredTimes: [...form.preferredTimes].sort(),
@@ -166,11 +166,14 @@ export default function NewRequest() {
           </div>
 
           <div className="mb-5">
-            <label className="block text-sm font-medium text-foreground mb-1.5">
+            <label htmlFor="request-title" className="block text-sm font-medium text-foreground mb-1.5">
               Request title
             </label>
             <input
               type="text"
+              id="request-title"
+              aria-describedby="request-title-count"
+              aria-invalid={requestTitleLength(form.title) > 60}
               value={form.title}
               onChange={(e) =>
                 setForm((f) => ({ ...f, title: e.target.value }))
@@ -179,6 +182,28 @@ export default function NewRequest() {
               required
               className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
             />
+            <p id="request-title-count" className="text-xs text-muted-foreground mt-1 text-right" aria-live="polite">
+              {requestTitleLength(form.title)}/60 characters, including spaces
+            </p>
+          </div>
+
+          <div className="mb-5">
+            <label htmlFor="request-audience" className="block text-sm font-medium text-foreground mb-1.5">
+              Who can see this request?
+            </label>
+            <select id="request-audience" value={form.audience}
+              onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value as typeof f.audience }))}
+              aria-describedby="request-audience-help"
+              className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground">
+              <option value="both">Both — all students</option>
+              <option value="female">Female students</option>
+              <option value="male">Male students</option>
+            </select>
+            <p id="request-audience-help" className="text-xs text-muted-foreground mt-1">
+              Only the selected students, you, and administrators can view this request.
+              Students without a registered gender can only view Both requests.
+              The audience cannot be changed after posting.
+            </p>
           </div>
 
           <div className="mb-5">
@@ -284,7 +309,7 @@ export default function NewRequest() {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={createRequest.isPending}
+            disabled={createRequest.isPending || requestTitleLength(form.title) > 60}
             className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {createRequest.isPending ? "Posting..." : "Post request"}

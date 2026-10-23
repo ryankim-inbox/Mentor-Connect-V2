@@ -17,7 +17,7 @@ RECIPIENT = 'owner+test@example.com'
 
 def registration(email=RECIPIENT, **changes):
     return {'email': email, 'name': 'Test owner', 'password': 'Password123!',
-            'role': 'both', 'districtId': 1, **changes}
+            'role': 'both', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29', **changes}
 
 
 def configure(monkeypatch, enabled='true', recipient=RECIPIENT):

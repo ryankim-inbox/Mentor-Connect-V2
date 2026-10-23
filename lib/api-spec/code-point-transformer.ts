@@ -12,10 +12,12 @@ export const codePointTransformer: InputTransformerFn = (config) => {
     const schema = value as Record<string, unknown>;
     if (schema["x-length-unit"] === "unicode-code-points") {
       const maximum = schema.maxLength;
+      const minimum = schema.minLength ?? 0;
       if (
         typeof maximum !== "number" ||
         !Number.isSafeInteger(maximum) ||
         maximum < 0 ||
+        typeof minimum !== "number" || !Number.isSafeInteger(minimum) || minimum < 0 || minimum > maximum ||
         schema.pattern !== undefined
       ) {
         throw new Error(
@@ -23,9 +25,10 @@ export const codePointTransformer: InputTransformerFn = (config) => {
         );
       }
       delete schema.maxLength;
+      delete schema.minLength;
       // The final negative lookahead enforces the true end of input, including
       // a final newline (JavaScript's $ alone also matches before that newline).
-      schema.pattern = `^(?:\\p{Any}){0,${maximum}}(?!\\p{Any})`;
+      schema.pattern = `^(?:\\p{Any}){${minimum},${maximum}}(?!\\p{Any})`;
     }
     for (const child of Object.values(schema)) visit(child);
   }

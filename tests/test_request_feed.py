@@ -8,16 +8,16 @@ import pytest
 from backend_support import api, login
 
 
-def test_request_utf8_limits(backend_server):
+def test_request_title_codepoint_and_description_utf8_limits(backend_server):
     with backend_server() as base:
         client, _ = login(base, "student001@test.edu")
         body = {"districtId": 1, "title": " é ", "description": " Detail ", "role": "mentee"}
         status, created = api(client, base, "POST", "/api/requests", body)
         assert status == 201
-        assert created['title'] == 'é' and created['description'] == 'Detail'
+        assert created['title'] == ' é ' and created['description'] == 'Detail'
         path = f'/api/requests/{created["id"]}'
         for field, valid, invalid in [
-            ("title", "é" * 100, "é" * 100 + "a"),
+            ("title", "é" * 60, "é" * 60 + "a"),
             ("description", "🦉" * 1000, "🦉" * 1000 + "a"),
         ]:
             for value, expected in [(valid, 201), (invalid, 422), (" \t\n", 422),
@@ -27,7 +27,7 @@ def test_request_utf8_limits(backend_server):
         status, trimmed = api(client, base, "POST", "/api/requests", body)
         # An identical original submission now returns its current edited record.
         assert status == 201 and trimmed['id'] == created['id']
-        assert trimmed['title'] == 'é' * 100 and trimmed['description'] == '🦉' * 1000
+        assert trimmed['title'] == 'é' * 60 and trimmed['description'] == '🦉' * 1000
         assert trimmed["descriptionTruncated"] is False
         assert api(client, base, "GET", path)[1]["descriptionTruncated"] is False
 
@@ -43,9 +43,9 @@ def test_legacy_large_feed_survives_gateway(backend_database, gateway_server):
     status, rows = api(client, gateway_server, "GET", "/api/requests")
     assert status == 200, rows
     assert len(rows) == 3
-    assert all(len(row["description"].encode()) <= 4000 and len(row["title"].encode()) <= 200 for row in rows)
+    assert all(len(row["description"].encode()) <= 4000 and len(row["title"]) <= 60 for row in rows)
     assert all(row["descriptionTruncated"] is True for row in rows)
-    assert all(row["title"] == "a" + "🦉" * 49 for row in rows)
+    assert all(row["title"] == "a" + "🦉" * 59 for row in rows)
     assert {len(row["description"].encode()) for row in rows} == {3997, 3999, 4000}
     ascii_id = next(row["id"] for row in rows if row["description"] == "a" * 4000)
     status, detail = api(client, gateway_server, "GET", f"/api/requests/{ascii_id}")

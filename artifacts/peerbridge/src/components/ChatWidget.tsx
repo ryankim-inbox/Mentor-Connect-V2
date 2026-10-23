@@ -1,6 +1,7 @@
 import { useChatNavigation, MessageButton } from "@/lib/chat-navigation";
 import { useConnections } from "@/lib/journey-queries";
 import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useDmUnread, useMarkRenderedDmsRead } from "@/hooks/use-dm-unread";
 import { syncChatHistory, type ChatConnectionState } from "@/lib/chat-socket";
 // Floating messenger popup (bottom-right) with Global / My District / DMs tabs.
 //
@@ -53,6 +54,7 @@ import {
   type ChatRoom,
   type DmConversation,
   type DmMessage,
+  type DmUnreadCount,
   type ScaffoldTodo,
 } from "@/lib/chat-api";
 
@@ -79,10 +81,13 @@ function pollDelay(
 export function ChatWidget() {
   const { user, status } = useAuth();
   const [open, setOpen] = useState(false);
+  const allowed = status === "authenticated" && user?.hasMemberAccess && !user.isAdmin;
+  const unreadQuery = useDmUnread(allowed ? user.id : undefined);
+  const unread = unreadQuery.data && !isScaffoldTodo(unreadQuery.data) ? unreadQuery.data : undefined;
   const { selection } = useChatNavigation();
   useEffect(() => { if (selection) setOpen(true); }, [selection]);
 
-  if (status !== "authenticated" || !user?.hasMemberAccess || user.isAdmin) return null;
+  if (!allowed) return null;
 
   return (
     <>
@@ -91,11 +96,13 @@ export function ChatWidget() {
           key={user.id}
           currentUserId={user.id}
           districtId={user.districtId}
+          unreadCounts={unread?.conversations ?? []}
         />
       )}
       <Button
         size="icon"
         aria-label={open ? "Close chat" : "Open chat"}
+        aria-describedby={unread?.unreadCount ? "chat-unread-count" : undefined}
         onClick={() => setOpen((prev) => !prev)}
         className="fixed bottom-4 right-4 z-40 h-12 w-12 rounded-full shadow-lg"
       >
@@ -103,6 +110,16 @@ export function ChatWidget() {
           <X className="h-5 w-5" />
         ) : (
           <MessageCircle className="h-5 w-5" />
+        )}
+        {!!unread?.unreadCount && (
+          <span
+            id="chat-unread-count"
+            role="status"
+            aria-label={`${unread.unreadCount} unread direct message${unread.unreadCount === 1 ? "" : "s"}`}
+            className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
+          >
+            {unread.unreadCount}
+          </span>
         )}
       </Button>
     </>
@@ -112,9 +129,11 @@ export function ChatWidget() {
 function ChatPanel({
   currentUserId,
   districtId,
+  unreadCounts,
 }: {
   currentUserId: number;
   districtId: number;
+  unreadCounts: DmUnreadCount[];
 }) {
   const { selection } = useChatNavigation();
   const [tab, setTab] = useState(selection ? "dms" : "global");
@@ -162,7 +181,7 @@ function ChatPanel({
           />
         </TabsContent>
         <TabsContent value="dms" className="mt-0 min-h-0 flex-1">
-          <DmsPane currentUserId={currentUserId} />
+          <DmsPane currentUserId={currentUserId} unreadCounts={unreadCounts} />
         </TabsContent>
       </Tabs>
     </div>
@@ -408,7 +427,7 @@ function RoomThread({
 // Direct messages
 // ---------------------------------------------------------------------------
 
-function DmsPane({ currentUserId }: { currentUserId: number }) {
+function DmsPane({ currentUserId, unreadCounts }: { currentUserId: number; unreadCounts: DmUnreadCount[] }) {
   const [openConversation, setOpenConversation] =
     useState<DmConversation | null>(null);
   const { selection } = useChatNavigation();
@@ -423,15 +442,17 @@ function DmsPane({ currentUserId }: { currentUserId: number }) {
       />
     );
   }
-  return <DmList currentUserId={currentUserId} onOpen={setOpenConversation} />;
+  return <DmList currentUserId={currentUserId} onOpen={setOpenConversation} unreadCounts={unreadCounts} />;
 }
 
 function DmList({
   currentUserId,
   onOpen,
+  unreadCounts,
 }: {
   currentUserId: number;
   onOpen: (conversation: DmConversation) => void;
+  unreadCounts: DmUnreadCount[];
 }) {
   const connections = useConnections(currentUserId);
 
@@ -476,7 +497,9 @@ function DmList({
           </div>
         ) : (
           <ul className="divide-y divide-card-border">
-            {conversations.map((conversation) => (
+            {conversations.map((conversation) => {
+              const count = unreadCounts.find(row => row.conversationId === conversation.id)?.unreadCount ?? 0;
+              return (
               <li key={conversation.id}>
                 <button
                   type="button"
@@ -489,9 +512,11 @@ function DmList({
                   <span className="text-xs text-muted-foreground">
                     {relativeTime(conversation.createdAt)}
                   </span>
+                  {count > 0 && <span aria-label={`${count} unread in this conversation`} className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">{count}</span>}
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </ScrollArea>
@@ -539,6 +564,10 @@ function DmThread({
             query.state.fetchFailureCount,
           ),
   });
+
+  const readReceiptError = useMarkRenderedDmsRead(
+    currentUserId, conversation.id, messagesQuery.data, messagesQuery.dataUpdatedAt, messagesQuery.error,
+  );
 
   const connectionState = useChatSocket(
     currentUserId,
@@ -627,7 +656,7 @@ function DmThread({
       currentUserId={currentUserId}
       sendMutation={sendMutation}
       connectionState={connectionState}
-      readError={messagesQuery.error}
+      readError={messagesQuery.error ?? readReceiptError}
       emptyText="No messages yet — send the first one."
     />
   );

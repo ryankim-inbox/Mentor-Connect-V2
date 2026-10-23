@@ -12,4 +12,5 @@ export type NotificationItemKind =
 export const NotificationItemKind = {
   request_match: "request_match",
   request_match_summary: "request_match_summary",
+  request_accepted: "request_accepted",
 } as const;

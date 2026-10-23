@@ -51,7 +51,7 @@ def test_user_demo_marker_is_server_owned_and_survives_public_projection(
         assert api(client, base, 'PATCH', '/api/users/1', {'isDemo': True})[0] in (400, 422)
         status, registered = api(build_opener(), base, 'POST', '/api/auth/register', {
             'email': 'new-demo-label@test.edu', 'name': '[Synthetic] New',
-            'password': 'Password123!', 'role': 'mentee', 'districtId': 1,
+            'password': 'Password123!', 'role': 'mentee', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29',
         })
         assert status == 201
         assert_marker(registered['user'], False)

@@ -8,7 +8,10 @@
 import type { UpdateRequestBodyStatus } from "./updateRequestBodyStatus";
 
 export interface UpdateRequestBody {
-  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
+  /**
+   * Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
+   * @pattern ^(?:\p{Any}){0,60}(?!\p{Any})
+   */
   title?: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;

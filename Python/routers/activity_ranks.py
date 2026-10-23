@@ -24,7 +24,7 @@ def get_user_activity_rank(user_id: int, request: Request):
             )
             if cur.fetchone():
                 raise HTTPException(404, "User not found")
-    activity = get_activity_rank(user_id)
+    activity = get_activity_rank(user_id, viewer)
     if activity is None:
         raise HTTPException(404, "User not found")
     return activity

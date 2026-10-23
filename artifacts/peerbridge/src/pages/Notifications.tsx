@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,8 +20,14 @@ function MemberNotifications({ userId }: { userId: number }) {
   const pendingRead = useRef<AbortController | null>(null);
   const attempted = useRef<string | null>(null);
   useEffect(() => () => pendingRead.current?.abort(), []);
-  const markRead = useMutation({
-    mutationFn: () => {
+  const [visible, setVisible] = useState(document.visibilityState === "visible");
+  useEffect(() => {
+    const sync = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+  const markRead = useMutation<void, Error, boolean>({
+    mutationFn: (all = false) => {
       const current = queryClient.getQueryData<User | null>(getGetMeQueryKey());
       if (
         current?.id !== userId ||
@@ -31,7 +37,9 @@ function MemberNotifications({ userId }: { userId: number }) {
         throw new Error("Member session changed");
       }
       pendingRead.current = new AbortController();
-      return markNotificationsRead({ signal: pendingRead.current.signal });
+      const ids = (notifications.data?.items ?? []).filter((item) => !item.read).map((item) => item.id);
+      if (!all && !ids.length) throw new Error("No unread notification snapshot");
+      return markNotificationsRead(all ? undefined : { ids }, { signal: pendingRead.current.signal });
     },
     onSuccess: () => {
       if (!pendingRead.current?.signal.aborted) {
@@ -44,22 +52,21 @@ function MemberNotifications({ userId }: { userId: number }) {
   });
   // Attempt once per unread snapshot. A failed mutation waits for explicit retry.
   const data = notifications.isSuccess ? notifications.data : undefined;
-  const unreadSnapshot = data?.unreadCount
-    ? `${data.items[0]?.id}:${data.unreadCount}`
-    : null;
+  const unreadSnapshot = data?.items.filter((item) => !item.read).map((item) => item.id).join(",") || null;
   const { mutate, isPending, isError } = markRead;
   useEffect(() => {
     if (!unreadSnapshot) attempted.current = null;
     else if (
+      visible &&
       !notifications.isFetching &&
       !isPending &&
       !isError &&
       attempted.current !== unreadSnapshot
     ) {
       attempted.current = unreadSnapshot;
-      mutate();
+      mutate(false);
     }
-  }, [unreadSnapshot, notifications.isFetching, isPending, isError, mutate]);
+  }, [unreadSnapshot, visible, notifications.isFetching, isPending, isError, mutate]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -81,7 +88,7 @@ function MemberNotifications({ userId }: { userId: number }) {
         <div role="alert" className="mb-4 text-red-600">
           <p>Could not mark notifications as read.</p>
           <button
-            onClick={() => markRead.mutate()}
+            onClick={() => markRead.mutate(false)}
             disabled={markRead.isPending}
           >
             Retry marking read
@@ -90,6 +97,11 @@ function MemberNotifications({ userId }: { userId: number }) {
       )}
       {data?.items.length === 0 && (
         <p className="text-muted-foreground">No notifications yet.</p>
+      )}
+      {!!data?.unreadCount && (
+        <button className="mb-4 text-sm text-primary underline" onClick={() => markRead.mutate(true)} disabled={markRead.isPending}>
+          Mark all notifications read
+        </button>
       )}
       <ul className="flex flex-col gap-3">
         {data?.items.map((item) => (

@@ -312,3 +312,23 @@ ALTER TABLE reports ADD CONSTRAINT reports_target_type_check CHECK (target_type 
 ALTER TABLE reports ADD CONSTRAINT reports_target_context_check CHECK (target_type = 'request' OR (request_id IS NULL AND request_title IS NULL));
 ALTER TABLE reports ADD CONSTRAINT reports_request_title_check CHECK (request_title IS NULL OR octet_length(request_title) <= 200);
 CREATE INDEX idx_reports_target ON reports (reporter_id, target_type, reported_user_id, request_id, status);
+-- Leave legacy demographics unknown; registration validates new self-reported values.
+ALTER TABLE users ADD COLUMN gender text;
+ALTER TABLE users ADD COLUMN date_of_birth date;
+ALTER TABLE users ADD CONSTRAINT users_gender_check CHECK (gender IN ('female', 'male'));
+
+-- Existing requests retain their original visibility and stored content.
+ALTER TABLE requests ADD COLUMN audience text NOT NULL DEFAULT 'both';
+ALTER TABLE requests ADD CONSTRAINT requests_audience_check CHECK (audience IN ('female', 'male', 'both'));
+
+ALTER TABLE notifications ADD COLUMN event_key text;
+ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
+    CHECK (kind IN ('request_match', 'request_match_summary', 'request_accepted'));
+-- Preserve match deduplication while allowing one acceptance per later application.
+ALTER TABLE notifications DROP CONSTRAINT notifications_user_id_request_id_kind_key;
+CREATE UNIQUE INDEX notifications_user_id_request_id_kind_key
+    ON notifications(user_id, request_id, kind)
+    WHERE kind IN ('request_match', 'request_match_summary');
+CREATE UNIQUE INDEX notifications_user_event_key
+    ON notifications(user_id, event_key) WHERE event_key IS NOT NULL;

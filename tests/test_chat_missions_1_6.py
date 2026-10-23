@@ -621,7 +621,7 @@ def test_mission_7_checks_membership(monkeypatch, method, conversation, expected
     assert not cursor.steps
 
 
-def test_mission_7_reads_visible_messages(monkeypatch):
+def test_mission_7_history_does_not_mark_messages_read(monkeypatch):
     cursor = patch_db(
         monkeypatch,
         QueryStep("from dm_conversations", params=(7,),
@@ -631,13 +631,10 @@ def test_mission_7_reads_visible_messages(monkeypatch):
                       "id": 42, "conversation_id": 7, "sender_id": 2,
                       "body": "hello", "created_at": STAMP, "read_at": None,
                   }]),
-        QueryStep("update dm_messages", "coalesce(read_at, now())", "id = any(%s)",
-                  "deleted_at is null", "returning id, read_at", params=([42],),
-                  all_rows=[{"id": 42, "read_at": STAMP}]),
     )
     assert chat.list_dm_messages(7, request_for(1)) == [{
         "id": 42, "conversationId": 7, "senderId": 2, "body": "hello",
-        "createdAt": "2026-07-01T16:00:00+00:00", "readAt": "2026-07-01T16:00:00+00:00",
+        "createdAt": "2026-07-01T16:00:00+00:00", "readAt": None,
     }]
     assert not cursor.steps
 

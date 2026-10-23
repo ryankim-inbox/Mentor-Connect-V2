@@ -7,10 +7,7 @@
  */
 
 export interface SendChatMessageBody {
-  /**
-   * @minLength 1
-   * @pattern ^(?:\p{Any}){0,2000}(?!\p{Any})
-   */
+  /** @pattern ^(?:\p{Any}){1,2000}(?!\p{Any}) */
   body: string;
   /**
    * Reuse for an explicit retry of the same message. Scoped to sender and room or conversation; different content returns 409.

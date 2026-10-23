@@ -156,10 +156,12 @@ test("login and registration block double submits until session confirmation fin
       .getByPlaceholder(
         mode === "login" ? "Enter your password" : "Create a password",
       )
-      .fill("password123");
+      .fill(mode === "register" ? "Password123!" : "password123");
     if (mode === "register") {
       await page.getByPlaceholder("Your name").fill(accountA.name);
-      await page.locator("select").selectOption("1");
+      await page.getByLabel("Gender", { exact: true }).selectOption("female");
+      await page.getByLabel("Date of birth").fill("2008-02-29");
+      await page.getByLabel("District choices").selectOption("1");
     }
     await page.locator("form").evaluate((form: HTMLFormElement) => {
       form.requestSubmit();
@@ -198,8 +200,10 @@ test("registration validates name bytes before sending and trims a valid name", 
   });
   await page.goto("/register");
   await page.getByPlaceholder("you@school.edu").fill(accountA.email);
-  await page.getByPlaceholder("Create a password").fill("password123");
-  await page.locator("select").selectOption("1");
+  await page.getByPlaceholder("Create a password").fill("Password123!");
+  await page.getByLabel("Gender", { exact: true }).selectOption("female");
+  await page.getByLabel("Date of birth").fill("2008-02-29");
+  await page.getByLabel("District choices").selectOption("1");
   const name = page.getByPlaceholder("Your name");
   for (const invalid of [
     "   ",
@@ -246,7 +250,9 @@ test("registration validates name bytes before sending and trims a valid name", 
     expect(submitted).toEqual({
       name: expected,
       email: accountA.email,
-      password: "password123",
+      password: "Password123!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "mentee",
       districtId: 1,
     });

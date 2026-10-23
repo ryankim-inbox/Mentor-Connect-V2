@@ -36,7 +36,7 @@ test("unverified test member receives the notification badge and reads its own l
     }),
   );
   await page.route("**/api/notifications/read", (route) => {
-    expect(route.request().postData()).toBe(null);
+    expect(route.request().postDataJSON()).toEqual({ ids: [item.id] });
     reads++;
     return route.fulfill({ status: 204 });
   });
@@ -194,4 +194,41 @@ test("revoked member access removes the open notification page and stops read at
   ).toBeVisible();
   await expect(page.getByText(item.message, { exact: true })).toHaveCount(0);
   expect(reads).toBe(0);
+});
+
+test("a later notification is acknowledged by its own observed ID snapshot", async ({ page }) => {
+  await setup(page);
+  const acknowledged: number[][] = [];
+  await page.route("**/api/notifications", (route) => {
+    const id = acknowledged.length ? 99 : 100;
+    return route.fulfill({ json: { unreadCount: acknowledged.length > 1 ? 0 : 1,
+      items: [{ ...item, id, read: acknowledged.length > 1 }] } });
+  });
+  await page.route("**/api/notifications/read", (route) => {
+    const body = route.request().postDataJSON();
+    expect(body).toEqual({ ids: [acknowledged.length ? 99 : 100] });
+    acknowledged.push(body.ids);
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("/notifications");
+  await expect.poll(() => acknowledged).toEqual([[100], [99]]);
+});
+
+test("older unread notifications beyond the newest page have an explicit mark-all action", async ({ page }) => {
+  await setup(page);
+  let readAll = false;
+  await page.route("**/api/notifications", (route) => route.fulfill({ json: {
+    unreadCount: readAll ? 0 : 1, items: Array.from({ length: 50 }, (_, i) => ({ ...item, id: i + 2, read: true })),
+  } }));
+  await page.route("**/api/notifications/read", (route) => {
+    expect(route.request().postData()).toBe(null);
+    readAll = true;
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("/notifications");
+  await expect(page.getByRole("button", { name: "Mark all notifications read", exact: true })).toBeVisible();
+  expect(readAll).toBe(false);
+  await page.getByRole("button", { name: "Mark all notifications read", exact: true }).click();
+  await expect.poll(() => readAll).toBe(true);
+  await expect(page.getByRole("button", { name: "Mark all notifications read", exact: true })).toHaveCount(0);
 });

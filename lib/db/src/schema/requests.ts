@@ -43,8 +43,10 @@ export const requestsTable = pgTable(
     preferredTimes: text("preferred_times").array().notNull().default([]),
     clientRequestId: uuid("client_request_id"),
     payloadHash: text("payload_hash"),
+    audience: text("audience").notNull().default("both"),
   },
   (table) => [
+    check("requests_audience_check", sql`${table.audience} IN ('female', 'male', 'both')`),
     unique("requests_author_client_request_key").on(table.authorId, table.clientRequestId),
     check("requests_payload_hash_check", sql`${table.payloadHash} IS NULL OR ${table.payloadHash} ~ '^[a-f0-9]{64}$'::text`),
     index("idx_requests_author_payload_created").on(table.authorId, table.payloadHash, table.createdAt.desc()),

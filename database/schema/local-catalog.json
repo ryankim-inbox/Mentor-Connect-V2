@@ -415,6 +415,14 @@
       "default": null
     },
     {
+      "table": "notifications",
+      "position": 8,
+      "name": "event_key",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
       "table": "questions",
       "position": 1,
       "name": "id",
@@ -943,6 +951,14 @@
       "default": null
     },
     {
+      "table": "requests",
+      "position": 15,
+      "name": "audience",
+      "type": "text",
+      "nullable": false,
+      "default": "'both'::text"
+    },
+    {
       "table": "schedules",
       "position": 1,
       "name": "id",
@@ -1149,6 +1165,22 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+    },
+    {
+      "table": "users",
+      "position": 19,
+      "name": "gender",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "table": "users",
+      "position": 20,
+      "name": "date_of_birth",
+      "type": "date",
+      "nullable": true,
+      "default": null
     }
   ],
   "constraints": [
@@ -1342,7 +1374,7 @@
       "table": "notifications",
       "name": "notifications_kind_check",
       "type": "c",
-      "definition": "CHECK (kind = ANY (ARRAY['request_match'::text, 'request_match_summary'::text]))"
+      "definition": "CHECK (kind = ANY (ARRAY['request_match'::text, 'request_match_summary'::text, 'request_accepted'::text]))"
     },
     {
       "table": "notifications",
@@ -1361,12 +1393,6 @@
       "name": "notifications_user_id_fkey",
       "type": "f",
       "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
-    },
-    {
-      "table": "notifications",
-      "name": "notifications_user_id_request_id_kind_key",
-      "type": "u",
-      "definition": "UNIQUE (user_id, request_id, kind)"
     },
     {
       "table": "questions",
@@ -1592,6 +1618,12 @@
     },
     {
       "table": "requests",
+      "name": "requests_audience_check",
+      "type": "c",
+      "definition": "CHECK (audience = ANY (ARRAY['female'::text, 'male'::text, 'both'::text]))"
+    },
+    {
+      "table": "requests",
       "name": "requests_author_client_request_key",
       "type": "u",
       "definition": "UNIQUE (author_id, client_request_id)"
@@ -1679,6 +1711,12 @@
       "name": "users_email_ownership_check",
       "type": "c",
       "definition": "CHECK (is_verified = (email_verified_at IS NOT NULL))"
+    },
+    {
+      "table": "users",
+      "name": "users_gender_check",
+      "type": "c",
+      "definition": "CHECK (gender = ANY (ARRAY['female'::text, 'male'::text]))"
     },
     {
       "table": "users",
@@ -1811,8 +1849,13 @@
     },
     {
       "table": "notifications",
+      "name": "notifications_user_event_key",
+      "definition": "CREATE UNIQUE INDEX notifications_user_event_key ON public.notifications USING btree (user_id, event_key) WHERE (event_key IS NOT NULL)"
+    },
+    {
+      "table": "notifications",
       "name": "notifications_user_id_request_id_kind_key",
-      "definition": "CREATE UNIQUE INDEX notifications_user_id_request_id_kind_key ON public.notifications USING btree (user_id, request_id, kind)"
+      "definition": "CREATE UNIQUE INDEX notifications_user_id_request_id_kind_key ON public.notifications USING btree (user_id, request_id, kind) WHERE (kind = ANY (ARRAY['request_match'::text, 'request_match_summary'::text]))"
     },
     {
       "table": "questions",

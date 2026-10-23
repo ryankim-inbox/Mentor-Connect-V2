@@ -34,6 +34,9 @@ import type {
   DistrictStats,
   DmConversation,
   DmMessage,
+  DmReadInput,
+  DmUnreadConversation,
+  DmUnreadResponse,
   EditCommentBody,
   Error400Response,
   Error401Response,
@@ -68,6 +71,7 @@ import type {
   MessageResponse,
   ModerateReportBody,
   ModerationReport,
+  NotificationsReadInput,
   NotificationsResponse,
   PopularSubjectsEnvelope,
   PracticeStatus,
@@ -223,14 +227,42 @@ export const getMarkNotificationsReadUrl = () => {
 };
 
 /**
- * @summary Mark all notifications belonging to the signed-in member as read
+ * Optional observed IDs prevent consuming unseen arrivals. A bodyless explicit mark-all call marks all currently accessible notifications read.
+ * @summary Mark the signed-in student's notifications read through the observed snapshot
  */
 export const markNotificationsRead = async (
+  notificationsReadInput?: NotificationsReadInput,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<void> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
   return customFetch<void>(getMarkNotificationsReadUrl(), {
     ...options,
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(notificationsReadInput),
   });
 };
 
@@ -253,14 +285,14 @@ export const getMarkNotificationsReadMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof markNotificationsRead>>,
     TError,
-    void,
+    MarkNotificationsReadMutationVariables,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof markNotificationsRead>>,
   TError,
-  void,
+  MarkNotificationsReadMutationVariables,
   TContext
 > => {
   const mutationKey = getMarkNotificationsReadMutationKey();
@@ -274,9 +306,11 @@ export const getMarkNotificationsReadMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof markNotificationsRead>>,
-    void
-  > = () => {
-    return markNotificationsRead(requestOptions);
+    MarkNotificationsReadMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return markNotificationsRead(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -285,7 +319,9 @@ export const getMarkNotificationsReadMutationOptions = <
 export type MarkNotificationsReadMutationResult = NonNullable<
   Awaited<ReturnType<typeof markNotificationsRead>>
 >;
-
+export type MarkNotificationsReadMutationBody =
+  | BodyType<NotificationsReadInput>
+  | undefined;
 export type MarkNotificationsReadMutationError = ErrorType<
   | Error400Response
   | Error401Response
@@ -296,9 +332,12 @@ export type MarkNotificationsReadMutationError = ErrorType<
   | Error503Response
   | Error504Response
 >;
+export type MarkNotificationsReadMutationVariables = {
+  data?: BodyType<NotificationsReadInput>;
+};
 
 /**
- * @summary Mark all notifications belonging to the signed-in member as read
+ * @summary Mark the signed-in student's notifications read through the observed snapshot
  */
 export const useMarkNotificationsRead = <
   TError = ErrorType<
@@ -316,14 +355,14 @@ export const useMarkNotificationsRead = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof markNotificationsRead>>,
     TError,
-    void,
+    MarkNotificationsReadMutationVariables,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof markNotificationsRead>>,
   TError,
-  void,
+  MarkNotificationsReadMutationVariables,
   TContext
 > => {
   return useMutation(getMarkNotificationsReadMutationOptions(options));
@@ -3371,6 +3410,252 @@ export function useListDmConversations<
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+export const getGetDmUnreadUrl = () => {
+  return `/api/dms/unread`;
+};
+
+/**
+ * @summary Count incoming visible unread direct messages for the signed-in student
+ */
+export const getDmUnread = async (
+  options?: Parameters<typeof customFetch>[1],
+): Promise<DmUnreadResponse> => {
+  return customFetch<DmUnreadResponse>(getGetDmUnreadUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDmUnreadQueryKey = () => {
+  return [`/api/dms/unread`] as const;
+};
+
+export const getGetDmUnreadQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDmUnread>>,
+  TError = ErrorType<
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDmUnread>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDmUnreadQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDmUnread>>> = ({
+    signal,
+  }) => getDmUnread({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDmUnread>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDmUnreadQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDmUnread>>
+>;
+export type GetDmUnreadQueryError = ErrorType<
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+
+/**
+ * @summary Count incoming visible unread direct messages for the signed-in student
+ */
+
+export function useGetDmUnread<
+  TData = Awaited<ReturnType<typeof getDmUnread>>,
+  TError = ErrorType<
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDmUnread>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDmUnreadQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getMarkDmReadUrl = (conversationId: number) => {
+  return `/api/dms/${conversationId}/read`;
+};
+
+/**
+ * @summary Mark only the observed incoming messages in this conversation read
+ */
+export const markDmRead = async (
+  conversationId: number,
+  dmReadInput: DmReadInput,
+  options?: Parameters<typeof customFetch>[1],
+): Promise<DmUnreadConversation> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<
+      string | readonly string[] | undefined
+    >(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  return customFetch<DmUnreadConversation>(getMarkDmReadUrl(conversationId), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHeaders(options?.headers),
+    },
+    body: JSON.stringify(dmReadInput),
+  });
+};
+
+export const getMarkDmReadMutationKey = () => ["markDmRead"] as const;
+
+export const getMarkDmReadMutationOptions = <
+  TError = ErrorType<
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markDmRead>>,
+    TError,
+    MarkDmReadMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markDmRead>>,
+  TError,
+  MarkDmReadMutationVariables,
+  TContext
+> => {
+  const mutationKey = getMarkDmReadMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markDmRead>>,
+    MarkDmReadMutationVariables
+  > = (props) => {
+    const { conversationId, data } = props ?? {};
+
+    return markDmRead(conversationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkDmReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markDmRead>>
+>;
+export type MarkDmReadMutationBody = BodyType<DmReadInput>;
+export type MarkDmReadMutationError = ErrorType<
+  | Error401Response
+  | Error403Response
+  | Error404Response
+  | Error422Response
+  | Error429Response
+  | Error502Response
+  | Error503Response
+  | Error504Response
+>;
+export type MarkDmReadMutationVariables = {
+  conversationId: number;
+  data: BodyType<DmReadInput>;
+};
+
+/**
+ * @summary Mark only the observed incoming messages in this conversation read
+ */
+export const useMarkDmRead = <
+  TError = ErrorType<
+    | Error401Response
+    | Error403Response
+    | Error404Response
+    | Error422Response
+    | Error429Response
+    | Error502Response
+    | Error503Response
+    | Error504Response
+  >,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markDmRead>>,
+    TError,
+    MarkDmReadMutationVariables,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markDmRead>>,
+  TError,
+  MarkDmReadMutationVariables,
+  TContext
+> => {
+  return useMutation(getMarkDmReadMutationOptions(options));
+};
 
 export const getStartDmConversationUrl = () => {
   return `/api/dms/start`;

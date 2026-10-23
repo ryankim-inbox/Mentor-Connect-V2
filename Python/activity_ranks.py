@@ -8,6 +8,7 @@ import mentor_ranks
 from account_policy import SYNTHETIC_LOCK_PREFIX
 from db import db
 from member_access import has_student_access
+from request_access import request_access_sql
 
 
 ACTIVITY_TIERS = (
@@ -41,8 +42,8 @@ def rank_activity_counts(rows: list[dict]) -> list[dict]:
     ]
 
 
-def get_activity_rank(user_id: int) -> dict | None:
-    """Return one eligible student's global rank, or None for an invalid target.
+def get_activity_rank(user_id: int, viewer=None) -> dict | None:
+    """Rank an eligible student using requests visible to the viewer.
 
     Authentication/authorization belongs to the calling profile route. Reads use
     one consistent, read-only snapshot; there are at most two data queries, never
@@ -67,12 +68,14 @@ def get_activity_rank(user_id: int) -> dict | None:
         if user_id not in eligible_ids:
             return None
 
+        audience_clause, audience_params = request_access_sql(viewer)
         cur.execute(
-            """WITH eligible_pairs AS (
+            f"""WITH eligible_pairs AS (
                    SELECT DISTINCT LEAST(r.author_id, r.matched_user_id) AS first_id,
                                    GREATEST(r.author_id, r.matched_user_id) AS second_id
                    FROM requests r
                    WHERE r.status IN ('matched', 'closed')
+                     AND {audience_clause}
                      AND r.author_id <> r.matched_user_id
                      AND r.author_id = ANY(%s)
                      AND r.matched_user_id = ANY(%s)
@@ -91,7 +94,7 @@ def get_activity_rank(user_id: int) -> dict | None:
                    SELECT second_id AS id FROM eligible_pairs
                )
                SELECT id, COUNT(*)::int AS matched_count FROM participants GROUP BY id""",
-            (eligible_ids, eligible_ids),
+            (*audience_params, eligible_ids, eligible_ids),
         )
         counts = {row["id"]: row["matched_count"] for row in cur.fetchall()}
 

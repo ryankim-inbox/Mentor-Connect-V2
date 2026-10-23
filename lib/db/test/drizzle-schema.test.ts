@@ -72,7 +72,7 @@ const frozenCatalog = JSON.parse(
 const dialect = new PgDialect();
 
 const expectedColumnCounts = new Map([
-  ["notifications", 7],
+  ["notifications", 8],
   ["blocks", 4],
   ["chat_messages", 7],
   ["chat_rooms", 5],
@@ -82,14 +82,14 @@ const expectedColumnCounts = new Map([
   ["questions", 10],
   ["reports", 13],
   ["request_tags", 3],
-  ["requests", 14],
+  ["requests", 15],
   ["request_submission_keys", 5],
   ["request_events", 6],
   ["request_applications", 6],
   ["request_comments", 9],
   ["schedules", 4],
   ["tags", 4],
-  ["users", 18],
+  ["users", 20],
   ["email_verification_tokens",5],
   ["email_verification_requests",4],
 ]);
@@ -127,6 +127,8 @@ test("Drizzle represents every canonical table and column", () => {
       "teaching_style",
       "email_verified_at",
       "is_admin",
+      "gender",
+      "date_of_birth",
     ],
   );
   assert.deepEqual(
@@ -146,6 +148,7 @@ test("Drizzle represents every canonical table and column", () => {
       "preferred_times",
       "client_request_id",
       "payload_hash",
+      "audience",
     ],
   );
 });
@@ -274,4 +277,24 @@ test("Drizzle exposes the new integrity checks and matching indexes", () => {
       (index) => index.config.name === "idx_requests_open_matching_lookup",
     ),
   );
+});
+
+test("privacy fields preserve nullable legacy data and notification indexes preserve event scope", () => {
+  assert.equal(usersTable.gender.notNull, false);
+  assert.equal(usersTable.dateOfBirth.notNull, false);
+  assert.equal(usersTable.dateOfBirth.getSQLType(), "date");
+  assert.equal(requestsTable.audience.notNull, true);
+  assert.equal(requestsTable.audience.default, "both");
+  assert.equal(notificationsTable.eventKey.notNull, false);
+  const indexes = getTableConfig(notificationsTable).indexes;
+  for (const [name, columns, predicate] of [
+    ["notifications_user_id_request_id_kind_key", ["user_id", "request_id", "kind"], '"notifications"."kind" IN (\'request_match\', \'request_match_summary\')'],
+    ["notifications_user_event_key", ["user_id", "event_key"], '"notifications"."event_key" IS NOT NULL'],
+  ] as const) {
+    const index = indexes.find((candidate) => candidate.config.name === name);
+    assert.ok(index?.config.where);
+    assert.equal(index.config.unique, true);
+    assert.deepEqual(index.config.columns.map((column) => "name" in column ? column.name : null), columns);
+    assert.equal(dialect.sqlToQuery(index.config.where).sql, predicate);
+  }
 });

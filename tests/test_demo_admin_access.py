@@ -104,8 +104,9 @@ def test_real_database_authority_and_revocation(request, backend_database, backe
             assert api(build_opener(), base, 'GET', path)[0] == 401
         student, _ = login(base, 'student001@test.edu')
         assert api(student, base, 'GET', '/api/admin/reports')[0] == 403
-        for path in ('/api/chat/rooms', '/api/dms', '/api/notifications', '/api/connections'):
+        for path in ('/api/chat/rooms', '/api/dms', '/api/dms/unread', '/api/notifications', '/api/connections'):
             assert api(client, base, 'GET', path)[0] == 403, path
+        assert api(client, base, 'POST', '/api/dms/1/read', {'messageIds': [3]})[0] == 403
         assert api(client, base, 'POST', '/api/requests', {
             'districtId': 1, 'title': 'Must not publish', 'description': 'Synthetic', 'role': 'mentor',
         })[0] == 403

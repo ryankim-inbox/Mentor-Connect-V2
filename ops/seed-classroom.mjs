@@ -22,12 +22,14 @@ const accountSpecs = [
     email: "mentor@classroom.example.edu",
     name: "Classroom Mentor",
     role: "mentor",
+    gender: "male",
   },
   {
     key: "mentee",
     email: "mentee@classroom.example.edu",
     name: "Classroom Mentee",
     role: "mentee",
+    gender: "female",
   },
 ];
 
@@ -204,7 +206,7 @@ export async function seedClassroom({
   const accounts = {};
   try {
     for (const account of accountSpecs) {
-      const password = randomBytes(24).toString("base64url");
+      const password = "A!" + randomBytes(24).toString("base64url");
       const expected = {
         ...account,
         districtId: prepared.districtIds[0],
@@ -219,6 +221,8 @@ export async function seedClassroom({
           password,
           role: account.role,
           districtId: expected.districtId,
+          gender: account.gender,
+          dateOfBirth: "2008-01-01",
         },
       });
       const user = validatedRegisteredUser(registered.payload, expected);

@@ -37,6 +37,21 @@ function configuredTestRecipient(): string | undefined {
   return normalizeMailbox(process.env.EMAIL_TEST_RECIPIENT);
 }
 
+function validDateOfBirth(value: unknown): boolean {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    value.startsWith("0000-")
+  )
+    return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return (
+    Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value &&
+    value <= new Date().toISOString().slice(0, 10)
+  );
+}
+
 export function validateAuthBody(
   kind: "login" | "register",
   body: Buffer | undefined,
@@ -59,7 +74,15 @@ export function validateAuthBody(
   const requiredKeys =
     kind === "login"
       ? ["email", "password"]
-      : ["email", "name", "password", "role", "districtId"];
+      : [
+          "email",
+          "name",
+          "password",
+          "role",
+          "districtId",
+          "gender",
+          "dateOfBirth",
+        ];
   const keys = Object.keys(payload);
   if (
     keys.length !== requiredKeys.length ||
@@ -82,7 +105,13 @@ export function validateAuthBody(
     (typeof payload.name !== "string" ||
       typeof payload.role !== "string" ||
       !["mentor", "mentee", "both"].includes(payload.role) ||
-      !Number.isSafeInteger(payload.districtId))
+      !Number.isSafeInteger(payload.districtId) ||
+      (payload.gender !== "female" && payload.gender !== "male") ||
+      !validDateOfBirth(payload.dateOfBirth) ||
+      [...payload.password].length < 12 ||
+      !/[A-Z]/.test(payload.password) ||
+      !/[\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E]/.test(payload.password) ||
+      /[\uD800-\uDFFF]/u.test(payload.password))
   ) {
     throw new Error("invalid_auth_body");
   }
@@ -254,6 +283,14 @@ export function validateSensitiveBody(
     z
       .string()
       .refine((v) => !!v.trim() && Buffer.byteLength(v, "utf8") <= maxBytes);
+  const requestTitle = z
+    .string()
+    .refine(
+      (value) =>
+        hasAtMostCodePoints(value, 60) &&
+        /[^\s\u0085\u001c-\u001f]/u.test(value) &&
+        !/[\uD800-\uDFFF]/u.test(value),
+    );
   const tags = z
     .array(positive)
     .max(20)
@@ -261,7 +298,7 @@ export function validateSensitiveBody(
     .nullable()
     .optional();
   const requestFields = {
-    title: requestText(200).nullable().optional(),
+    title: requestTitle.nullable().optional(),
     description: requestText(4000).nullable().optional(),
     tagIds: tags,
   };
@@ -338,6 +375,28 @@ export function validateSensitiveBody(
       .strict();
   else if (path === "/api/dms/start")
     schema = z.object({ toUserId: positive }).strict();
+  else if (path === "/api/dms/{id}/read" && method === "POST")
+    schema = z
+      .object({
+        messageIds: z
+          .array(positive.max(2147483647))
+          .min(1)
+          .max(50)
+          .refine((ids) => new Set(ids).size === ids.length),
+      })
+      .strict();
+  else if (
+    path === "/api/notifications/read" && method === "POST" && body?.length
+  )
+    schema = z
+      .object({
+        ids: z
+          .array(positive)
+          .min(1)
+          .max(50)
+          .refine((ids) => new Set(ids).size === ids.length),
+      })
+      .strict();
   else if (path === "/api/matches" && method === "POST")
     schema = z
       .object({
@@ -351,9 +410,10 @@ export function validateSensitiveBody(
         ...requestFields,
         clientRequestId: z.string().uuid().optional(),
         districtId: positive,
-        title: requestText(200),
+        title: requestTitle,
         description: requestText(4000),
         role: z.enum(["mentor", "mentee"]),
+        audience: z.enum(["female", "male", "both"]).optional(),
         preferredTimes: z
           .array(
             z

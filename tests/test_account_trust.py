@@ -36,7 +36,7 @@ def test_registration_cannot_prove_ownership_or_grant_privilege(backend_database
 
     with backend_server() as base:
         client = build_opener(HTTPCookieProcessor(CookieJar()))
-        body = {'email':'new@test.edu','name':'New','password':'Password123!','role':'both','districtId':1}
+        body = {'email':'new@test.edu','name':'New','password':'Password123!','role':'both','districtId':1,'gender':'female','dateOfBirth':'2008-02-29'}
         status, payload = api(client,base,'POST','/api/auth/register',body)
         assert status == 201
         assert payload['user']['isVerified'] is False
@@ -174,7 +174,7 @@ def test_verification_hourly_ceiling_and_stale_sessions(backend_database,backend
         assert api(client,base,'POST','/api/auth/verification/request')[0]==429
         assert execute(backend_database,'SELECT count(*) FROM email_verification_tokens')[0][0]==1
         # Deleting an account must revoke an existing signed session immediately.
-        result=api(client,base,'POST','/api/auth/register',{'email':'gone@test.edu','name':'Gone','password':'Password123!','role':'mentee','districtId':1})
+        result=api(client,base,'POST','/api/auth/register',{'email':'gone@test.edu','name':'Gone','password':'Password123!','role':'mentee','districtId':1,'gender':'female','dateOfBirth':'2008-02-29'})
         # build_opener doesn't retain this registration cookie: log in explicitly.
         client,_=login(base,'gone@test.edu')
         execute(backend_database,"DELETE FROM users WHERE email='gone@test.edu'")

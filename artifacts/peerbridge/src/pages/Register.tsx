@@ -7,6 +7,7 @@ import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, sessionReturnPath } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api-error-message";
+import { dateOfBirthError, signupPasswordError, SIGNUP_PASSWORD_HELP } from "@/lib/signup-validation";
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -50,6 +51,8 @@ export default function Register() {
     name: "",
     email: "",
     password: "",
+    gender: "" as "" | "female" | "male",
+    dateOfBirth: "",
     role: "mentee" as "mentor" | "mentee" | "both",
     districtId: 0,
   });
@@ -84,6 +87,17 @@ export default function Register() {
       return;
     }
 
+    const validationError = signupPasswordError(form.password) || dateOfBirthError(form.dateOfBirth);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    const gender = form.gender;
+    if (gender !== "female" && gender !== "male") {
+      setError("Please select female or male.");
+      return;
+    }
+
     if (!selectedDistrict) {
       setError("Please select your school district");
       return;
@@ -95,7 +109,7 @@ export default function Register() {
     try {
       await queryClient.cancelQueries({ queryKey: getGetMeQueryKey() });
       const response = await registerMutation.mutateAsync({
-        data: { ...form, name },
+        data: { ...form, name, gender },
       });
       await queryClient.cancelQueries();
       queryClient.removeQueries({
@@ -176,15 +190,59 @@ export default function Register() {
                 id="register-password"
                 type="password"
                 autoComplete="new-password"
+                aria-describedby="register-password-help"
                 value={form.password}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
                 placeholder="Create a password"
                 required
-                minLength={6}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
               />
+              <p id="register-password-help" className="text-xs text-muted-foreground mt-1">
+                {SIGNUP_PASSWORD_HELP} Special characters include !, @, #, and ?.
+                Symbols such as emoji do not count as the required special character.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="register-gender" className="block text-sm font-medium text-foreground mb-1.5">
+                Gender
+              </label>
+              <select
+                id="register-gender"
+                value={form.gender}
+                onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value as "" | "female" | "male" }))}
+                aria-describedby="register-private-help"
+                required
+                className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+              >
+                <option value="" disabled>Select your gender</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="register-birth-date" className="block text-sm font-medium text-foreground mb-1.5">
+                Date of birth
+              </label>
+              <input
+                id="register-birth-date"
+                type="date"
+                autoComplete="bday"
+                value={form.dateOfBirth}
+                onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                min="0001-01-01"
+                max={new Date().toISOString().slice(0, 10)}
+                aria-describedby="register-private-help"
+                required
+                className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+              />
+              <p id="register-private-help" className="text-xs text-muted-foreground mt-1">
+                Gender and date of birth are required for new accounts and are kept private.
+                They do not appear on your profile and do not verify your age or school enrollment.
+              </p>
             </div>
 
             <fieldset>

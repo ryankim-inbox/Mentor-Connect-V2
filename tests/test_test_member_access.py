@@ -191,7 +191,7 @@ def test_client_fields_and_session_claims_cannot_falsify_ownership_or_admin_acce
             assert api(third, base, 'PATCH', '/api/users/951', {field: True})[0] == 422
             assert api(third, base, 'POST', '/api/auth/register', {
                 'email': 'synthetic-new@example.edu', 'name': 'Synthetic member',
-                'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, field: True,
+                'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29', field: True,
             })[0] == 422
         # Even a valid signature over stale/forged privilege attributes is insufficient.
         claims = {'user_id': 951, 'role': 'mentor', 'hasMemberAccess': True, 'isVerified': True,
@@ -206,11 +206,11 @@ def test_client_fields_and_session_claims_cannot_falsify_ownership_or_admin_acce
         # Signup eligibility remains separate; valid registrations get member access.
         assert api(client, base, 'POST', '/api/auth/register', {
             'email': 'synthetic-new@example.com', 'name': 'Synthetic member',
-            'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1,
+            'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29',
         })[0] == 422
         status, payload = api(client, base, 'POST', '/api/auth/register', {
             'email': 'synthetic-new@example.edu', 'name': 'Synthetic member',
-            'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1,
+            'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29',
         })
         assert status == 201
         assert payload['user']['hasMemberAccess'] is True

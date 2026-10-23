@@ -1336,7 +1336,9 @@ function sendUpstreamResponse(
   if (
     (policy.family === "notifications" &&
       upstream.response.status !== (policy.method === "GET" ? 200 : 204)) ||
-    (policy.family === "activity-ranks" && upstream.response.status !== 200)
+    (policy.family === "activity-ranks" && upstream.response.status !== 200) ||
+    (["/api/dms/unread", "/api/dms/{id}/read"].includes(policy.template) &&
+      upstream.response.status !== 200)
   ) {
     sendGatewayError(response, 502, "backend_error", requestId);
     return;

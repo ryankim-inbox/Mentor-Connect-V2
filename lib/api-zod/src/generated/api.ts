@@ -18,7 +18,7 @@ export const listNotificationsResponseItemsItemIdMax = 9007199254740991;
 export const listNotificationsResponseItemsItemRequestIdMax = 9007199254740991;
 
 export const listNotificationsResponseItemsItemMessageRegExp = new RegExp(
-  "^(?:\\p{Any}){0,1000}(?!\\p{Any})",
+  "^(?:\\p{Any}){1,1000}(?!\\p{Any})",
   "u",
 );
 export const listNotificationsResponseItemsMax = 50;
@@ -40,7 +40,11 @@ export const ListNotificationsResponse = zod.object({
           .int()
           .min(1)
           .max(listNotificationsResponseItemsItemIdMax),
-        kind: zod.enum(["request_match", "request_match_summary"]),
+        kind: zod.enum([
+          "request_match",
+          "request_match_summary",
+          "request_accepted",
+        ]),
         requestId: zod
           .number()
           .int()
@@ -49,7 +53,6 @@ export const ListNotificationsResponse = zod.object({
           .nullable(),
         message: zod
           .string()
-          .min(1)
           .regex(listNotificationsResponseItemsItemMessageRegExp),
         createdAt: zod.string().datetime({ offset: true }),
         read: zod.boolean(),
@@ -59,8 +62,20 @@ export const ListNotificationsResponse = zod.object({
 });
 
 /**
- * @summary Mark all notifications belonging to the signed-in member as read
+ * Optional observed IDs prevent consuming unseen arrivals. A bodyless explicit mark-all call marks all currently accessible notifications read.
+ * @summary Mark the signed-in student's notifications read through the observed snapshot
  */
+export const markNotificationsReadBodyIdsItemMax = 9007199254740991;
+
+export const markNotificationsReadBodyIdsMax = 50;
+
+export const MarkNotificationsReadBody = zod.object({
+  ids: zod
+    .array(zod.number().int().min(1).max(markNotificationsReadBodyIdsItemMax))
+    .min(1)
+    .max(markNotificationsReadBodyIdsMax),
+});
+
 export const MarkNotificationsReadResponse = zod.void();
 
 /**
@@ -73,6 +88,11 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Register with school email
  */
+export const registerBodyPasswordRegExp = new RegExp(
+  "^(?:\\p{Any}){12,72}(?!\\p{Any})",
+  "u",
+);
+
 export const RegisterBody = zod.object({
   email: zod
     .string()
@@ -80,9 +100,23 @@ export const RegisterBody = zod.object({
       "Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access.",
     ),
   name: zod.string(),
-  password: zod.string(),
+  password: zod
+    .string()
+    .regex(registerBodyPasswordRegExp)
+    .describe(
+      "New registrations only. At least 12 Unicode code points, one ASCII A-Z uppercase and one ASCII punctuation character (U+0021-002F, U+003A-0040, U+005B-0060, U+007B-007E). Maximum 72 UTF-8 bytes for bcrypt. Unpaired surrogates are invalid.",
+    ),
   role: zod.enum(["mentor", "mentee", "both"]),
   districtId: zod.number().int(),
+  gender: zod
+    .enum(["female", "male"])
+    .describe("Private self-reported information; never returned in profiles."),
+  dateOfBirth: zod
+    .string()
+    .date()
+    .describe(
+      "Private real calendar date in YYYY-MM-DD, no later than UTC today. Not age or enrollment verification.",
+    ),
 });
 
 export const RegisterResponse = zod.object({
@@ -388,6 +422,12 @@ export const ListRequestsQueryParams = zod.object({
 });
 
 export const ListRequestsResponseItem = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .optional()
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   id: zod.number().int(),
   authorId: zod.number().int(),
   authorName: zod.string(),
@@ -435,6 +475,11 @@ export const ListRequestsResponse = zod.array(ListRequestsResponseItem);
 /**
  * @summary Post a mentorship request
  */
+export const createRequestBodyAudienceDefault = `both`;
+export const createRequestBodyTitleRegExp = new RegExp(
+  "^(?:\\p{Any}){0,60}(?!\\p{Any})",
+  "u",
+);
 
 export const createRequestBodyTagIdsMax = 20;
 
@@ -444,10 +489,19 @@ export const createRequestBodyPreferredTimesItemRegExp = new RegExp(
 export const createRequestBodyPreferredTimesMax = 30;
 
 export const CreateRequestBody = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .default(createRequestBodyAudienceDefault)
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   districtId: zod.number().int().min(1),
   title: zod
     .string()
-    .describe("Non-whitespace text, at most 200 UTF-8 bytes before trimming."),
+    .regex(createRequestBodyTitleRegExp)
+    .describe(
+      "Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.",
+    ),
   description: zod
     .string()
     .describe(
@@ -475,6 +529,12 @@ export const CreateRequestBody = zod.object({
 });
 
 export const CreateRequestResponse = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .optional()
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   id: zod.number().int(),
   authorId: zod.number().int(),
   authorName: zod.string(),
@@ -527,6 +587,12 @@ export const GetRequestParams = zod.object({
 });
 
 export const GetRequestResponse = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .optional()
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   id: zod.number().int(),
   authorId: zod.number().int(),
   authorName: zod.string(),
@@ -578,13 +644,21 @@ export const UpdateRequestParams = zod.object({
   id: zod.coerce.number().int().min(1),
 });
 
+export const updateRequestBodyTitleRegExp = new RegExp(
+  "^(?:\\p{Any}){0,60}(?!\\p{Any})",
+  "u",
+);
+
 export const updateRequestBodyTagIdsMax = 20;
 
 export const UpdateRequestBody = zod.object({
   title: zod
     .string()
+    .regex(updateRequestBodyTitleRegExp)
     .optional()
-    .describe("Non-whitespace text, at most 200 UTF-8 bytes before trimming."),
+    .describe(
+      "Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.",
+    ),
   description: zod
     .string()
     .optional()
@@ -604,6 +678,12 @@ export const UpdateRequestBody = zod.object({
 });
 
 export const UpdateRequestResponse = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .optional()
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   id: zod.number().int(),
   authorId: zod.number().int(),
   authorName: zod.string(),
@@ -957,12 +1037,12 @@ export const SendChatRoomMessageParams = zod.object({
 });
 
 export const sendChatRoomMessageBodyBodyRegExp = new RegExp(
-  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "^(?:\\p{Any}){1,2000}(?!\\p{Any})",
   "u",
 );
 
 export const SendChatRoomMessageBody = zod.object({
-  body: zod.string().min(1).regex(sendChatRoomMessageBodyBodyRegExp),
+  body: zod.string().regex(sendChatRoomMessageBodyBodyRegExp),
   clientMessageId: zod
     .string()
     .uuid()
@@ -1077,6 +1157,81 @@ export const ListDmConversationsResponse = zod.union([
       "Placeholder answer from chat learning-scaffold endpoints the student\nhas not implemented yet (Python/routers/chat.py).\n",
     ),
 ]);
+
+/**
+ * @summary Count incoming visible unread direct messages for the signed-in student
+ */
+export const getDmUnreadResponseUnreadCountMin = 0;
+export const getDmUnreadResponseUnreadCountMax = 9007199254740991;
+
+export const getDmUnreadResponseConversationsItemConversationIdMax = 2147483647;
+
+export const getDmUnreadResponseConversationsItemUnreadCountMin = 0;
+export const getDmUnreadResponseConversationsItemUnreadCountMax = 9007199254740991;
+
+export const GetDmUnreadResponse = zod.object({
+  unreadCount: zod
+    .number()
+    .int()
+    .min(getDmUnreadResponseUnreadCountMin)
+    .max(getDmUnreadResponseUnreadCountMax),
+  conversations: zod.array(
+    zod.object({
+      conversationId: zod
+        .number()
+        .int()
+        .min(1)
+        .max(getDmUnreadResponseConversationsItemConversationIdMax),
+      unreadCount: zod
+        .number()
+        .int()
+        .min(getDmUnreadResponseConversationsItemUnreadCountMin)
+        .max(getDmUnreadResponseConversationsItemUnreadCountMax),
+    }),
+  ),
+});
+
+/**
+ * @summary Mark only the observed incoming messages in this conversation read
+ */
+export const markDmReadPathConversationIdMax = 2147483647;
+
+export const MarkDmReadParams = zod.object({
+  conversationId: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(markDmReadPathConversationIdMax),
+});
+
+export const markDmReadBodyMessageIdsItemMax = 2147483647;
+
+export const markDmReadBodyMessageIdsMax = 50;
+
+export const MarkDmReadBody = zod.object({
+  messageIds: zod
+    .array(zod.number().int().min(1).max(markDmReadBodyMessageIdsItemMax))
+    .min(1)
+    .max(markDmReadBodyMessageIdsMax),
+});
+
+export const markDmReadResponseConversationIdMax = 2147483647;
+
+export const markDmReadResponseUnreadCountMin = 0;
+export const markDmReadResponseUnreadCountMax = 9007199254740991;
+
+export const MarkDmReadResponse = zod.object({
+  conversationId: zod
+    .number()
+    .int()
+    .min(1)
+    .max(markDmReadResponseConversationIdMax),
+  unreadCount: zod
+    .number()
+    .int()
+    .min(markDmReadResponseUnreadCountMin)
+    .max(markDmReadResponseUnreadCountMax),
+});
 
 /**
  * Student TODO — intended contract: return the existing conversation
@@ -1223,12 +1378,12 @@ export const SendDmMessageParams = zod.object({
 });
 
 export const sendDmMessageBodyBodyRegExp = new RegExp(
-  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "^(?:\\p{Any}){1,2000}(?!\\p{Any})",
   "u",
 );
 
 export const SendDmMessageBody = zod.object({
-  body: zod.string().min(1).regex(sendDmMessageBodyBodyRegExp),
+  body: zod.string().regex(sendDmMessageBodyBodyRegExp),
   clientMessageId: zod
     .string()
     .uuid()
@@ -2397,12 +2552,12 @@ export const CreateRequestCommentParams = zod.object({
 });
 
 export const createRequestCommentBodyBodyRegExp = new RegExp(
-  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "^(?:\\p{Any}){1,2000}(?!\\p{Any})",
   "u",
 );
 
 export const CreateRequestCommentBody = zod.object({
-  body: zod.string().min(1).regex(createRequestCommentBodyBodyRegExp),
+  body: zod.string().regex(createRequestCommentBodyBodyRegExp),
   parentId: zod.number().int().min(1).nullish(),
   clientCommentId: zod.string().uuid(),
 });
@@ -2657,6 +2812,12 @@ export const ListRequestActivityQueryParams = zod.object({
 });
 
 export const ListRequestActivityResponseItem = zod.object({
+  audience: zod
+    .enum(["female", "male", "both"])
+    .optional()
+    .describe(
+      "Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.",
+    ),
   id: zod.number().int(),
   authorId: zod.number().int(),
   authorName: zod.string(),
@@ -3027,12 +3188,12 @@ export const EditRequestCommentParams = zod.object({
 });
 
 export const editRequestCommentBodyBodyRegExp = new RegExp(
-  "^(?:\\p{Any}){0,2000}(?!\\p{Any})",
+  "^(?:\\p{Any}){1,2000}(?!\\p{Any})",
   "u",
 );
 
 export const EditRequestCommentBody = zod.object({
-  body: zod.string().min(1).regex(editRequestCommentBodyBodyRegExp),
+  body: zod.string().regex(editRequestCommentBodyBodyRegExp),
 });
 
 export const editRequestCommentResponseIdMax = 2147483647;

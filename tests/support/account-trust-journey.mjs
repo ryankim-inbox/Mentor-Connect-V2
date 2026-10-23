@@ -11,6 +11,8 @@ export async function runAccountTrustJourney({ origin, outbox }, browser) {
     await page.getByLabel("Full name").fill("E2E TEST Ownership Member");
     await page.getByLabel(/School email/).fill("ownership-browser@test.edu");
     await page.getByLabel("Password", { exact: true }).fill("Password123!");
+    await page.getByLabel("Gender", { exact: true }).selectOption("female");
+    await page.getByLabel("Date of birth").fill("2008-02-29");
     await page.getByRole("button", { name: "Both", exact: true }).click();
     await page.getByLabel("District choices").selectOption("1");
     await page

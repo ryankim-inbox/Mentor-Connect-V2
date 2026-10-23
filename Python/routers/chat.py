@@ -24,7 +24,7 @@ from uuid import UUID
 from typing import Annotated
 
 from fastapi import BackgroundTasks, APIRouter, Query, Request, WebSocket, WebSocketDisconnect, HTTPException
-from pydantic import ConfigDict, BaseModel
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
 from db import db  # imported for you — every mission's queries will use it
@@ -45,6 +45,18 @@ class SendMessageBody(BaseModel):
 class StartDmBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     toUserId: int
+
+
+class ReadDmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messageIds: list[Annotated[int, Field(strict=True, gt=0, le=2147483647)]] = Field(min_length=1, max_length=50)
+
+    @field_validator("messageIds")
+    @classmethod
+    def unique_message_ids(cls, value):
+        if len(value) != len(set(value)):
+            raise ValueError("Message IDs must be unique")
+        return value
 
 
 def _todo(mission: int, message: str) -> dict:
@@ -428,6 +440,58 @@ def send_room_message(room_id: int, body: SendMessageBody, request: Request, bac
 # Direct messages
 # ---------------------------------------------------------------------------
 
+@router.get("/dms/unread")
+def dm_unread_counts(request: Request):
+    """Canonical incoming unread counts, including while the chat is closed."""
+    user_id = _require_user(request)
+    with db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT c.id AS conversation_id, count(m.id) AS unread_count
+               FROM dm_conversations c
+               LEFT JOIN dm_messages m ON m.conversation_id = c.id
+                 AND m.sender_id <> %s AND m.read_at IS NULL AND m.deleted_at IS NULL
+               WHERE c.user_a_id = %s OR c.user_b_id = %s
+               GROUP BY c.id ORDER BY c.id""",
+            (user_id, user_id, user_id),
+        )
+        conversations = [{"conversationId": row["conversation_id"],
+                          "unreadCount": row["unread_count"]} for row in cur.fetchall()]
+    return {"unreadCount": sum(row["unreadCount"] for row in conversations),
+            "conversations": conversations}
+
+
+@router.post("/dms/{conversation_id}/read")
+def mark_dm_read(conversation_id: int, body: ReadDmBody, request: Request):
+    """Acknowledge only the incoming messages in the client's rendered snapshot."""
+    user_id = _require_user(request)
+    with db() as conn:
+        cur = conn.cursor()
+        _load_conversation_membership(cur, conversation_id, user_id)
+        cur.execute(
+            """SELECT id FROM dm_messages WHERE conversation_id = %s AND id = ANY(%s)
+                 AND sender_id <> %s AND deleted_at IS NULL""",
+            (conversation_id, body.messageIds, user_id),
+        )
+        if len(cur.fetchall()) != len(body.messageIds):
+            raise HTTPException(status_code=404, detail="Incoming message not found")
+        # IDs can commit out of order; a watermark could clear unseen messages.
+        cur.execute(
+            """UPDATE dm_messages SET read_at = now()
+               WHERE conversation_id = %s AND sender_id <> %s AND id = ANY(%s)
+                 AND read_at IS NULL AND deleted_at IS NULL""",
+            (conversation_id, user_id, body.messageIds),
+        )
+        cur.execute(
+            """SELECT count(*) AS unread_count FROM dm_messages
+               WHERE conversation_id = %s AND sender_id <> %s
+                 AND read_at IS NULL AND deleted_at IS NULL""",
+            (conversation_id, user_id),
+        )
+        unread_count = cur.fetchone()["unread_count"]
+    return {"conversationId": conversation_id, "unreadCount": unread_count}
+
+
 @router.get("/dms")
 def list_dm_conversations(request: Request):
     """Mission 5 — this user's DM conversation list, newest first."""
@@ -511,18 +575,6 @@ def list_dm_messages(conversation_id: int, request: Request,
             (conversation_id,) if before_id is None else (conversation_id, conversation_id, before_id),
         )
         messages = cur.fetchall()
-        incoming_ids = [message["id"] for message in messages if message["sender_id"] != user_id]
-        if incoming_ids:
-            cur.execute(
-                """UPDATE dm_messages SET read_at = COALESCE(read_at, now())
-                   WHERE id = ANY(%s) AND deleted_at IS NULL
-                   RETURNING id, read_at""",
-                (incoming_ids,),
-            )
-            read_times = {row["id"]: row["read_at"] for row in cur.fetchall()}
-            for message in messages:
-                if message["id"] in read_times:
-                    message["read_at"] = read_times[message["id"]]
     return [_format_dm_message(message) for message in reversed(messages)]
 
 

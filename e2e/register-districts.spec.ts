@@ -19,6 +19,8 @@ async function fillAccount(page: Page) {
   await page.getByLabel("Full name").fill("Tester");
   await page.getByLabel("School email").fill("tester@school.edu");
   await page.getByLabel("Password", { exact: true }).fill("Password123!");
+  await page.getByLabel("Gender", { exact: true }).selectOption("female");
+  await page.getByLabel("Date of birth").fill("2008-02-29");
 }
 
 test.beforeEach(async ({ page }) => {

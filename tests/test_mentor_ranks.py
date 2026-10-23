@@ -326,7 +326,7 @@ def test_mission_1_aggregates_real_postgresql_without_persistent_changes(monkeyp
         with conn.cursor() as cur:
             cur.execute("CREATE TEMP TABLE users (id integer PRIMARY KEY, name text NOT NULL, role text NOT NULL)")
             cur.execute(
-                "CREATE TEMP TABLE requests (id integer PRIMARY KEY, author_id integer NOT NULL, role text NOT NULL, status text NOT NULL, matched_user_id integer)"
+                "CREATE TEMP TABLE requests (id integer PRIMARY KEY, author_id integer NOT NULL, role text NOT NULL, status text NOT NULL, matched_user_id integer, audience text NOT NULL DEFAULT 'both')"
             )
             cur.executemany(
                 "INSERT INTO users (id, name, role) VALUES (%s, %s, %s)",
@@ -352,6 +352,8 @@ def test_mission_1_aggregates_real_postgresql_without_persistent_changes(monkeyp
                     (108, 1, "mentor", "closed", 4),
                 ],
             )
+            cur.execute("""INSERT INTO requests(id,author_id,role,status,matched_user_id,audience)
+                VALUES (109,1,'mentor','matched',4,'female'),(110,4,'mentee','matched',2,'male')""")
 
         @contextmanager
         def test_db():

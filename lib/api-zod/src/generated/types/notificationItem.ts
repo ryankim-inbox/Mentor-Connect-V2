@@ -20,10 +20,7 @@ export interface NotificationItem {
    * @nullable
    */
   requestId: number | null;
-  /**
-   * @minLength 1
-   * @pattern ^(?:\p{Any}){0,1000}(?!\p{Any})
-   */
+  /** @pattern ^(?:\p{Any}){1,1000}(?!\p{Any}) */
   message: string;
   createdAt: string;
   read: boolean;

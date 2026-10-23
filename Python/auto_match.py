@@ -4,6 +4,7 @@ import logging
 from db import db
 from find_matches import rank_candidates
 from member_access import has_student_access
+from request_access import can_access_request
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def find_matches_for_request(cur, request_row: dict, limit: int = TOP_MATCHES) -
     student = {"id": author_id, "district": request_row["district_id"]}
     cur.execute(
         """SELECT u.id, u.name, u.subjects, u.district_id, u.role,
-                  u.email_verified_at, u.is_admin, u.password_hash,
+                  u.email_verified_at, u.is_admin, u.password_hash, u.gender,
                   COALESCE(array_agg(s.slot ORDER BY s.slot)
                       FILTER (WHERE s.slot IS NOT NULL), '{}') AS slots
            FROM users u LEFT JOIN schedules s ON s.user_id = u.id
@@ -41,7 +42,7 @@ def find_matches_for_request(cur, request_row: dict, limit: int = TOP_MATCHES) -
     )
     mentors = [
         {**mentor, "district": mentor["district_id"], "available_times": mentor["slots"]}
-        for mentor in cur.fetchall() if has_student_access(mentor)
+        for mentor in cur.fetchall() if has_student_access(mentor) and can_access_request(request_row, mentor)
     ]
     return rank_candidates(student, mentors, question, min(limit, TOP_MATCHES))
 
@@ -82,7 +83,8 @@ def auto_match_request(request_row: dict) -> int:
             cur.execute('SELECT * FROM users WHERE id=ANY(%s) ORDER BY id FOR SHARE',
                         ([match['mentor_id'] for match in matches],))
             recipients = {user['id']: user for user in cur.fetchall()
-                          if user['role'] in ('mentor', 'both') and has_student_access(user)}
+                          if user['role'] in ('mentor', 'both') and has_student_access(user)
+                          and can_access_request(request, user)}
             delivered = 0
             title = request['title']
             for match in matches:

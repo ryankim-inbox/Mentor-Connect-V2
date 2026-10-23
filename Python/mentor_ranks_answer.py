@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 def rank_data() -> list[dict]:
-    """Return mentors and both-role users with their matched-request counts."""
+    """Return mentors and both-role users with unrestricted matched-request counts."""
     with db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -18,6 +18,7 @@ def rank_data() -> list[dict]:
             FROM users AS u
             LEFT JOIN requests AS r
               ON r.status = %s
+             AND r.audience = 'both'
              AND r.matched_user_id IS NOT NULL
              AND CASE r.role
                    WHEN %s THEN r.author_id

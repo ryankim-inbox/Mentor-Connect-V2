@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
-import { fixtures, fixturePassword, signedInUser } from "./fixtures";
+import { fixtures, signedInUser } from "./fixtures";
 
 // Browser/API mocks only: these tests do not create accounts or deliver mail.
+const signupPassword = "Password123!";
 const testMember = {
   ...signedInUser,
   name: "Email Test Member",
@@ -27,7 +28,9 @@ async function setup(page: Page, signedIn = false) {
 async function fillRegistration(page: Page, email: string) {
   await page.getByLabel("Full name").fill(testMember.name);
   await page.getByLabel("School email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
+  await page.getByLabel("Password", { exact: true }).fill(signupPassword);
+  await page.getByLabel("Gender", { exact: true }).selectOption("female");
+  await page.getByLabel("Date of birth").fill("2008-02-29");
   await page.getByLabel("District choices").selectOption("1");
 }
 
@@ -59,7 +62,7 @@ test("non-.edu signup reaches the server once and a rejection preserves the form
     "unapproved@example.com",
   );
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
-    fixturePassword,
+    signupPassword,
   );
   await expect(page.getByLabel("District choices")).toHaveValue("1");
   await expect(submit).toBeEnabled();
@@ -67,7 +70,9 @@ test("non-.edu signup reaches the server once and a rejection preserves the form
     {
       name: testMember.name,
       email: "unapproved@example.com",
-      password: fixturePassword,
+      password: signupPassword,
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "mentee",
       districtId: 1,
     },

@@ -42,6 +42,11 @@
       "id": "0008_student_demo",
       "path": "0008_student_demo.sql",
       "sha256": "5b150b045ef5c21e76340f5e7ea1e721d4196726465f0f6b85bf47ad12f0d36d"
+    },
+    {
+      "id": "0009_student_privacy_notifications",
+      "path": "0009_student_privacy_notifications.sql",
+      "sha256": "80c773b1571f6a3a0fe2d2882127ef7709541c0cad6ab92fcfd38a443d0ae733"
     }
   ]
 }

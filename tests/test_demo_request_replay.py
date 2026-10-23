@@ -54,7 +54,7 @@ def test_same_key_replays_current_representation_without_duplicate_alerts(backen
 @pytest.mark.parametrize('keys', ['missing', 'different'])
 def test_identical_content_coalesces_old_clients_and_different_keys(backend_database, backend_server, keys):
     first = payload(**({'clientRequestId': str(uuid4())} if keys == 'different' else {}))
-    second = {**first, 'title': '  Replay-safe study question  ',
+    second = {**first,
               'description': ' Synthetic request for publication tests ',
               'tagIds': [2, 1], 'preferredTimes': ['Tue 17:00', 'Mon 16:00']}
     if keys == 'different':
@@ -98,7 +98,8 @@ def test_deleted_request_releases_all_submission_keys_and_alerts(backend_databas
 
 
 @pytest.mark.parametrize('change', [
-    {'title': 'Another question'}, {'description': 'Another description'},
+    {'title': 'Another question'}, {'title': '  Replay-safe study question  '},
+    {'description': 'Another description'}, {'audience': 'female'},
     {'districtId': 2}, {'role': 'mentor'}, {'tagIds': [1]},
     {'preferredTimes': ['Wed 18:00']},
 ])

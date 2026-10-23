@@ -174,11 +174,11 @@ test("admin list and moderation retain legacy evidence and code-point-bounded no
   assert.equal(generated.ModerateReportResponse.safeParse(row).success, false);
 });
 
-test("request title and description keep independent UTF-8 byte limits", () => {
+test("request titles use code points while descriptions keep the UTF-8 byte limit", () => {
   const payload = {
     districtId: 1,
     role: "mentee",
-    title: "😀".repeat(50),
+    title: "😀".repeat(60),
     description: "😀".repeat(1000),
   };
   assert.doesNotThrow(() =>
@@ -189,7 +189,7 @@ test("request title and description keep independent UTF-8 byte limits", () => {
     ),
   );
   for (const invalid of [
-    { ...payload, title: "😀".repeat(51) },
+    { ...payload, title: "😀".repeat(61) },
     { ...payload, description: "😀".repeat(1001) },
   ])
     assert.throws(() =>

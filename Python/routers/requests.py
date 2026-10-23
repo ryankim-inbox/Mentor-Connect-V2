@@ -14,6 +14,7 @@ from typing import Annotated, Literal, Optional, List
 from db import db
 from auto_match import auto_match_request
 from account_policy import is_demo_user, is_demo_request
+from request_access import request_access_sql, require_request_access
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 
@@ -50,7 +51,12 @@ class RequestTextBody(BaseModel):
     @field_validator("title", check_fields=False)
     @classmethod
     def check_title(cls, value):
-        return validate_request_text(value, 200)
+        if value is None:
+            return None
+        if (len(value) > 60 or any('\ud800' <= char <= '\udfff' for char in value)
+                or not any(not (char.isspace() or char == '\ufeff') for char in value)):
+            raise ValueError('Title must contain text and be at most 60 Unicode codepoints including spaces')
+        return value
 
     @field_validator("description", check_fields=False)
     @classmethod
@@ -70,6 +76,7 @@ class CreateRequestBody(RequestTextBody):
     title: str
     description: str
     role: Literal["mentor", "mentee"]
+    audience: Literal["female", "male", "both"] = "both"
     tagIds: Optional[TagIds] = Field(default_factory=list)
     preferredTimes: Optional[List[str]] = []
     clientRequestId: Optional[UUID] = None
@@ -104,6 +111,9 @@ def publication_payload_hash(body: CreateRequestBody) -> str:
         'tagIds': sorted(body.tagIds or []),
         'preferredTimes': sorted(body.preferredTimes or []),
     }
+    # Preserve publication retry keys created before the audience migration.
+    if body.audience != 'both':
+        payload['audience'] = body.audience
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
@@ -154,7 +164,8 @@ def build_request_response(cur, req, *, preview=False):
         "authorRole": req["role"],
         "districtId": req["district_id"],
         "districtName": district["name"] if district else "Unknown",
-        "title": request_list_preview(req["title"], 200) if preview else req["title"],
+        "title": req["title"][:60] if preview else req["title"],
+        "audience": req["audience"],
         "description": request_list_preview(req["description"], 4000) if preview else req["description"],
         "descriptionTruncated": preview and len(req["description"].encode("utf-8")) > 4000,
         "tags": [{"id": t["id"], "name": t["name"], "color": t["color"], "requestCount": 0} for t in tags],
@@ -180,6 +191,9 @@ def list_requests(
     viewer = require_member_user(request)
     conditions = ["(%s OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id=%s AND b.blocked_user_id=r.author_id) OR (b.blocker_id=r.author_id AND b.blocked_user_id=%s)))"]
     params = [has_admin_access(viewer), viewer["id"], viewer["id"]]
+    audience_clause, audience_params = request_access_sql(viewer)
+    conditions.append(audience_clause)
+    params.extend(audience_params)
     effective_status = status or "open"
     conditions.append("r.status = %s")
     params.append(effective_status)
@@ -252,10 +266,10 @@ def create_request(body: CreateRequestBody, request: Request):
                 validate_tag_references(cur, body.tagIds)
                 cur.execute(
                     """INSERT INTO requests
-                       (author_id,district_id,title,description,role,status,preferred_times,client_request_id,payload_hash)
-                       VALUES (%s,%s,%s,%s,%s,'open',%s,%s,%s) RETURNING *""",
+                       (author_id,district_id,title,description,role,audience,status,preferred_times,client_request_id,payload_hash)
+                       VALUES (%s,%s,%s,%s,%s,%s,'open',%s,%s,%s) RETURNING *""",
                     (user_id, body.districtId, body.title, body.description, body.role,
-                     body.preferredTimes or [], client_key, digest),
+                     body.audience, body.preferredTimes or [], client_key, digest),
                 )
                 req = cur.fetchone()
                 for tag_id in body.tagIds or []:
@@ -292,6 +306,7 @@ def get_request(request_id: PositiveInt, request: Request):
         req = cur.fetchone()
         if not req:
             raise HTTPException(status_code=404, detail="Request not found")
+        require_request_access(req, viewer)
         from routers.chat import _require_unblocked_pair
         if not has_admin_access(viewer):
             _require_unblocked_pair(cur,req["author_id"],viewer["id"])
@@ -299,7 +314,8 @@ def get_request(request_id: PositiveInt, request: Request):
 
 @router.patch("/requests/{request_id}", dependencies=[Depends(require_student_user)])
 def update_request(request_id: PositiveInt, body: UpdateRequestBody, request: Request):
-    user_id = request.session.get("user_id")
+    viewer = require_student_user(request)
+    user_id = viewer['id']
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -310,6 +326,7 @@ def update_request(request_id: PositiveInt, body: UpdateRequestBody, request: Re
             existing = cur.fetchone()
             if not existing:
                 raise HTTPException(status_code=404, detail="Request not found")
+            require_request_access(existing, viewer)
             if existing["author_id"] != user_id:
                 raise HTTPException(status_code=403, detail="Forbidden")
             if body.status == "matched" and existing["status"] != "matched":
@@ -372,6 +389,7 @@ def delete_request(request_id: PositiveInt, request: Request):
         existing = cur.fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Request not found")
+        require_request_access(existing, viewer)
         if existing["author_id"] != user_id and not has_admin_access(viewer):
             raise HTTPException(status_code=403, detail="Forbidden")
         cur.execute("DELETE FROM request_tags WHERE request_id = %s", (request_id,))

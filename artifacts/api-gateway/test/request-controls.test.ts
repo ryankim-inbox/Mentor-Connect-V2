@@ -25,7 +25,7 @@ const TEST_RECIPIENT = "owner+test@example.com";
 
 function registration(email = TEST_RECIPIENT, extra = {}) {
   return Buffer.from(JSON.stringify({
-    email, name: "Test owner", password: "secret", role: "both", districtId: 1, ...extra,
+    email, name: "Test owner", password: "SyntheticPass!", gender: "female", dateOfBirth: "2008-02-29", role: "both", districtId: 1, ...extra,
   }));
 }
 
@@ -461,13 +461,15 @@ test("enforces the bcrypt 72-byte password boundary without truncation", () => {
   }
 });
 
-test("accepts only the existing registration model", () => {
+test("accepts only the required registration model", () => {
   for (const role of ["mentor", "mentee", "both"]) {
     const valid = Buffer.from(
       JSON.stringify({
         email: "student@example.edu",
         name: "Student",
-        password: "secret",
+        password: "SyntheticPass!",
+        gender: "female",
+        dateOfBirth: "2008-02-29",
         role,
         districtId: 1,
       }),
@@ -483,13 +485,17 @@ test("accepts only the existing registration model", () => {
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "both",
     },
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "both",
       districtId: 1,
       subjects: [],
@@ -497,42 +503,54 @@ test("accepts only the existing registration model", () => {
     {
       email: "student@example.com",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "both",
       districtId: 1,
     },
     {
       email: "student@example.edu",
       name: 7,
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "both",
       districtId: 1,
     },
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "admin",
       districtId: 1,
     },
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: ["mentor"],
       districtId: 1,
     },
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: [["both"]],
       districtId: 1,
     },
     {
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "both",
       districtId: 1.5,
     },
@@ -683,7 +701,9 @@ test("rejects invalid auth bodies before upstream and preserves accepted login b
     const body = JSON.stringify({
       email: "student@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role,
       districtId: 1,
     });
@@ -732,7 +752,7 @@ test("rejects invalid auth bodies before upstream and preserves accepted login b
   assert.equal(fixture.calls.at(-1)?.body, loginBody);
 
   const registerBody =
-    '{ "email": "student@example.edu", "name": "Student", "password": "secret", "role": "both", "districtId": 1 }';
+    '{ "email": "student@example.edu", "name": "Student", "password": "SyntheticPass!", "gender": "female", "dateOfBirth": "2008-02-29", "role": "both", "districtId": 1 }';
   const register = await fetch(fixture.gatewayOrigin + "/api/auth/register", {
     method: "POST",
     headers: {
@@ -776,7 +796,9 @@ for (const name of [
       body: JSON.stringify({
         email: "ada@example.edu",
         name,
-        password: "secret",
+        password: "SyntheticPass!",
+        gender: "female",
+        dateOfBirth: "2008-02-29",
         role: "mentee",
         districtId: 1,
       }),
@@ -812,7 +834,9 @@ test("registration forwards normalized names and accepts the UTF-8 byte boundary
       body: JSON.stringify({
         email: "ada@example.edu",
         name,
-        password: "secret",
+        password: "SyntheticPass!",
+        gender: "female",
+        dateOfBirth: "2008-02-29",
         role: "mentee",
         districtId: 1,
       }),
@@ -821,7 +845,9 @@ test("registration forwards normalized names and accepts the UTF-8 byte boundary
     assert.deepEqual(JSON.parse(fixture.calls.at(-1)!.body), {
       email: "ada@example.edu",
       name: expected,
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "mentee",
       districtId: 1,
     });
@@ -884,7 +910,9 @@ test("applies the 30-per-minute registration plan", async (context) => {
       body: JSON.stringify({
         email: `student-${account}@example.edu`,
         name: "Student",
-        password: "secret",
+        password: "SyntheticPass!",
+        gender: "female",
+        dateOfBirth: "2008-02-29",
         role: "mentee",
         districtId: 1,
       }),
@@ -901,7 +929,9 @@ test("applies the 30-per-minute registration plan", async (context) => {
     body: JSON.stringify({
       email: "student-overflow@example.edu",
       name: "Student",
-      password: "secret",
+      password: "SyntheticPass!",
+      gender: "female",
+      dateOfBirth: "2008-02-29",
       role: "mentee",
       districtId: 1,
     }),

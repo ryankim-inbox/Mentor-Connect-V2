@@ -5,13 +5,22 @@
  * PeerBridge - Student Mentorship Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { RegisterBodyGender } from "./registerBodyGender";
 import type { RegisterBodyRole } from "./registerBodyRole";
 
 export interface RegisterBody {
   /** Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access. */
   email: string;
   name: string;
+  /**
+   * New registrations only. At least 12 Unicode code points, one ASCII A-Z uppercase and one ASCII punctuation character (U+0021-002F, U+003A-0040, U+005B-0060, U+007B-007E). Maximum 72 UTF-8 bytes for bcrypt. Unpaired surrogates are invalid.
+   * @pattern ^(?:\p{Any}){12,72}(?!\p{Any})
+   */
   password: string;
   role: RegisterBodyRole;
   districtId: number;
+  /** Private self-reported information; never returned in profiles. */
+  gender: RegisterBodyGender;
+  /** Private real calendar date in YYYY-MM-DD, no later than UTC today. Not age or enrollment verification. */
+  dateOfBirth: string;
 }

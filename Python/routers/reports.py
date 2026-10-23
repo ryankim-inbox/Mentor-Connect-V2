@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Optional
 from security import require_admin
 from db import db
 from account_policy import is_demo_user, is_demo_request
+from request_access import require_request_access
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 
@@ -23,7 +24,8 @@ class BlockUserBody(BaseModel):
 
 @router.post("/reports", status_code=201)
 def create_report(body: CreateReportBody, request: Request):
-    user_id = require_student_user(request)["id"]
+    viewer = require_student_user(request)
+    user_id = viewer["id"]
     if body.reportedUserId == user_id:
         raise HTTPException(status_code=400, detail="Cannot report yourself")
 
@@ -36,10 +38,11 @@ def create_report(body: CreateReportBody, request: Request):
             target_type = "profile"
             request_title = None
             if body.requestId is not None:
-                cur.execute("SELECT author_id,title FROM requests WHERE id=%s FOR SHARE", (body.requestId,))
+                cur.execute("SELECT author_id,title,audience FROM requests WHERE id=%s FOR SHARE", (body.requestId,))
                 reported_request = cur.fetchone()
                 if not reported_request:
                     raise HTTPException(status_code=404, detail="Request not found")
+                require_request_access(reported_request, viewer)
                 if reported_request["author_id"] != body.reportedUserId:
                     raise HTTPException(status_code=400, detail="Reported user must be the request author")
                 target_type = "request"

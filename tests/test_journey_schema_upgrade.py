@@ -40,7 +40,7 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
         cur.execute((ROOT / 'database/migrations/0006_account_trust.sql').read_text())
         cur.execute('SELECT count(*) FROM users WHERE is_verified OR email_verified_at IS NOT NULL')
         assert cur.fetchone()[0] == 0
-        for migration in sorted((ROOT / 'database/migrations').glob('000[7-8]_*.sql')):
+        for migration in sorted((ROOT / 'database/migrations').glob('000[7-9]_*.sql')):
             cur.execute(migration.read_text())
         cur.execute('UPDATE users SET email_verified_at=now(),is_verified=true')
         cur.execute(sql.SQL('CREATE ROLE {} LOGIN').format(sql.Identifier(role)))
@@ -67,10 +67,14 @@ def test_upgrade_from_0003_preserves_data_and_new_flows_use_narrow_grants(backen
         with closing(psycopg2.connect(make_dsn(backend_database,user=role))) as app,app.cursor() as cur:
             cur.execute("SELECT has_column_privilege(current_user,'users','is_admin','INSERT'),has_column_privilege(current_user,'users','is_admin','UPDATE')")
             assert cur.fetchone()==(False,False)
+        # Proposed release grant is exercised only on this disposable synthetic role.
+        with closing(psycopg2.connect(backend_database)) as conn, conn.cursor() as cur:
+            cur.execute(sql.SQL('GRANT INSERT(gender,date_of_birth) ON users TO {}').format(sql.Identifier(role)))
+            conn.commit()
         environment={'EMAIL_DELIVERY_MODE':'development-file','EMAIL_DEV_OUTBOX_DIR':str(tmp_path/'outbox'),'APP_ORIGIN':'http://localhost:5173'}
         with backend_server(database_url=make_dsn(backend_database, user=role),environment=environment) as base:
             new_user=build_opener(HTTPCookieProcessor(CookieJar()))
-            status,registration=api(new_user,base,'POST','/api/auth/register',{'email':'grant-owner@test.edu','name':'Grant owner','password':'Password123!','role':'mentee','districtId':1})
+            status,registration=api(new_user,base,'POST','/api/auth/register',{'email':'grant-owner@test.edu','name':'Grant owner','password':'Password123!','role':'mentee','districtId':1,'gender':'female','dateOfBirth':'2008-02-29'})
             assert status==201,registration
             assert registration['user']['isAdmin'] is False and registration['user']['isVerified'] is False
             assert api(new_user,base,'PATCH',f"/api/users/{registration['user']['id']}",{'name':'Changed','bio':'local only','role':'both','subjects':['Math']})[0]==200

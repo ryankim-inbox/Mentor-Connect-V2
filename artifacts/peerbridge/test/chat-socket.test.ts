@@ -123,3 +123,10 @@ test("resync uses fresh pages so deleted cached messages disappear", async () =>
     [{ id: 2 }],
   );
 });
+
+test("resync retains late commits preceding the old anchor in the latest page", async () => {
+  assert.deepEqual(
+    await history.syncChatHistory(async () => [{ id: 9 }, { id: 10 }], [{ id: 10 }]),
+    [{ id: 9 }, { id: 10 }],
+  );
+});

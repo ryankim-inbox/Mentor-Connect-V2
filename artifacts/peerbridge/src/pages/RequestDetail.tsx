@@ -188,6 +188,9 @@ export default function RequestDetail({ id }: Props) {
           </div>
         </div>
 
+        <p className="text-sm text-muted-foreground mb-4">
+          Audience: {request.audience === "female" ? "Female students" : request.audience === "male" ? "Male students" : "Both — all students"}
+        </p>
         <DemoNotice isDemo={request.isDemo} kind="post" />
         <p className="text-foreground leading-relaxed mb-5 whitespace-pre-wrap break-words">
           {request.description}

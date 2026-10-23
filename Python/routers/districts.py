@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from security import require_member_user
 from typing import Optional
 from db import db
+from request_access import request_access_sql
 
 router = APIRouter()
 
-def build_district_response(cur, district):
+def build_district_response(cur, district, viewer=None):
     cur.execute("SELECT COUNT(*) as cnt FROM users WHERE district_id = %s", (district["id"],))
     member_count = cur.fetchone()["cnt"]
+    audience_clause, audience_params = request_access_sql(viewer)
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM requests WHERE district_id = %s AND status = 'open'",
-        (district["id"],),
+        f"SELECT COUNT(*) as cnt FROM requests r WHERE district_id = %s AND status = 'open' AND {audience_clause}",
+        (district["id"], *audience_params),
     )
     open_count = cur.fetchone()["cnt"]
     return {
@@ -23,7 +25,8 @@ def build_district_response(cur, district):
     }
 
 @router.get("/districts")
-def list_districts(type: Optional[str] = None, search: Optional[str] = None):
+def list_districts(request: Request, type: Optional[str] = None, search: Optional[str] = None):
+    viewer = require_member_user(request) if request.session.get('user_id') else None
     conditions = []
     params = []
     if type is not None:
@@ -42,14 +45,14 @@ def list_districts(type: Optional[str] = None, search: Optional[str] = None):
         cur = conn.cursor()
         cur.execute(query, params)
         districts = cur.fetchall()
-        return [build_district_response(cur, d) for d in districts]
+        return [build_district_response(cur, d, viewer) for d in districts]
 
 @router.get("/districts/{district_id}", dependencies=[Depends(require_member_user)])
-def get_district(district_id: int):
+def get_district(district_id: int, viewer=Depends(require_member_user)):
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM districts WHERE id = %s", (district_id,))
         district = cur.fetchone()
         if not district:
             raise HTTPException(status_code=404, detail="District not found")
-        return build_district_response(cur, district)
+        return build_district_response(cur, district, viewer)

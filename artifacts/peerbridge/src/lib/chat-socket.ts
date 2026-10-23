@@ -117,7 +117,8 @@ export async function syncChatHistory<T extends { id: number }>(
   const cursors = new Set<number>();
   for (;;) {
     const index = rows.findIndex((row) => row.id === anchor);
-    if (index >= 0 && !loadOlder) return rows.slice(index);
+    // Keep the latest page too: an earlier ID can commit after the old anchor.
+    if (index >= 0 && !loadOlder) return rows.slice(Math.min(index, Math.max(0, rows.length - 50)));
     if (index >= 50 && loadOlder) return rows.slice(index - 50);
     if (page.length < 50) return rows;
     const cursor = page[0].id;

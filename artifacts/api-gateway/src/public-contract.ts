@@ -70,6 +70,14 @@ const dm = z.object({
   createdAt: timestamp,
   readAt: timestamp.nullable(),
 });
+const dmRead = z.object({
+  conversationId: id.max(2147483647),
+  unreadCount: z.number().int().nonnegative().safe(),
+});
+const dmUnread = z.object({
+  unreadCount: z.number().int().nonnegative().safe(),
+  conversations: dmRead.array(),
+});
 const adminRow = z.object({
   isDemo: z.boolean(),
   userId: id,
@@ -104,7 +112,7 @@ const notifications = z.object({
     .array(
       z.object({
         id,
-        kind: z.enum(["request_match", "request_match_summary"]),
+        kind: z.enum(["request_match", "request_match_summary", "request_accepted"]),
         requestId: id.nullable(),
         message: text.refine((value) => hasAtMostCodePoints(value, 1000)),
         createdAt: z.string().datetime({ offset: true }),
@@ -139,6 +147,7 @@ const mentorshipRequest = z.object({
   districtId: integer,
   districtName: string,
   title: string,
+  audience: z.enum(["female", "male", "both"]).optional(),
   description: string,
   descriptionTruncated: z.boolean(),
   tags: tag.array(),
@@ -372,6 +381,10 @@ export function projectPublicPayload(
   path: string,
   method: string,
 ): unknown {
+  if (path === "/api/dms/unread" && method === "GET")
+    return dmUnread.parse(payload);
+  if (path === "/api/dms/{id}/read" && method === "POST")
+    return dmRead.parse(payload);
   if (path === "/api/users/{id}/activity-rank")
     return activityRank.parse(payload);
   if (path === "/api/notifications" && method === "GET")

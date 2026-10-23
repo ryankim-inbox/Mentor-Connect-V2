@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   pgTable,
@@ -41,8 +42,11 @@ export const usersTable = pgTable(
     teachingStyle: text("teaching_style"),
     emailVerifiedAt: timestamp("email_verified_at", {withTimezone:true}),
     isAdmin: boolean("is_admin").notNull().default(false),
+    gender: text("gender"),
+    dateOfBirth: date("date_of_birth"),
   },
   (table) => [
+    check("users_gender_check", sql`${table.gender} IN ('female', 'male')`),
     check("users_email_ownership_check",sql`${table.isVerified} = (${table.emailVerifiedAt} IS NOT NULL)`),
     check(
       "users_role_check",

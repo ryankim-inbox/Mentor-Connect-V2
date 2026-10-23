@@ -69,7 +69,14 @@ paths:
       operationId: markNotificationsRead
       tags:
         - notifications
-      summary: Mark all notifications belonging to the signed-in member as read
+      summary: Mark the signed-in student's notifications read through the observed snapshot
+      description: Optional observed IDs prevent consuming unseen arrivals. A bodyless explicit mark-all call marks all currently accessible notifications read.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationsReadInput"
       responses:
         "204":
           description: Success
@@ -1159,6 +1166,88 @@ paths:
           $ref: "#/components/responses/Error403"
         "404":
           $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      x-required-authority: student
+  /dms/unread:
+    get:
+      operationId: getDmUnread
+      tags: [chat]
+      summary: Count incoming visible unread direct messages for the signed-in student
+      responses:
+        "200":
+          description: Authoritative unread state for the signed-in student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DmUnreadResponse"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "502":
+          $ref: "#/components/responses/Error502"
+        "503":
+          $ref: "#/components/responses/Error503"
+        "504":
+          $ref: "#/components/responses/Error504"
+      security:
+        - cookieAuth: []
+      x-required-authority: student
+  /dms/{conversationId}/read:
+    post:
+      operationId: markDmRead
+      tags: [chat]
+      summary: Mark only the observed incoming messages in this conversation read
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DmReadInput"
+      responses:
+        "200":
+          description: Authoritative unread state for the signed-in student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DmUnreadConversation"
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "422":
+          $ref: "#/components/responses/Error422"
         "429":
           $ref: "#/components/responses/Error429"
         "502":
@@ -2840,7 +2929,7 @@ components:
           maximum: 9007199254740991
         kind:
           type: string
-          enum: [ request_match, request_match_summary ]
+          enum: [ request_match, request_match_summary, request_accepted ]
         requestId:
           type: [ integer, "null" ]
           minimum: 1
@@ -2855,6 +2944,20 @@ components:
           format: date-time
         read:
           type: boolean
+    NotificationsReadInput:
+      type: object
+      additionalProperties: false
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+      required: [ids]
     NotificationsResponse:
       type: object
       additionalProperties: false
@@ -2904,6 +3007,11 @@ components:
           type: string
         password:
           type: string
+          minLength: 12
+          maxLength: 72
+          x-length-unit: unicode-code-points
+          writeOnly: true
+          description: New registrations only. At least 12 Unicode code points, one ASCII A-Z uppercase and one ASCII punctuation character (U+0021-002F, U+003A-0040, U+005B-0060, U+007B-007E). Maximum 72 UTF-8 bytes for bcrypt. Unpaired surrogates are invalid.
         role:
           type: string
           enum:
@@ -2912,12 +3020,24 @@ components:
             - both
         districtId:
           type: integer
+        gender:
+          type: string
+          enum: [ female, male ]
+          writeOnly: true
+          description: Private self-reported information; never returned in profiles.
+        dateOfBirth:
+          type: string
+          format: date
+          writeOnly: true
+          description: Private real calendar date in YYYY-MM-DD, no later than UTC today. Not age or enrollment verification.
       required:
         - email
         - name
         - password
         - role
         - districtId
+        - gender
+        - dateOfBirth
       additionalProperties: false
     LoginBody:
       type: object
@@ -3065,6 +3185,10 @@ components:
     MentorshipRequest:
       type: object
       properties:
+        audience:
+          type: string
+          enum: [ female, male, both ]
+          description: Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.
         id:
           type: integer
         authorId:
@@ -3138,12 +3262,19 @@ components:
     CreateRequestBody:
       type: object
       properties:
+        audience:
+          type: string
+          enum: [ female, male, both ]
+          default: both
+          description: Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.
         districtId:
           type: integer
           minimum: 1
         title:
           type: string
-          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
+          maxLength: 60
+          x-length-unit: unicode-code-points
+          description: Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
         description:
           type: string
           description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
@@ -3183,7 +3314,9 @@ components:
       properties:
         title:
           type: string
-          description: Non-whitespace text, at most 200 UTF-8 bytes before trimming.
+          maxLength: 60
+          x-length-unit: unicode-code-points
+          description: Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
         description:
           type: string
           description: Non-whitespace text, at most 4,000 UTF-8 bytes before trimming.
@@ -3447,6 +3580,46 @@ components:
       required:
         - toUserId
       additionalProperties: false
+    DmUnreadConversation:
+      type: object
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        unreadCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required: [conversationId, unreadCount]
+    DmUnreadResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        unreadCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/DmUnreadConversation"
+      required: [unreadCount, conversations]
+    DmReadInput:
+      type: object
+      additionalProperties: false
+      properties:
+        messageIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      required: [messageIds]
     DmMessage:
       type: object
       properties:

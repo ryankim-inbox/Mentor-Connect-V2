@@ -11,6 +11,7 @@ export type NotificationItemKind =
 export const NotificationItemKind = {
   request_match: "request_match",
   request_match_summary: "request_match_summary",
+  request_accepted: "request_accepted",
 } as const;
 
 export interface NotificationItem {
@@ -33,6 +34,16 @@ export interface NotificationItem {
   message: string;
   createdAt: string;
   read: boolean;
+}
+
+export interface NotificationsReadInput {
+  /**
+   * @minItems 1
+   * @maxItems 50
+   * @items.minimum 1
+   * @items.maximum 9007199254740991
+   */
+  ids: number[];
 }
 
 export interface NotificationsResponse {
@@ -68,13 +79,33 @@ export const RegisterBodyRole = {
   both: "both",
 } as const;
 
+/**
+ * Private self-reported information; never returned in profiles.
+ */
+export type RegisterBodyGender =
+  (typeof RegisterBodyGender)[keyof typeof RegisterBodyGender];
+
+export const RegisterBodyGender = {
+  female: "female",
+  male: "male",
+} as const;
+
 export interface RegisterBody {
   /** Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access. */
   email: string;
   name: string;
+  /**
+   * New registrations only. At least 12 Unicode code points, one ASCII A-Z uppercase and one ASCII punctuation character (U+0021-002F, U+003A-0040, U+005B-0060, U+007B-007E). Maximum 72 UTF-8 bytes for bcrypt. Unpaired surrogates are invalid.
+   * @minLength 12
+   * @maxLength 72
+   */
   password: string;
   role: RegisterBodyRole;
   districtId: number;
+  /** Private self-reported information; never returned in profiles. */
+  gender: RegisterBodyGender;
+  /** Private real calendar date in YYYY-MM-DD, no later than UTC today. Not age or enrollment verification. */
+  dateOfBirth: string;
 }
 
 export interface LoginBody {
@@ -163,6 +194,18 @@ export interface Tag {
   requestCount: number;
 }
 
+/**
+ * Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.
+ */
+export type MentorshipRequestAudience =
+  (typeof MentorshipRequestAudience)[keyof typeof MentorshipRequestAudience];
+
+export const MentorshipRequestAudience = {
+  female: "female",
+  male: "male",
+  both: "both",
+} as const;
+
 export type MentorshipRequestAuthorRole =
   (typeof MentorshipRequestAuthorRole)[keyof typeof MentorshipRequestAuthorRole];
 
@@ -181,6 +224,8 @@ export const MentorshipRequestStatus = {
 } as const;
 
 export interface MentorshipRequest {
+  /** Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both. */
+  audience?: MentorshipRequestAudience;
   id: number;
   authorId: number;
   authorName: string;
@@ -206,6 +251,18 @@ export interface MentorshipRequest {
   readonly matchedUserIsDemo: boolean;
 }
 
+/**
+ * Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both.
+ */
+export type CreateRequestBodyAudience =
+  (typeof CreateRequestBodyAudience)[keyof typeof CreateRequestBodyAudience];
+
+export const CreateRequestBodyAudience = {
+  female: "female",
+  male: "male",
+  both: "both",
+} as const;
+
 export type CreateRequestBodyRole =
   (typeof CreateRequestBodyRole)[keyof typeof CreateRequestBodyRole];
 
@@ -215,9 +272,14 @@ export const CreateRequestBodyRole = {
 } as const;
 
 export interface CreateRequestBody {
+  /** Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both. */
+  audience?: CreateRequestBodyAudience;
   /** @minimum 1 */
   districtId: number;
-  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
+  /**
+   * Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
+   * @maxLength 60
+   */
   title: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;
@@ -250,7 +312,10 @@ export const UpdateRequestBodyStatus = {
 } as const;
 
 export interface UpdateRequestBody {
-  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
+  /**
+   * Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
+   * @maxLength 60
+   */
   title?: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description?: string;
@@ -433,6 +498,38 @@ export interface DmConversation {
 export interface StartDmBody {
   /** @minimum 1 */
   toUserId: number;
+}
+
+export interface DmUnreadConversation {
+  /**
+   * @minimum 1
+   * @maximum 2147483647
+   */
+  conversationId: number;
+  /**
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  unreadCount: number;
+}
+
+export interface DmUnreadResponse {
+  /**
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  unreadCount: number;
+  conversations: DmUnreadConversation[];
+}
+
+export interface DmReadInput {
+  /**
+   * @minItems 1
+   * @maxItems 50
+   * @items.minimum 1
+   * @items.maximum 2147483647
+   */
+  messageIds: number[];
 }
 
 export interface DmMessage {

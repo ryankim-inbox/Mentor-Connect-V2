@@ -101,7 +101,7 @@ def _todo(mission: int, message: str) -> dict:
 
 
 def rank_data() -> list[dict]:
-    """Return mentor/both users with raw matched-request counts."""
+    """Return mentor/both users with unrestricted matched-request counts."""
     query = """
             SELECT
                 u.id,
@@ -110,6 +110,7 @@ def rank_data() -> list[dict]:
             FROM users u
                      LEFT JOIN requests r
                                ON r.status = %s
+                                   AND r.audience = 'both'
                                    AND r.matched_user_id IS NOT NULL
                                    AND u.id = CASE r.role
                                                   WHEN %s THEN r.author_id

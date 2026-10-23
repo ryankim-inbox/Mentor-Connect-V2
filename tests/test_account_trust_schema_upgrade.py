@@ -30,6 +30,10 @@ def test_0005_upgrade_preserves_content_resets_legacy_trust_and_never_promotes_a
             assert [row[:len(before[table][0])] for row in after]==before[table]
         cur.execute('SELECT is_verified,email_verified_at,is_admin FROM users')
         assert all(row==(False,None,False) for row in cur.fetchall())
+        # Current application expects the later additive columns; the trust
+        # transition assertions above remain pinned to the 0006 boundary.
+        for migration in sorted((ROOT/'database/migrations').glob('000[7-9]_*.sql')):
+            cur.execute(migration.read_text())
         conn.commit()
     with backend_server() as base:
         client,_=login(base,'student001@test.edu')

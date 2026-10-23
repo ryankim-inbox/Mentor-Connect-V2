@@ -152,6 +152,12 @@ const server = createServer(async (req, res) => {
       }
       if (req.method === 'GET') return send(200, messages);
     }
+    const dmUnreadCount = () => dmMessages.filter(message => message.senderId !== user.id && message.readAt === null).length;
+    if (path === '/api/dms/unread' && req.method === 'GET') return send(200, { unreadCount: dmUnreadCount(), conversations: [{ conversationId: 1, unreadCount: dmUnreadCount() }] });
+    if (path === '/api/dms/1/read' && req.method === 'POST') {
+      for (const message of dmMessages) if (message.senderId !== user.id && body.messageIds.includes(message.id)) message.readAt ??= new Date().toISOString();
+      return send(200, { conversationId: 1, unreadCount: dmUnreadCount() });
+    }
     if (path === '/api/dms' && req.method === 'GET') return send(200, [{ id: 1, otherUserId: user.id === 1 ? 2 : 1, otherUserName: user.id === 1 ? accounts.mentee.name : accounts.mentor.name, createdAt: '2026-09-09T00:00:00Z' }]);
     if (path === '/api/dms/start') return send(200,{ id:1,otherUserId:user.id===1?2:1,otherUserName:user.id===1?accounts.mentee.name:accounts.mentor.name,createdAt:'2026-09-09T00:00:00Z' });
     if (/^\/api\/dms\/\d+\/messages$/.test(path)) {

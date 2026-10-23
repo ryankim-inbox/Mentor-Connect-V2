@@ -8,7 +8,7 @@ const digest=value=>createHash('sha256').update(value).digest('hex');
 export async function snapshotSchemaAssets({rootDir,schemaVersion}) {
   const current=await verifySchemaAssets({rootDir});
   if(schemaVersion===undefined || schemaVersion===current.version.schemaVersion)return current;
-  if(!['0005','0006','0007'].includes(schemaVersion))throw new Error('unsupported snapshot schema version');
+  if(!['0005','0006','0007','0008'].includes(schemaVersion))throw new Error('unsupported snapshot schema version');
   const directory=path.join(rootDir,'database/recovery');
   const version=JSON.parse(await readFile(path.join(directory,`${schemaVersion}-version.json`),'utf8'));
   const catalogContents=await readFile(path.join(directory,`${schemaVersion}-catalog.json`),'utf8');

@@ -4,14 +4,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from security import require_member_user, require_student_user
-from member_access import has_admin_access
+from member_access import has_admin_access, has_student_access
 from account_policy import is_demo_user
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 from db import db
 from request_events import record_match_event
-from routers.chat import _require_user, _require_unblocked_pair
+from routers.chat import _require_unblocked_pair
 from routers.requests import build_request_response
+from request_access import request_access_sql, require_request_access
+from routers.notifications import notify_request_accepted
 
 router = APIRouter(dependencies=[Depends(require_member_user)])
 PageLimit = Annotated[int, Query(ge=1, le=50)]
@@ -37,11 +39,12 @@ class ApplicationAction(BaseModel):
     action: Literal["accept", "reject", "cancel"]
 
 
-def _request(cur, request_id, *, lock=False):
+def _request(cur, request_id, viewer, *, lock=False):
     cur.execute("SELECT * FROM requests WHERE id = %s" + (" FOR UPDATE" if lock else ""), (request_id,))
     row = cur.fetchone()
     if not row:
         raise HTTPException(404, "Request not found")
+    require_request_access(row, viewer)
     return row
 
 
@@ -57,10 +60,11 @@ def _application(cur, app_id):
 
 @router.post("/requests/{request_id}/applications", dependencies=[Depends(require_student_user)])
 def apply_to_request(request_id: PositiveInt, request: Request):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        req = _request(cur, request_id, lock=True)
+        req = _request(cur, request_id, viewer, lock=True)
         if req["author_id"] == user_id:
             raise HTTPException(400, "Cannot apply to your own request")
         _require_unblocked_pair(cur, req["author_id"], user_id)
@@ -84,10 +88,11 @@ def apply_to_request(request_id: PositiveInt, request: Request):
 
 @router.get("/requests/{request_id}/applications")
 def list_applications(request_id: PositiveInt, request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        req = _request(cur, request_id)
+        req = _request(cur, request_id, viewer)
         cur.execute("""SELECT id FROM request_applications WHERE request_id=%s
                        AND (%s OR applicant_id=%s) AND (%s IS NULL OR id < %s)
                        ORDER BY id DESC LIMIT %s""",
@@ -98,10 +103,11 @@ def list_applications(request_id: PositiveInt, request: Request, limit: PageLimi
 
 @router.patch("/requests/{request_id}/applications/{application_id}", dependencies=[Depends(require_student_user)])
 def act_on_application(request_id: PositiveInt, application_id: PositiveInt, body: ApplicationAction, request: Request):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        req = _request(cur, request_id, lock=True)
+        req = _request(cur, request_id, viewer, lock=True)
         cur.execute("SELECT * FROM request_applications WHERE id=%s AND request_id=%s", (application_id, request_id))
         app = cur.fetchone()
         if not app:
@@ -116,11 +122,18 @@ def act_on_application(request_id: PositiveInt, application_id: PositiveInt, bod
         if app["status"] != "pending" or req["status"] != "open":
             raise HTTPException(409, "Application is no longer pending on an open request")
         if body.action == "accept":
+            cur.execute('SELECT * FROM users WHERE id=%s FOR SHARE', (app['applicant_id'],))
+            applicant = cur.fetchone()
+            if not applicant or not has_student_access(applicant):
+                raise HTTPException(409, 'Applicant is no longer eligible')
+            require_request_access(req, applicant)
             cur.execute("UPDATE requests SET status='matched', matched_user_id=%s, updated_at=now() WHERE id=%s RETURNING *",
                         (app["applicant_id"], request_id))
             record_match_event(cur, cur.fetchone())
             cur.execute("UPDATE request_applications SET status='rejected', updated_at=now() WHERE request_id=%s AND id<>%s AND status='pending'", (request_id, application_id))
         cur.execute("UPDATE request_applications SET status=%s, updated_at=now() WHERE id=%s", (target, application_id))
+        if body.action == 'accept':
+            notify_request_accepted(cur, req, application_id, (viewer, applicant))
         return _application(cur, application_id)
 
 
@@ -147,7 +160,7 @@ def list_comments(request_id: PositiveInt, request: Request, limit: PageLimit = 
     moderator = has_admin_access(viewer)
     with db() as conn:
         cur = conn.cursor()
-        req = _request(cur, request_id)
+        req = _request(cur, request_id, viewer)
         if not moderator:
             _require_unblocked_pair(cur, req["author_id"], user_id)
         cur.execute("""SELECT c.id FROM request_comments c WHERE c.request_id=%s AND (%s IS NULL OR c.id < %s)
@@ -161,10 +174,11 @@ def list_comments(request_id: PositiveInt, request: Request, limit: PageLimit = 
 
 @router.post("/requests/{request_id}/comments", status_code=201, dependencies=[Depends(require_student_user)])
 def create_comment(request_id: PositiveInt, body: CommentBody, request: Request):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        req = _request(cur, request_id, lock=True)
+        req = _request(cur, request_id, viewer, lock=True)
         _require_unblocked_pair(cur, req["author_id"], user_id)
         if body.parentId is not None:
             cur.execute("SELECT * FROM request_comments WHERE id=%s AND request_id=%s", (body.parentId, request_id))
@@ -187,28 +201,38 @@ def create_comment(request_id: PositiveInt, body: CommentBody, request: Request)
 
 @router.get("/connections", dependencies=[Depends(require_student_user)])
 def list_connections(request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        cur.execute("""SELECT DISTINCT ON (u.id) u.id, u.name, u.password_hash, r.id AS request_id, r.title
+        audience_clause, audience_params = request_access_sql(viewer)
+        cur.execute(f"""SELECT DISTINCT ON (u.id) u.id, u.name, u.password_hash, r.id AS request_id, r.title
                        FROM requests r JOIN users u ON u.id=CASE WHEN r.author_id=%s THEN r.matched_user_id ELSE r.author_id END
                        WHERE r.status='matched' AND (r.author_id=%s OR r.matched_user_id=%s)
+                       AND {audience_clause}
                        AND (%s IS NULL OR u.id < %s) AND u.id<>%s
                        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE
                          (b.blocker_id=%s AND b.blocked_user_id=u.id) OR (b.blocker_id=u.id AND b.blocked_user_id=%s))
                        ORDER BY u.id DESC, r.id DESC LIMIT %s""",
-                    (user_id, user_id, user_id, beforeId, beforeId, user_id, user_id, user_id, limit))
+                    (user_id, user_id, user_id, *audience_params, beforeId, beforeId, user_id, user_id, user_id, limit))
         return [{"userId": c["id"], "name": c["name"], "isDemo": is_demo_user(c), "requestId": c["request_id"], "requestTitle": c["title"]} for c in cur.fetchall()]
 
 
 @router.get("/request-activity", dependencies=[Depends(require_student_user)])
 def request_activity(request: Request, limit: PageLimit = 50, beforeId: BeforeId = None):
-    user_id = _require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur = conn.cursor()
-        cur.execute("""SELECT r.* FROM requests r WHERE (r.author_id=%s OR r.matched_user_id=%s OR
+        audience_clause, audience_params = request_access_sql(viewer)
+        cur.execute(f"""SELECT r.* FROM requests r WHERE (r.author_id=%s OR r.matched_user_id=%s OR
                        EXISTS (SELECT 1 FROM request_applications a WHERE a.request_id=r.id AND a.applicant_id=%s))
-                       AND (%s IS NULL OR r.id < %s) ORDER BY r.id DESC LIMIT %s""", (user_id, user_id, user_id, beforeId, beforeId, limit))
+                       AND {audience_clause}
+                       AND NOT EXISTS (SELECT 1 FROM blocks b WHERE
+                         (b.blocker_id=%s AND b.blocked_user_id=r.author_id) OR
+                         (b.blocker_id=r.author_id AND b.blocked_user_id=%s))
+                       AND (%s IS NULL OR r.id < %s) ORDER BY r.id DESC LIMIT %s""",
+                    (user_id, user_id, user_id, *audience_params, user_id, user_id, beforeId, beforeId, limit))
         rows = cur.fetchall()
         return [build_request_response(cur, r, preview=True) for r in rows]
 
@@ -225,8 +249,9 @@ class EditCommentBody(BaseModel):
         return value.strip()
 
 
-def _own_comment(cur,request_id,comment_id,user_id):
-    req = _request(cur,request_id,lock=True)
+def _own_comment(cur,request_id,comment_id,viewer):
+    user_id = viewer['id']
+    req = _request(cur,request_id,viewer,lock=True)
     _require_unblocked_pair(cur,req['author_id'],user_id)
     cur.execute('SELECT * FROM request_comments WHERE id=%s AND request_id=%s FOR UPDATE',(comment_id,request_id))
     row=cur.fetchone()
@@ -242,10 +267,11 @@ def _own_comment(cur,request_id,comment_id,user_id):
 
 @router.patch('/requests/{request_id}/comments/{comment_id}', dependencies=[Depends(require_student_user)])
 def edit_comment(request_id: PositiveInt,comment_id: PositiveInt,body: EditCommentBody,request: Request):
-    user_id=_require_user(request)
+    viewer = require_member_user(request)
+    user_id = viewer['id']
     with db() as conn:
         cur=conn.cursor()
-        row=_own_comment(cur,request_id,comment_id,user_id)
+        row=_own_comment(cur,request_id,comment_id,viewer)
         if row['deleted_at']:
             raise HTTPException(409,'Deleted comments cannot be edited')
         cur.execute('UPDATE request_comments SET body=%s,updated_at=now() WHERE id=%s',(body.body,comment_id))
@@ -259,13 +285,13 @@ def delete_comment(request_id: PositiveInt,comment_id: PositiveInt,request: Requ
     with db() as conn:
         cur=conn.cursor()
         if has_admin_access(viewer):
-            _request(cur,request_id,lock=True)
+            _request(cur,request_id,viewer,lock=True)
             cur.execute('SELECT * FROM request_comments WHERE id=%s AND request_id=%s FOR UPDATE',(comment_id,request_id))
             row=cur.fetchone()
             if not row:
                 raise HTTPException(404,'Comment not found')
         else:
-            row=_own_comment(cur,request_id,comment_id,user_id)
+            row=_own_comment(cur,request_id,comment_id,viewer)
         if not row['deleted_at']:
             cur.execute("UPDATE request_comments SET body='',deleted_at=now() WHERE id=%s",(comment_id,))
         return _comment(cur,comment_id)

@@ -5,12 +5,18 @@
  * PeerBridge - Student Mentorship Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateRequestBodyAudience } from "./createRequestBodyAudience";
 import type { CreateRequestBodyRole } from "./createRequestBodyRole";
 
 export interface CreateRequestBody {
+  /** Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both. */
+  audience?: CreateRequestBodyAudience;
   /** @minimum 1 */
   districtId: number;
-  /** Non-whitespace text, at most 200 UTF-8 bytes before trimming. */
+  /**
+   * Non-whitespace text, at most 60 Unicode code points including all spaces. Retained without trimming; unpaired surrogates are invalid.
+   * @pattern ^(?:\p{Any}){0,60}(?!\p{Any})
+   */
   title: string;
   /** Non-whitespace text, at most 4,000 UTF-8 bytes before trimming. */
   description: string;

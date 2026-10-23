@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
+from datetime import date, datetime, timezone
+from typing import Literal
 from db import db
 import bcrypt
 import re
@@ -24,12 +26,38 @@ def normalize_display_name(value: str) -> str:
     return normalized
 
 class RegisterBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     email: str
     name: str
-    password: str
+    password: str = Field(repr=False)
     role: str
     districtId: int
+    gender: Literal["female", "male"] = Field(repr=False)
+    dateOfBirth: date = Field(repr=False)
+
+    @field_validator("password")
+    @classmethod
+    def password_must_be_strong(cls, value):
+        # Same ASCII punctuation ranges as the browser; bcrypt accepts at most 72 bytes.
+        if (len(value) < 12 or not re.search(r"[A-Z]", value)
+                or not re.search(r"[\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E]", value)
+                or re.search(r"[\ud800-\udfff]", value) or len(value.encode("utf-8")) > 72):
+            raise ValueError("Use at least 12 characters, an uppercase letter (A–Z), and an ASCII special character; maximum 72 UTF-8 bytes.")
+        return value
+
+    @field_validator("dateOfBirth", mode="before")
+    @classmethod
+    def date_of_birth_must_be_valid(cls, value):
+        message = "Use a real date of birth in YYYY-MM-DD format, no later than today."
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+            raise ValueError(message)
+        try:
+            born = date.fromisoformat(value)
+        except ValueError:
+            raise ValueError(message) from None
+        if born > datetime.now(timezone.utc).date():
+            raise ValueError(message)
+        return born
 
     @field_validator("name")
     @classmethod
@@ -90,9 +118,9 @@ def register(body: RegisterBody, request: Request):
         password_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
 
         cur.execute(
-            """INSERT INTO users (email, name, password_hash, role, district_id, is_verified, subjects)
-               VALUES (%s, %s, %s, %s, %s, false, '{}') RETURNING *""",
-            (body.email, body.name, password_hash, body.role, body.districtId),
+            """INSERT INTO users (email, name, password_hash, role, district_id, gender, date_of_birth, is_verified, subjects)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, false, '{}') RETURNING *""",
+            (body.email, body.name, password_hash, body.role, body.districtId, body.gender, body.dateOfBirth),
         )
         user = cur.fetchone()
 

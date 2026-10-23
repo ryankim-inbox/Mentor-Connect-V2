@@ -18,6 +18,7 @@ export function useChatSocket(
     const queryKey = ["chat", userId, `${kind}-messages`, id];
     const sync = () => {
       void client.invalidateQueries({ queryKey, exact: true });
+      if (kind === "dm") void client.invalidateQueries({ queryKey: ["chat", userId, "unread"], exact: true });
     };
     const url = new URL(
       kind === "room" ? `/ws/chat/rooms/${id}` : `/ws/dms/${id}`,

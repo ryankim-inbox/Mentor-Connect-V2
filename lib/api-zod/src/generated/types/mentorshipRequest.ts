@@ -5,11 +5,14 @@
  * PeerBridge - Student Mentorship Platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { MentorshipRequestAudience } from "./mentorshipRequestAudience";
 import type { MentorshipRequestAuthorRole } from "./mentorshipRequestAuthorRole";
 import type { MentorshipRequestStatus } from "./mentorshipRequestStatus";
 import type { Tag } from "./tag";
 
 export interface MentorshipRequest {
+  /** Immutable visibility audience. The author and existing admin moderators retain access. Unknown gender cannot view restricted requests. Legacy requests default to both. */
+  audience?: MentorshipRequestAudience;
   id: number;
   authorId: number;
   authorName: string;

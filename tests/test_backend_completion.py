@@ -97,7 +97,7 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
         client = build_opener(HTTPCookieProcessor(CookieJar()))
         result = call(client, "POST", "/api/auth/register", {
             "email": f"completion-{role}@test.edu", "name": f"Completion {role}",
-            "password": "Password123!", "role": role, "districtId": 1,
+            "password": "Password123!", "role": role, "districtId": 1, "gender": "female", "dateOfBirth": "2008-02-29",
         }, expected=201)
         assert result["user"]["role"] == role
         call(client, "POST", "/api/auth/logout")
@@ -214,7 +214,9 @@ def test_completed_backend_flow_through_gateway(gateway_server, backend_database
     assert call(student, "GET", dm_path) == []
     sent = call(student, "POST", dm_path, {"body": "Persistent completion DM"}, expected=201)
     received = call(mentor, "GET", dm_path)
-    assert len(received) == 1 and received[0]["id"] == sent["id"] and received[0]["readAt"] is not None
+    assert len(received) == 1 and received[0]["id"] == sent["id"] and received[0]["readAt"] is None
+    call(mentor, "POST", f'/api/dms/{conversation["id"]}/read', {"messageIds": [sent["id"]]})
+    assert call(mentor, "GET", dm_path)[0]["readAt"] is not None
     assert any(row["id"] == conversation["id"] for row in call(student, "GET", "/api/dms"))
     outsider, _ = login(base, "mentor501@test.edu")
     call(outsider, "GET", dm_path, expected=403)

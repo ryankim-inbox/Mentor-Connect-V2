@@ -48,6 +48,16 @@ export interface DmMessage {
   readAt: string | null;
 }
 
+export interface DmUnreadCount {
+  conversationId: number;
+  unreadCount: number;
+}
+
+export interface DmUnreadSummary {
+  unreadCount: number;
+  conversations: DmUnreadCount[];
+}
+
 export function isScaffoldTodo(payload: unknown): payload is ScaffoldTodo {
   return (
     payload !== null &&
@@ -151,6 +161,25 @@ export const sendRoomMessage = (roomId: number, body: string, clientMessageId?: 
 
 export const fetchDmConversations = (signal?: AbortSignal) =>
   chatFetch<DmConversation[]>("/api/dms", { signal }, arrayOf(dmConversation));
+
+const unreadCount = (value: unknown) => {
+  const item = record(value);
+  return !!item && Number.isSafeInteger(item.unreadCount) && Number(item.unreadCount) >= 0;
+};
+const conversationUnreadCount = (value: unknown) =>
+  unreadCount(value) && fields(value, { conversationId: "number" });
+
+export const fetchDmUnread = (signal?: AbortSignal) =>
+  chatFetch<DmUnreadSummary>("/api/dms/unread", { signal }, value =>
+    unreadCount(value) && arrayOf(conversationUnreadCount)(record(value)?.conversations),
+  );
+
+export const markDmRead = (conversationId: number, messageIds: number[], signal?: AbortSignal) =>
+  chatFetch<DmUnreadCount>(
+    `/api/dms/${conversationId}/read`,
+    { ...postJson({ messageIds }), signal },
+    conversationUnreadCount,
+  );
 
 export const startDmConversation = (toUserId: number) =>
   chatFetch<DmConversation>(
