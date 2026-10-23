@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const originalBaseline = "98e1b04c292302bd25365ed7db4c5675671df337";
-const pullRequestBase = "5fb771b43832f7fdf75199c52d534a396f72e912";
+const originalBaseline = "34c6e111cee84b70dc384ba27f83ffdffd9ae567";
+const pullRequestBase = "7bc18dfc040bd59b78edb962f0144af3f1ecac09";
 
 const output = execFileSync("sh", ["scripts/verify-release.sh", "--print"], {
   cwd: root,

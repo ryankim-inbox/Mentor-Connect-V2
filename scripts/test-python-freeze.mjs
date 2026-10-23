@@ -49,7 +49,7 @@ test("CLI rejects a historical base containing Python changes", () => {
     process.execPath,
     [
       "scripts/check-python-unchanged.mjs",
-      "98e1b04c292302bd25365ed7db4c5675671df337^",
+      "34c6e111cee84b70dc384ba27f83ffdffd9ae567^",
     ],
     { encoding: "utf8" },
   );

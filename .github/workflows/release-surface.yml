@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  PYTHON_FREEZE_BASE: 98e1b04c292302bd25365ed7db4c5675671df337
+  PYTHON_FREEZE_BASE: 34c6e111cee84b70dc384ba27f83ffdffd9ae567
   PYTHON_PR_BASE: ${{ github.event.pull_request.base.sha }}
 
 jobs:
