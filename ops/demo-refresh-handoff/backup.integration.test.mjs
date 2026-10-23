@@ -3,20 +3,23 @@ import assert from 'node:assert/strict';
 import { readFile, mkdtemp, chmod, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { localCluster,backupAndRestore,fullRowProof,compareRestoreProof,noOtherClients } from './backup.mjs';
+import { localCluster,fullRowProof,compareRestoreProof,noOtherClients } from './backup.mjs';
 import { observedClient,confirmCommittedReadOnly } from './driver.mjs';
 import { verifySchemaAssets } from '../../lib/db/tools/schema-assets.mjs';
 import { runMigrationTransaction } from '../../lib/db/tools/migration-runner.mjs';
-import { seedSyntheticClassroom } from '../seed-synthetic-classroom.mjs';
-import { reviseSyntheticClassroom, readSyntheticRevisionBaseline } from '../revise-synthetic-classroom.mjs';
+import { historicalSchemaFixture } from '../../lib/db/test/historical-schema-fixture.mjs';
 import { same,digest } from './protocol.mjs';
 
 const integration=process.env.RUN_REFRESH_BACKUP_LOCAL_TEST==='1'?test:test.skip;
 const pgBin=process.env.TEST_REFRESH_PG_BIN??'/opt/homebrew/opt/postgresql@18/bin';
-const codeRoot=fileURLToPath(new URL('../../',import.meta.url));
 
-integration('fresh schema8 backup restores all rows/passwords/current QA, catalog, ledger, sequences and grants locally',async()=>{
+integration('fresh schema8 backup restores all rows/passwords/current QA, catalog, ledger, sequences and grants locally',async(t)=>{
+  const fixture=await historicalSchemaFixture('0008');
+  t.after(fixture.close);
+  const codeRoot=fixture.rootDir;
+  const {seedSyntheticClassroom}=await fixture.import('ops/seed-synthetic-classroom.mjs');
+  const {reviseSyntheticClassroom,readSyntheticRevisionBaseline}=await fixture.import('ops/revise-synthetic-classroom.mjs');
+  const {backupAndRestore}=await fixture.import('ops/demo-refresh-handoff/backup.mjs');
   const cluster=await localCluster({pgBin});
   const directory=await mkdtemp(path.join(os.tmpdir(),'refresh-backup-proof-test-'));await chmod(directory,0o700);
   let client;

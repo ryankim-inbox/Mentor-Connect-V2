@@ -88,6 +88,7 @@ const pythonEnvelope = (feature: string, data: unknown) => ({
 const fixtures: Record<string, unknown> = {
   "/api/auth/me": signedInUser,
   "/api/notifications": { unreadCount: 0, items: [] },
+  "/api/dms/unread": { unreadCount: 0, conversations: [] },
   "/api/admin/reports": [],
   "/api/blocks": [],
   "/api/districts": [district],
@@ -522,15 +523,15 @@ test("request browsing pages older and newer, resets filters, and discloses prev
   await expect(page.getByRole("heading", { name: "Page request 100", exact: true })).toBeVisible();
 });
 
-test("request creation validates UTF-8 byte lengths before sending", async ({ page }) => {
+test("request creation limits title code points and description UTF-8 bytes before sending", async ({ page }) => {
   await interceptApi(page, { student: true });
   await page.goto("/requests/new");
   const title = page.getByPlaceholder("e.g. Need help with AP Calculus BC");
   const description = page.getByPlaceholder("Describe what you're looking for, your background, and your goals...");
-  await title.fill("é".repeat(100) + "a");
+  await title.fill("é".repeat(61));
   await description.fill("Description");
-  await page.getByRole("button", { name: "Post request", exact: true }).click();
-  await expect(page.getByText("Title must contain text and be at most 200 UTF-8 bytes.", { exact: true })).toBeVisible();
+  await expect(page.getByText("61/60 characters, including spaces", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Post request", exact: true })).toBeDisabled();
   await title.fill("Valid title");
   await description.fill("🦉".repeat(1000) + "a");
   await page.getByRole("button", { name: "Post request", exact: true }).click();

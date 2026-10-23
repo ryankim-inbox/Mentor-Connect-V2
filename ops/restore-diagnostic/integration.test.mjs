@@ -9,15 +9,18 @@ import {localCluster,fullRowProof} from '../demo-refresh-handoff/backup.mjs';
 import {runMigrationTransaction} from '../../lib/db/tools/migration-runner.mjs';
 import {verifySchemaAssets} from '../../lib/db/tools/schema-assets.mjs';
 import {runDiagnostic,runNative} from './diagnostic.mjs';
+import {historicalSchemaFixture} from '../../lib/db/test/historical-schema-fixture.mjs';
 
 const integration=process.env.RUN_LOCAL_RESTORE_DIAGNOSTIC_TEST==='1'?test:test.skip;
-const root=path.resolve(import.meta.dirname,'../..');
 const pgBin='/opt/homebrew/opt/postgresql@18/bin';
 const python='/Users/rinny/Library/Application Support/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const canary='FAKE_PRIVATE_CONTENT_MUST_NEVER_APPEAR_IN_DIAGNOSTIC_OUTPUT';
 
-integration('actual local restore detects membership-only grant view differences and keeps source untouched',async()=>{
+integration('actual local restore detects membership-only grant view differences and keeps source untouched',async(t)=>{
+  const fixture=await historicalSchemaFixture('0008');
+  t.after(fixture.close);
+  const root=fixture.rootDir;
   const cluster=await localCluster({pgBin});
   const directory=await mkdtemp('/private/tmp/restore-diagnostic-fixture-');await chmod(directory,0o700);
   let client;

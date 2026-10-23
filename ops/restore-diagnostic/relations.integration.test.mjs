@@ -11,10 +11,10 @@ import {runNative,compareProofs,cleanEnvironment} from './diagnostic.mjs';
 import * as diagnostic from './diagnostic.mjs';
 import {verifySchemaAssets} from '../../lib/db/tools/schema-assets.mjs';
 import {runMigrationTransaction} from '../../lib/db/tools/migration-runner.mjs';
+import {historicalSchemaFixture} from '../../lib/db/test/historical-schema-fixture.mjs';
 
 const integration=process.env.RUN_LOCAL_RESTORE_DIAGNOSTIC_TEST==='1'?test:test.skip;
 const pgBin='/opt/homebrew/opt/postgresql@18/bin';
-const root=path.resolve(import.meta.dirname,'../..');
 const python='/Users/rinny/Library/Application Support/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12';
 const effectiveAcl=`SELECT c.relname,array_to_json(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 's' ELSE 'r' END::"char",c.relowner))) AS acl FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' ORDER BY c.relname`;
 
@@ -79,7 +79,10 @@ integration('pg_dump restores explicit default table/sequence ACLs as NULL while
   }finally{await source?.end();await restored?.end();await cluster.close();await rm(directory,{recursive:true,force:true});}
 });
 
-integration('full frozen wrapper accepts only semantically identical default ACLs and keeps source proof unchanged',async()=>{
+integration('full frozen wrapper accepts only semantically identical default ACLs and keeps source proof unchanged',async(t)=>{
+  const fixture=await historicalSchemaFixture('0008');
+  t.after(fixture.close);
+  const root=fixture.rootDir;
   const cluster=await localCluster({pgBin});
   const directory=await mkdtemp('/private/tmp/restore-relation-report-fixture-');await chmod(directory,0o700);
   const output='/private/tmp/mentor-restore-diagnostic-run-relations-test-'+path.basename(directory).split('-').at(-1).toLowerCase();
