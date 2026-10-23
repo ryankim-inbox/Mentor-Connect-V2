@@ -27,7 +27,7 @@ export default function DistrictDetail({ id }: Props) {
   });
 
   const { data: stats } = useGetDistrictStats(districtId, {
-    query: { queryKey: getGetDistrictStatsQueryKey(districtId), enabled: !!districtId && user?.isAdmin === true && user.isVerified }
+    query: { queryKey: getGetDistrictStatsQueryKey(districtId), enabled: !!districtId && user?.isAdmin === true }
   });
 
   if (districtLoading) {

@@ -50,7 +50,7 @@ def require_student_user(request: Request):
 
 
 def require_admin(request: Request):
-    user = require_verified_user(request)
+    user = current_user(request)
     if not has_admin_access(user):
         raise HTTPException(403, 'Administrator access required')
     return user

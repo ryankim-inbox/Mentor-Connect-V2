@@ -37,7 +37,6 @@ export default function Dashboard({
 }: DashboardProps = {}) {
   const { user } = useAuth();
   const practiceAvailable =
-    user?.isVerified === true &&
     user?.isAdmin === true &&
     PracticeLab !== undefined;
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
@@ -48,7 +47,7 @@ export default function Dashboard({
   const { data: stats } = useGetStatsOverview({
     query: {
       queryKey: getGetStatsOverviewQueryKey(),
-      enabled: user?.isAdmin === true && user.isVerified,
+      enabled: user?.isAdmin === true,
     },
   });
   const { data: recentRequests } = useListRequests(

@@ -1460,6 +1460,7 @@ function assertSessionAuthority(
     throw new GatewayHttpError(403, "forbidden");
   if (authority === "student" && session.isAdmin)
     throw new GatewayHttpError(403, "forbidden");
-  if (authority === "admin" && (!session.isVerified || !session.isAdmin))
+  // isAdmin is current Python/DB authority, including the pinned demo exception.
+  if (authority === "admin" && !session.isAdmin)
     throw new GatewayHttpError(403, "forbidden");
 }

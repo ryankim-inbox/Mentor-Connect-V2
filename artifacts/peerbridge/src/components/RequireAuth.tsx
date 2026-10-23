@@ -49,7 +49,7 @@ export function RequireAuth({
   if (
     status === "authenticated" &&
     admin &&
-    (!user?.isVerified || !user?.isAdmin)
+    !user?.isAdmin
   )
     return (
       <p role="alert" className="px-4 py-20 text-center">

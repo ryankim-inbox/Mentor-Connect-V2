@@ -49,8 +49,9 @@ test("unverified-member login follows return path and revoked access blocks dire
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
 });
 
-test("an inconsistent unverified admin claim grants neither operations nor student participation", async ({ page }) => {
-  await setup(page, () => ({ ...testMember, isAdmin: true }));
+test("server-authorized demo admin opens operations but never claims ownership or student access", async ({ page }) => {
+  let identity = { ...testMember, id: 991, email: "admin@test.edu", isAdmin: true };
+  await setup(page, () => identity);
   const operations: string[] = [];
   page.on("request", (request) => {
     if (/\/api\/(admin|practice|analytics|scheduling|matches|python-reports|stats|chat|dms|notifications|connections)/.test(request.url())) operations.push(request.url());
@@ -58,14 +59,40 @@ test("an inconsistent unverified admin claim grants neither operations nor stude
   await page.goto("/dashboard");
   await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Member access unavailable" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Python Practice Lab" })).toHaveCount(0);
-  for (const path of ["/admin/reports", "/practice-lab", "/analytics", "/scheduling", "/recommendations"]) {
+  await expect(page.getByRole("button", { name: "Python Practice Lab" })).toBeVisible();
+  await expect(page.getByText("Email ownership unverified · Verification is optional for member access.")).toBeVisible();
+  for (const [path, heading] of [
+    ["/admin/reports", "Learning Reports"], ["/practice-lab", "Python Practice Lab"],
+    ["/analytics", "Mentor Analytics"], ["/scheduling", "Scheduling"],
+    ["/recommendations", "Top mentors for you"],
+  ]) {
     await page.goto(path);
-    await expect(page.getByText("Administrator access required", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    await expect(page.getByText("Administrator access required", { exact: true })).toHaveCount(0);
+    if (path === "/admin/reports") await expect(page.getByText("No reports in this queue.")).toBeVisible();
   }
   for (const path of ["/requests/new", "/notifications", "/connections"]) {
     await page.goto(path);
     await expect(page.getByText("Student access required", { exact: true })).toBeVisible();
   }
-  expect(operations).toEqual([]);
+  expect(operations.some((url) => url.includes("/api/admin/reports"))).toBe(true);
+  expect(operations.some((url) => url.includes("/api/stats/overview"))).toBe(true);
+  expect(operations.filter((url) => /\/api\/(chat|dms|notifications|connections)/.test(url))).toEqual([]);
+  identity = { ...identity, isAdmin: false };
+  await page.goto("/admin/reports");
+  await expect(page.getByText("Administrator access required", { exact: true })).toBeVisible();
+});
+
+test("demo admin can recheck a denied report queue without fabricating ownership", async ({ page }) => {
+  await setup(page, () => ({ ...testMember, id: 991, email: "admin@test.edu", isAdmin: true }));
+  let denied = true;
+  await page.route("**/api/admin/reports?*", (route) => route.fulfill(
+    denied ? { status: 403, json: { detail: "Access denied" } } : { json: [] },
+  ));
+  await page.goto("/admin/reports");
+  await expect(page.getByRole("button", { name: "Recheck report access" })).toBeVisible();
+  denied = false;
+  await page.getByRole("button", { name: "Recheck report access" }).click();
+  await expect(page.getByText("No reports in this queue.")).toBeVisible();
+  await expect(page.getByText("Email ownership unverified · Verification is optional for member access.")).toBeVisible();
 });

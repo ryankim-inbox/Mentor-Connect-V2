@@ -100,6 +100,10 @@ test("fresh authority flags gate member/admin routes and special profiles", asyn
   assert.equal((await get("/api/users/2")).status, 200);
   assert.equal((await get("/api/admin/reports")).status, 403);
   identity = { id: 1, isVerified: false, hasMemberAccess: true, isAdmin: true };
+  // Effective admin is fresh upstream authority, independent of mailbox proof.
+  assert.equal((await get("/api/admin/reports")).status, 200);
+  assert.equal((await get("/api/chat/rooms")).status, 403);
+  identity = { ...identity, isAdmin: false };
   assert.equal((await get("/api/admin/reports")).status, 403);
   for (const hasMemberAccess of [false, "true", 1, null]) {
     identity = { id: 1, isVerified: false, hasMemberAccess, isAdmin: false };

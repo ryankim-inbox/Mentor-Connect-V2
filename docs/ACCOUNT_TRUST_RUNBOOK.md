@@ -2,7 +2,10 @@
 
 Current contest-demo member policy: ordinary authenticated accounts no longer need
 mailbox ownership proof to use member features. See [demo member access](TEST_MEMBER_ACCESS.md).
-The administrator and actual ownership-proof requirements below remain in force.
+Actual ownership-proof requirements remain in force. The single-account contest
+demo administrator exception and its separate activation approval are documented
+in [demo member access](TEST_MEMBER_ACCESS.md#administrator-preparation); the older
+administrator rollout below describes the normal verified-admin route.
 Migration-era member-gating statements below describe the older rollout, not the
 current member policy. This policy change needs no new schema migration.
 

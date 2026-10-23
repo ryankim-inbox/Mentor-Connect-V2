@@ -37,7 +37,7 @@ function MemberLinks({ className }: { className: string }) {
       !["Matches", "Practice", "Analytics", "Scheduling", "Reports"].includes(
         label,
       ) ||
-      (user.isVerified && user.isAdmin)
+      user.isAdmin
     );
   });
   return (

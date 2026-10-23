@@ -29,9 +29,19 @@ def has_admin_access(user):
     # Reserved test IDs cannot acquire admin through role edits or an accidental
     # DB flag, even after actual verification or disabling the member exception.
     return (not is_synthetic_locked(user)
-            and user['email_verified_at'] is not None
+            and (user['email_verified_at'] is not None or _has_demo_admin_exception(user))
             and user['is_admin'] is True
             and user['id'] not in configured_test_members())
+
+
+def _has_demo_admin_exception(user):
+    """Disabled by default; pinned identity and trusted server config, never proof."""
+    origin = 'https://mentor-connect-test.onrender.com'
+    return (user['id'] == 991
+            and user['email'] == 'admin@test.edu'
+            and os.environ.get('DEMO_ADMIN_USER_ID') == '991'
+            and os.environ.get('APP_ORIGIN') == origin
+            and os.environ.get('GATEWAY_PUBLIC_ORIGIN') == origin)
 
 
 def has_student_access(user):

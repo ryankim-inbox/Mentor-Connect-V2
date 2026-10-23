@@ -269,7 +269,6 @@ export default function ReportQueue() {
       if (
         mounted.current &&
         current?.id === user?.id &&
-        current?.isVerified &&
         current?.isAdmin
       ) {
         discard();

@@ -77,7 +77,7 @@ function DashboardRoute({
     <Dashboard
       key={`${user?.id}-${operational}`}
       initialTab={initialTab}
-      PracticeLab={user?.isVerified && user?.isAdmin ? PracticeLab : undefined}
+      PracticeLab={user?.isAdmin ? PracticeLab : undefined}
     />
   );
   return operational ? (
