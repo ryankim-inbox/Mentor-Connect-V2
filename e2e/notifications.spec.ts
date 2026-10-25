@@ -156,7 +156,7 @@ test("account switch cancels an old notification request and shows only the new 
   await page.goto("/notifications");
   await expect.poll(() => oldStarted).toBe(true);
   await page.evaluate(() => window.history.pushState({}, "", "/login"));
-  await page.getByLabel("School email").fill("second@test.edu");
+  await page.getByLabel("Email").fill("second@test.edu");
   await page.getByLabel("Password", { exact: true }).fill("SyntheticPass123!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

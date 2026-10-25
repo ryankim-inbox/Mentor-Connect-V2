@@ -93,7 +93,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4" aria-busy={pending}>
             <div>
               <label htmlFor="login-email" className="block text-sm font-medium text-foreground mb-1.5">
-                School email
+                Email
               </label>
               <input
                 id="login-email"
@@ -101,7 +101,7 @@ export default function Login() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@school.edu"
+                placeholder="you@example.com"
                 required
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
               />

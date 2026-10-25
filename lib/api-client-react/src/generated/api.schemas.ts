@@ -91,7 +91,7 @@ export const RegisterBodyGender = {
 } as const;
 
 export interface RegisterBody {
-  /** Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access. */
+  /** Must be a valid email address, with no domain restriction. Registration never verifies ownership or grants administrator access. */
   email: string;
   name: string;
   /**

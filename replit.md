@@ -26,7 +26,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 A full-stack app for California high school students to connect as mentors and mentees.
 
 **Key features:**
-- Registration requires a `.edu` school email (validated on both frontend and backend)
+- Registration accepts a valid email address from any domain
 - Students choose their role: mentor, mentee, or both
 - School district channels (79 seeded CA districts, organized by type: high school, unified, etc.)
 - Mentorship requests with tag-based categorization (20 subject tags)

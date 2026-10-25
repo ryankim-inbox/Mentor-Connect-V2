@@ -17,7 +17,7 @@ function deferred() {
 
 async function fillAccount(page: Page) {
   await page.getByLabel("Full name").fill("Tester");
-  await page.getByLabel("School email").fill("tester@school.edu");
+  await page.getByLabel("Email").fill("tester@school.edu");
   await page.getByLabel("Password", { exact: true }).fill("Password123!");
   await page.getByLabel("Gender", { exact: true }).selectOption("female");
   await page.getByLabel("Date of birth").fill("2008-02-29");
@@ -76,7 +76,7 @@ test("district failure can be retried without losing form data", async ({ page }
   await expect(page.getByRole("option", { name: "School A (Test County · High school)" })).toHaveCount(1);
   await expect(page.getByText("Couldn't load school districts. Please try again.")).toHaveCount(0);
   await expect(page.getByLabel("Full name")).toHaveValue("Tester");
-  await expect(page.getByLabel("School email")).toHaveValue("tester@school.edu");
+  await expect(page.getByLabel("Email")).toHaveValue("tester@school.edu");
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue("Password123!");
   expect(registerCalls).toBe(0);
 });

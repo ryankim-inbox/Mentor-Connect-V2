@@ -6,7 +6,7 @@ const signupPassword = "Password123!";
 const testMember = {
   ...signedInUser,
   name: "Email Test Member",
-  email: "approved-test@example.com",
+  email: "student@gmail.com",
   role: "mentee",
   isVerified: false, hasMemberAccess: true,
   isAdmin: false,
@@ -27,7 +27,7 @@ async function setup(page: Page, signedIn = false) {
 
 async function fillRegistration(page: Page, email: string) {
   await page.getByLabel("Full name").fill(testMember.name);
-  await page.getByLabel("School email").fill(email);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(signupPassword);
   await page.getByLabel("Gender", { exact: true }).selectOption("female");
   await page.getByLabel("Date of birth").fill("2008-02-29");
@@ -58,7 +58,7 @@ test("non-.edu signup reaches the server once and a rejection preserves the form
   await page.clock.fastForward(61_000);
   await expect(page).toHaveURL(/\/register$/);
   await expect(page.getByLabel("Full name")).toHaveValue(testMember.name);
-  await expect(page.getByLabel("School email")).toHaveValue(
+  await expect(page.getByLabel("Email")).toHaveValue(
     "unapproved@example.com",
   );
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
@@ -124,13 +124,13 @@ test("server-accepted signup keeps ownership unverified, opens member features a
   expect(sends).toBe(0);
 });
 
-test("signup explains the ordinary .edu rule and approved test account exception", async ({
+test("signup explains that valid email addresses from any domain are accepted", async ({
   page,
 }) => {
   await setup(page);
   await page.goto("/register");
-  await expect(page.getByLabel("School email")).toHaveAccessibleDescription(
-    "Use your .edu school email. A non-.edu address is allowed only for an approved test account.",
+  await expect(page.getByLabel("Email")).toHaveAccessibleDescription(
+    "Use a valid email address. Any email domain is welcome.",
   );
 });
 
@@ -145,7 +145,7 @@ test("native email syntax validation still prevents malformed signup requests", 
   });
   await page.goto("/register");
   await fillRegistration(page, "not-an-email");
-  await expect(page.getByLabel("School email")).toHaveAttribute(
+  await expect(page.getByLabel("Email")).toHaveAttribute(
     "type",
     "email",
   );
@@ -154,7 +154,7 @@ test("native email syntax validation still prevents malformed signup requests", 
     .evaluate((form: HTMLFormElement) => form.requestSubmit());
   expect(
     await page
-      .getByLabel("School email")
+      .getByLabel("Email")
       .evaluate((input: HTMLInputElement) => input.validity.typeMismatch),
   ).toBe(true);
   expect(calls).toBe(0);

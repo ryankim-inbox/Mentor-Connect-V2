@@ -54,7 +54,7 @@ export async function runLiveChat(
   }
   async function login(page, account) {
     await page.goto(origin + "/login");
-    await page.getByLabel("School email").fill(account.email);
+    await page.getByLabel("Email").fill(account.email);
     await page.getByLabel("Password", { exact: true }).fill(account.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.waitForURL(origin + "/dashboard");

@@ -454,7 +454,7 @@ export const getRegisterUrl = () => {
 };
 
 /**
- * @summary Register with school email
+ * @summary Register with email
  */
 export const register = async (
   registerBody: RegisterBody,
@@ -554,7 +554,7 @@ export type RegisterMutationError = ErrorType<
 export type RegisterMutationVariables = { data: BodyType<RegisterBody> };
 
 /**
- * @summary Register with school email
+ * @summary Register with email
  */
 export const useRegister = <
   TError = ErrorType<
@@ -588,7 +588,7 @@ export const getLoginUrl = () => {
 };
 
 /**
- * @summary Login with school email
+ * @summary Login with email
  */
 export const login = async (
   loginBody: LoginBody,
@@ -688,7 +688,7 @@ export type LoginMutationError = ErrorType<
 export type LoginMutationVariables = { data: BodyType<LoginBody> };
 
 /**
- * @summary Login with school email
+ * @summary Login with email
  */
 export const useLogin = <
   TError = ErrorType<

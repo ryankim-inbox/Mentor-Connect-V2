@@ -149,7 +149,7 @@ export async function runSmoke({ origin, credentials }, browser, emit = record =
       let loginResponse;
       try {
         await page.goto(`${origin}/login`);
-        await page.getByLabel('School email').fill(credentials.accounts[role].email);
+        await page.getByLabel('Email').fill(credentials.accounts[role].email);
         await page.getByLabel('Password', { exact: true }).fill(credentials.accounts[role].password);
         const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/login' && r.request().method() === 'POST');
         await page.getByRole('button', { name: 'Sign in', exact: true }).click();

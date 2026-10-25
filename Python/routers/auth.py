@@ -12,7 +12,7 @@ from security import require_user
 from member_access import has_member_access, has_admin_access
 from account_policy import is_synthetic_locked, is_demo_user
 from email_delivery import deliver_verification, DeliveryUnavailable
-from email_policy import configured_test_recipient, normalize_mailbox
+from email_policy import normalize_mailbox
 
 router = APIRouter()
 
@@ -66,10 +66,10 @@ class RegisterBody(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def email_must_be_eligible(cls, v):
+    def email_must_be_valid(cls, v):
         email = normalize_mailbox(v)
-        if email is None or (not email.endswith('.edu') and email != configured_test_recipient()):
-            raise ValueError("Use a valid .edu school email or an approved test email address")
+        if email is None:
+            raise ValueError("Use a valid email address")
         return email
 
     @field_validator("role")

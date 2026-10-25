@@ -3,7 +3,7 @@ import { fixtureAccounts, fixtureLoginEmail, fixturePassword } from "./fixtures"
 
 async function signIn(page: Page, role: "mentor" | "mentee") {
   await page.goto("/login");
-  await page.getByLabel("School email").fill(fixtureLoginEmail(role, test.info().testId));
+  await page.getByLabel("Email").fill(fixtureLoginEmail(role, test.info().testId));
   await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

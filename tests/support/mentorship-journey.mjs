@@ -7,7 +7,7 @@ export async function runMentorshipJourney({ origin, credentials }, browser, res
     const [mentor, owner] = await Promise.all(contexts.map(c => c.newPage()));
     for (const [page, account] of [[mentor, credentials.accounts.mentor], [owner, credentials.accounts.mentee]]) {
       await page.goto(origin + '/login');
-      await page.getByLabel('School email').fill(account.email);
+      await page.getByLabel('Email').fill(account.email);
       await page.getByLabel('Password', { exact: true }).fill(account.password);
       await page.getByRole('button', { name: 'Sign in', exact: true }).click();
       await expect(page).toHaveURL(/\/dashboard$/);

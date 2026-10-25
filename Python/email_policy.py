@@ -1,4 +1,4 @@
-"""Conservative mailbox syntax and the private, exact test-recipient exception."""
+"""Conservative mailbox syntax and the private, exact test delivery recipient."""
 import os
 import re
 

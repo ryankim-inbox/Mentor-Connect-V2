@@ -15,7 +15,7 @@ export async function runReportModerationJourney({ origin, db }, browser) {
     ]) {
       const login = await context.newPage();
       await login.goto(origin + "/login");
-      await login.getByLabel("School email").fill(email);
+      await login.getByLabel("Email").fill(email);
       await login.getByLabel("Password", { exact: true }).fill("Password123!");
       await login.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(login).toHaveURL(/\/dashboard$/);

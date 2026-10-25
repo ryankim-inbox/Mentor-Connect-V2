@@ -1,4 +1,4 @@
-"""The test signup exception is one server-selected mailbox, never authority."""
+"""Signup accepts valid mailboxes; test delivery configuration never grants authority."""
 import json
 from http.cookiejar import CookieJar
 from urllib.request import HTTPCookieProcessor, build_opener
@@ -28,6 +28,17 @@ def configure(monkeypatch, enabled='true', recipient=RECIPIENT):
             monkeypatch.setenv(key, value)
 
 
+@pytest.mark.parametrize(('email', 'expected'), [
+    ('Student@Gmail.COM', 'student@gmail.com'),
+    ('Student+Mentoring@Outlook.COM', 'student+mentoring@outlook.com'),
+    ('Student@Example.ORG', 'student@example.org'),
+    ('Student@School.EDU', 'student@school.edu'),
+])
+def test_signup_accepts_valid_email_from_any_domain_without_test_configuration(monkeypatch, email, expected):
+    configure(monkeypatch, None, None)
+    assert RegisterBody(**registration(email)).email == expected
+
+
 @pytest.mark.parametrize(('value', 'expected'), [
     ('Owner+Test@Example.COM', RECIPIENT),
     ('First.Last@students.Example.EDU', 'first.last@students.example.edu'),
@@ -53,6 +64,8 @@ INVALID_MAILBOXES = [
     '*@example.edu', 'owner@*.edu', 'a' * 65 + '@example.edu',
     'owner@' + 'a' * 64 + '.edu',
     'a' * 64 + '@' + '.'.join(['b' * 63] * 3 + ['com']),
+    'student@@gmail.com', 'student@-gmail.com', 'student@gmail..com',
+    'student name@gmail.com', 'student@gmail.com ',
 ]
 
 
@@ -69,11 +82,10 @@ def test_mailbox_normalization_rejects_ambiguous_or_invalid_addresses(value):
     ('true', 'Owner <owner@example.com>'), ('true', ' owner@example.com'),
     ('true', 'owner@example.com\n'),
 ])
-def test_invalid_or_disabled_configuration_fails_closed(monkeypatch, enabled, recipient):
+def test_invalid_or_disabled_delivery_configuration_does_not_restrict_signup(monkeypatch, enabled, recipient):
     configure(monkeypatch, enabled, recipient)
     assert email_policy.configured_test_recipient() is None
-    with pytest.raises(ValidationError):
-        RegisterBody(**registration())
+    assert RegisterBody(**registration()).email == RECIPIENT
     assert RegisterBody(**registration('Student@School.EDU')).email == 'student@school.edu'
 
 
@@ -89,15 +101,13 @@ def test_exact_case_normalized_configured_mailbox_is_eligible(monkeypatch):
     'owner.test@example.com', 'o.wner+test@example.com',
     'owner+test@sub.example.com', 'owner+test@example.com.evil.test',
 ])
-def test_exception_never_expands_to_aliases_or_other_recipients(monkeypatch, email):
+def test_signup_preserves_distinct_aliases_and_other_recipients(monkeypatch, email):
     configure(monkeypatch)
-    with pytest.raises(ValidationError) as error:
-        RegisterBody(**registration(email))
-    assert RECIPIENT not in json.dumps(error.value.errors(include_input=False, include_context=False))
+    assert RegisterBody(**registration(email)).email == email
 
 
 @pytest.mark.parametrize('email', [value for value in INVALID_MAILBOXES if isinstance(value, str)])
-def test_school_suffix_never_bypasses_mailbox_validation(monkeypatch, email):
+def test_signup_rejects_malformed_mailbox_regardless_of_domain(monkeypatch, email):
     configure(monkeypatch)
     with pytest.raises(ValidationError):
         RegisterBody(**registration(email))
@@ -116,8 +126,9 @@ def test_allowlist_cannot_be_selected_or_grant_privilege_in_body(monkeypatch, ch
 
 
 @pytest.mark.parametrize('entrypoint', ['backend', 'gateway'])
-def test_exact_test_signup_keeps_ownership_separate_from_membership_and_never_grants_admin(
-        request, backend_database, monkeypatch, tmp_path, entrypoint):
+@pytest.mark.parametrize('email', ['OWNER+TEST@example.COM', 'Student@Gmail.COM', 'Student@School.EDU'])
+def test_signup_keeps_ownership_separate_from_membership_and_never_grants_admin(
+        request, backend_database, monkeypatch, tmp_path, entrypoint, email):
     configure(monkeypatch, recipient='Owner+Test@Example.COM')
     monkeypatch.setenv('EMAIL_DELIVERY_MODE', 'development-file')
     monkeypatch.setenv('EMAIL_DEV_OUTBOX_DIR', str(tmp_path / 'outbox'))
@@ -129,10 +140,10 @@ def test_exact_test_signup_keeps_ownership_separate_from_membership_and_never_gr
     else:
         base = request.getfixturevalue('gateway_server')
     client = build_opener(HTTPCookieProcessor(CookieJar()))
-    status, result = api(client, base, 'POST', '/api/auth/register', registration('OWNER+TEST@example.COM'))
+    status, result = api(client, base, 'POST', '/api/auth/register', registration(email))
     assert status == 201, result
     user = result['user']
-    assert user['email'] == RECIPIENT
+    assert user['email'] == email.lower()
     assert user['isVerified'] is False and user['isAdmin'] is False
     user_id = user['id']
     assert execute(backend_database, 'SELECT email_verified_at,is_verified,is_admin FROM users WHERE id=%s', (user_id,)) == [(None, False, False)]
@@ -140,6 +151,10 @@ def test_exact_test_signup_keeps_ownership_separate_from_membership_and_never_gr
     assert api(client, base, 'GET', '/api/auth/me')[0] == 200
     assert api(client, base, 'GET', '/api/mentors')[0] == 200
     assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
+    assert api(build_opener(), base, 'POST', '/api/auth/register', registration(email.lower()))[0] == 400
+    returning = build_opener(HTTPCookieProcessor(CookieJar()))
+    assert api(returning, base, 'POST', '/api/auth/login', {'email': email, 'password': 'Password123!'})[0] == 200
+    assert api(returning, base, 'GET', '/api/auth/me')[0] == 200
     status, response = api(client, base, 'POST', '/api/auth/verification/request')
     assert status == 202, response
     assert 'accepted for delivery' in response['message']
@@ -149,7 +164,7 @@ def test_exact_test_signup_keeps_ownership_separate_from_membership_and_never_gr
     assert api(client, base, 'GET', '/api/mentors')[0] == 200
     assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
     assert execute(backend_database, 'SELECT email_verified_at IS NOT NULL,is_verified,is_admin FROM users WHERE id=%s', (user_id,)) == [(True, True, False)]
-    # Wrong addresses receive only generic eligibility errors, never the configured address.
-    status, error = api(build_opener(), base, 'POST', '/api/auth/register', registration('other@example.com'))
+    # Malformed addresses never reveal the configured delivery recipient.
+    status, error = api(build_opener(), base, 'POST', '/api/auth/register', registration('other@@example.com'))
     assert status == (400 if entrypoint == 'gateway' else 422)
     assert RECIPIENT not in json.dumps(error).lower()

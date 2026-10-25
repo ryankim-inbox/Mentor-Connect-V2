@@ -133,7 +133,7 @@ paths:
       operationId: register
       tags:
         - auth
-      summary: Register with school email
+      summary: Register with email
       requestBody:
         required: true
         content:
@@ -169,7 +169,7 @@ paths:
       operationId: login
       tags:
         - auth
-      summary: Login with school email
+      summary: Login with email
       requestBody:
         required: true
         content:
@@ -3001,8 +3001,8 @@ components:
       properties:
         email:
           type: string
-          description: Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private
-            server configuration. Registration never verifies ownership or grants administrator access.
+          description: Must be a valid email address, with no domain restriction.
+            Registration never verifies ownership or grants administrator access.
         name:
           type: string
         password:

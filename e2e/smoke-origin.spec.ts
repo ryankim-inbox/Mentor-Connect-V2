@@ -43,7 +43,7 @@ for (const status of [307, 308]) {
         return res.end();
       }
       res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(`<form><label>School email<input name="email"></label><label>Password<input name="password" type="password"></label><button>Sign in</button></form><output></output><script>
+      res.end(`<form><label>Email<input name="email"></label><label>Password<input name="password" type="password"></label><button>Sign in</button></form><output></output><script>
         document.querySelector('form').onsubmit = async event => {
           event.preventDefault();
           try { await fetch('/api/auth/login', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(event.target))) }); } catch {}
@@ -57,7 +57,7 @@ for (const status of [307, 308]) {
       const page = await context.newPage();
       await restrictSmokeOrigin(page, allowedOrigin);
       await page.goto(`${allowedOrigin}/login`);
-      await page.getByLabel("School email").fill("synthetic@example.edu");
+      await page.getByLabel("Email").fill("synthetic@example.edu");
       await page.getByLabel("Password").fill("synthetic-redirect-password");
       await page.getByRole("button", { name: "Sign in" }).click();
       await expect(page.getByText("Login attempt complete")).toBeVisible();

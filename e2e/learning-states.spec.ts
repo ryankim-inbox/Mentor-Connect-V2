@@ -343,9 +343,9 @@ test("account forms expose labels, autocomplete, alerts, and busy state", async 
     await route.abort();
   });
   await page.goto("/login");
-  await expect(page.getByLabel("School email")).toHaveAttribute("autocomplete", "username");
+  await expect(page.getByLabel("Email")).toHaveAttribute("autocomplete", "username");
   await expect(page.getByLabel("Password")).toHaveAttribute("autocomplete", "current-password");
-  await page.getByLabel("School email").fill(user.email);
+  await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.locator("form")).toHaveAttribute("aria-busy", "true");

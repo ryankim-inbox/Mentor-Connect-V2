@@ -16,7 +16,7 @@ async function setup(page: Page) {
   });
   await page.goto("/register");
   await page.getByLabel("Full name").fill("New Student");
-  await page.getByLabel("School email").fill("new@school.edu");
+  await page.getByLabel("Email").fill("new@school.edu");
   await page.getByLabel("District choices").selectOption("1");
   return submissions;
 }

@@ -9,7 +9,7 @@ export async function runAccountTrustJourney({ origin, outbox }, browser) {
     const page = await context.newPage();
     await page.goto(origin + "/register");
     await page.getByLabel("Full name").fill("E2E TEST Ownership Member");
-    await page.getByLabel(/School email/).fill("ownership-browser@test.edu");
+    await page.getByLabel(/Email/).fill("ownership-browser@test.edu");
     await page.getByLabel("Password", { exact: true }).fill("Password123!");
     await page.getByLabel("Gender", { exact: true }).selectOption("female");
     await page.getByLabel("Date of birth").fill("2008-02-29");

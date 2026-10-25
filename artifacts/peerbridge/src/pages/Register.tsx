@@ -135,7 +135,7 @@ export default function Register() {
             Create your account
           </h1>
           <p className="text-muted-foreground mt-1">
-            Join PeerBridge with your school email
+            Join PeerBridge with your email
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="register-email" className="block text-sm font-medium text-foreground mb-1.5">
-                School email
+                Email
               </label>
               <input
                 id="register-email"
@@ -172,13 +172,12 @@ export default function Register() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, email: e.target.value }))
                 }
-                placeholder="you@school.edu"
+                placeholder="you@example.com"
                 required
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
               />
               <p id="register-email-help" className="text-xs text-muted-foreground mt-1">
-                Use your .edu school email. A non-.edu address is allowed only
-                for an approved test account.
+                Use a valid email address. Any email domain is welcome.
               </p>
             </div>
 

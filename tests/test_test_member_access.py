@@ -203,13 +203,13 @@ def test_client_fields_and_session_claims_cannot_falsify_ownership_or_admin_acce
         assert api(client, base, 'GET', '/api/auth/me')[1]['isVerified'] is False
         assert api(client, base, 'GET', '/api/chat/rooms')[0] == 200
         assert api(client, base, 'GET', '/api/admin/reports')[0] == 403
-        # Signup eligibility remains separate; valid registrations get member access.
+        # Syntax remains checked; valid registrations get only normal member access.
         assert api(client, base, 'POST', '/api/auth/register', {
-            'email': 'synthetic-new@example.com', 'name': 'Synthetic member',
+            'email': 'synthetic-new@@example.com', 'name': 'Synthetic member',
             'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29',
         })[0] == 422
         status, payload = api(client, base, 'POST', '/api/auth/register', {
-            'email': 'synthetic-new@example.edu', 'name': 'Synthetic member',
+            'email': 'synthetic-new@example.com', 'name': 'Synthetic member',
             'password': 'Synthetic-password123!', 'role': 'mentor', 'districtId': 1, 'gender': 'female', 'dateOfBirth': '2008-02-29',
         })
         assert status == 201

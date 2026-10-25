@@ -3,7 +3,7 @@
 Ordinary registered accounts can use member features without verifying mailbox
 ownership. This is the approved contest-demo policy. It does not establish
 school enrollment, age, identity or mailbox ownership. The application still
-requires a valid login, the existing signup email eligibility rule, and current
+requires a valid login, a syntactically valid signup email address, and current
 server-side authority for each protected operation.
 
 ## Separate facts and privileges
@@ -20,8 +20,8 @@ server-side authority for each protected operation.
   `!mentor-connect-synthetic:` password sentinel. They cannot authenticate,
   retain a session, receive messages or acquire member/administrator authority.
 
-Signup retains the `.edu` format restriction and the existing private exact
-non-.edu test-recipient exception. Neither is evidence of school enrollment.
+Signup accepts syntactically valid email addresses from any domain. An email
+address is not evidence of school enrollment or mailbox ownership.
 Registration does not send mail automatically. Users may deliberately request
 optional ownership verification; the existing expiry, resend limits, protected
 local test outbox and disabled/failed delivery behavior remain unchanged.

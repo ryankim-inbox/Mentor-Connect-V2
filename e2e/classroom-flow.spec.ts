@@ -3,7 +3,7 @@ import { fixtureAccounts, fixtureLoginEmail, fixturePassword, pythonEnvelope } f
 
 async function signIn(page: Page, role: keyof typeof fixtureAccounts = "mentor") {
   await page.goto("/login");
-  await page.getByLabel("School email").fill(fixtureLoginEmail(role, test.info().testId));
+  await page.getByLabel("Email").fill(fixtureLoginEmail(role, test.info().testId));
   await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
   const accepted = page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/auth/login" && response.request().method() === "POST");

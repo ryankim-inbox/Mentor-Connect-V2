@@ -100,7 +100,7 @@ try {
   async function login(context, email) {
     const page = await context.newPage();
     await page.goto(origin + "/login");
-    await page.getByLabel("School email").fill(email);
+    await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password", { exact: true }).fill("Password123!");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard$/);

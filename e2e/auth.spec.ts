@@ -31,7 +31,7 @@ async function fallback(page: Page) {
   await page.route("**/api/**", (route) => route.fulfill({ json: [] }));
 }
 async function signIn(page: Page) {
-  await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+  await page.getByPlaceholder("you@example.com").fill(accountA.email);
   await page.getByPlaceholder("Enter your password").fill("password123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
@@ -151,7 +151,7 @@ test("login and registration block double submits until session confirmation fin
     );
     await page.goto(`/${mode}?returnTo=%2Fsettings`);
     await expect.poll(() => meCalls).toBe(1);
-    await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+    await page.getByPlaceholder("you@example.com").fill(accountA.email);
     await page
       .getByPlaceholder(
         mode === "login" ? "Enter your password" : "Create a password",
@@ -199,7 +199,7 @@ test("registration validates name bytes before sending and trims a valid name", 
     return route.fulfill({ status: 422, json: { error: "validation_error" } });
   });
   await page.goto("/register");
-  await page.getByPlaceholder("you@school.edu").fill(accountA.email);
+  await page.getByPlaceholder("you@example.com").fill(accountA.email);
   await page.getByPlaceholder("Create a password").fill("Password123!");
   await page.getByLabel("Gender", { exact: true }).selectOption("female");
   await page.getByLabel("Date of birth").fill("2008-02-29");

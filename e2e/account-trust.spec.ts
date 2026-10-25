@@ -391,7 +391,7 @@ test("admin direct account switch cancels delayed private data and removes cache
   await page.goto("/admin/reports");
   await expect.poll(() => oldStarted).toBe(true);
   await page.evaluate(() => window.history.pushState({}, "", "/login"));
-  await page.getByLabel("School email").fill("student@test.edu");
+  await page.getByLabel("Email").fill("student@test.edu");
   await page.getByLabel("Password", { exact: true }).fill("Password123!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -463,7 +463,7 @@ for (const role of ["mentor", "mentee", "both"] as const)
     await request.post("http://127.0.0.1:18181/__fixture/reset");
     await page.goto("/login");
     await page
-      .getByLabel("School email")
+      .getByLabel("Email")
       .fill(fixtureLoginEmail(role, test.info().testId));
     await page.getByLabel("Password", { exact: true }).fill(fixturePassword);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

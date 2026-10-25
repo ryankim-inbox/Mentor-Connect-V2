@@ -32,11 +32,6 @@ function normalizeMailbox(value: unknown): string | undefined {
   return value.toLowerCase();
 }
 
-function configuredTestRecipient(): string | undefined {
-  if (process.env.EMAIL_TEST_ALLOWLIST_ENABLED !== "true") return undefined;
-  return normalizeMailbox(process.env.EMAIL_TEST_RECIPIENT);
-}
-
 function validDateOfBirth(value: unknown): boolean {
   if (
     typeof value !== "string" ||
@@ -122,7 +117,7 @@ export function validateAuthBody(
 
   if (kind === "register") {
     const email = normalizeMailbox(payload.email);
-    if (!email || (!email.endsWith(".edu") && email !== configuredTestRecipient())) {
+    if (!email) {
       throw new Error("invalid_auth_body");
     }
     const name = readDisplayName(payload.name);

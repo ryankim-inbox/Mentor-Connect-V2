@@ -86,7 +86,7 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Register with school email
+ * @summary Register with email
  */
 export const registerBodyPasswordRegExp = new RegExp(
   "^(?:\\p{Any}){12,72}(?!\\p{Any})",
@@ -97,7 +97,7 @@ export const RegisterBody = zod.object({
   email: zod
     .string()
     .describe(
-      "Must be a valid .edu school mailbox or the exact test mailbox explicitly enabled in private server configuration. Registration never verifies ownership or grants administrator access.",
+      "Must be a valid email address, with no domain restriction. Registration never verifies ownership or grants administrator access.",
     ),
   name: zod.string(),
   password: zod
@@ -151,7 +151,7 @@ export const RegisterResponse = zod.object({
 });
 
 /**
- * @summary Login with school email
+ * @summary Login with email
  */
 export const LoginBody = zod.object({
   email: zod.string(),

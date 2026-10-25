@@ -50,7 +50,20 @@ function testSignupEnvironment(
   });
 }
 
-test("test signup accepts only the exact normalized server-configured mailbox", (context) => {
+test("signup accepts valid email from any domain without test configuration", (context) => {
+  testSignupEnvironment(context, undefined, undefined);
+  for (const [email, expected] of [
+    ["Student@Gmail.COM", "student@gmail.com"],
+    ["Student+Mentoring@Outlook.COM", "student+mentoring@outlook.com"],
+    ["Student@Example.ORG", "student@example.org"],
+    ["Student@School.EDU", "student@school.edu"],
+  ]) {
+    const result = validateAuthBody("register", registration(email));
+    assert.equal(JSON.parse(result.body.toString()).email, expected);
+  }
+});
+
+test("signup normalizes case and preserves distinct mailboxes regardless of test delivery recipient", (context) => {
   testSignupEnvironment(context, "true", "Owner+Test@Example.COM");
   const result = validateAuthBody("register", registration("OWNER+TEST@example.COM"));
   assert.equal(JSON.parse(result.body.toString()).email, TEST_RECIPIENT);
@@ -60,7 +73,7 @@ test("test signup accepts only the exact normalized server-configured mailbox", 
     "owner.test@example.com", "o.wner+test@example.com", "owner+test@sub.example.com",
     "owner+test@example.com.evil.test",
   ]) {
-    assert.throws(() => validateAuthBody("register", registration(email)), { message: "invalid_auth_body" });
+    assert.equal(JSON.parse(validateAuthBody("register", registration(email)).body.toString()).email, email);
   }
 });
 
@@ -71,17 +84,14 @@ for (const [enabled, recipient] of [
   ["true", "owner@example.com,other@example.com"], ["true", "Owner <owner@example.com>"],
   ["true", " owner@example.com"], ["true", "owner@example.com\n"],
 ] as const) {
-  test(`test signup fails closed for configuration ${JSON.stringify([enabled, recipient])}`, (context) => {
+  test(`signup ignores delivery configuration ${JSON.stringify([enabled, recipient])}`, (context) => {
     testSignupEnvironment(context, enabled, recipient);
-    assert.throws(() => validateAuthBody("register", registration()), { message: "invalid_auth_body" });
-    if (recipient) {
-      assert.throws(() => validateAuthBody("register", registration(recipient)), { message: "invalid_auth_body" });
-    }
+    assert.equal(JSON.parse(validateAuthBody("register", registration()).body.toString()).email, TEST_RECIPIENT);
     assert.equal(JSON.parse(validateAuthBody("register", registration("Student@School.EDU")).body.toString()).email, "student@school.edu");
   });
 }
 
-test("test signup cannot widen eligibility or set authority through request fields", (context) => {
+test("signup cannot set authority or delivery configuration through request fields", (context) => {
   testSignupEnvironment(context, "true", TEST_RECIPIENT);
   for (const extra of [
     { role: "admin" }, { isAdmin: true }, { isVerified: true },
@@ -94,7 +104,7 @@ test("test signup cannot widen eligibility or set authority through request fiel
   }
 });
 
-test("registration rejects malformed mailbox syntax even with a school suffix", (context) => {
+test("registration rejects malformed mailbox syntax regardless of domain", (context) => {
   testSignupEnvironment(context, "true", TEST_RECIPIENT);
   for (const email of [
     "missing-at.edu", "@example.edu", "owner@@example.edu", "owner@example.edu@evil.com",
@@ -107,12 +117,14 @@ test("registration rejects malformed mailbox syntax even with a school suffix", 
     "owner@[127.0.0.1]", "ownér@example.edu", "owner@exämple.edu", "*@example.edu",
     "owner@*.edu", "a".repeat(65) + "@example.edu", "owner@" + "a".repeat(64) + ".edu",
     "a".repeat(64) + "@" + ["b".repeat(63), "b".repeat(63), "b".repeat(63), "com"].join("."),
+    "student@@gmail.com", "student@-gmail.com", "student@gmail..com",
+    "student name@gmail.com", "student@gmail.com ",
   ]) {
     assert.throws(() => validateAuthBody("register", registration(email)), { message: "invalid_auth_body" }, email);
   }
 });
 
-test("test signup configuration cannot be enabled through request headers", async (context) => {
+test("test delivery headers cannot bypass signup mailbox syntax validation", async (context) => {
   testSignupEnvironment(context, undefined, undefined);
   const fixture = await startControlFixture();
   try {
@@ -123,7 +135,7 @@ test("test signup configuration cannot be enabled through request headers", asyn
         "x-email-test-allowlist-enabled": "true", "x-email-test-recipient": TEST_RECIPIENT,
         "EMAIL_TEST_ALLOWLIST_ENABLED": "true", "EMAIL_TEST_RECIPIENT": TEST_RECIPIENT,
       },
-      body: registration(),
+      body: registration("not-an-email"),
     });
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: "invalid_input" });
@@ -501,7 +513,7 @@ test("accepts only the required registration model", () => {
       subjects: [],
     },
     {
-      email: "student@example.com",
+      email: "student@@example.com",
       name: "Student",
       password: "SyntheticPass!",
       gender: "female",

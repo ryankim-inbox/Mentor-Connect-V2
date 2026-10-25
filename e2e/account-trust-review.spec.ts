@@ -403,7 +403,7 @@ test("switching accounts during report reauthorization cannot restore administra
       page.getByRole("button", { name: "Recheck report access", exact: true }),
     ).toBeVisible();
     await page.evaluate(() => window.history.pushState({}, "", "/login"));
-    await page.getByLabel("School email").fill(student.email);
+    await page.getByLabel("Email").fill(student.email);
     await page.getByLabel("Password", { exact: true }).fill("Password123!");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard$/);

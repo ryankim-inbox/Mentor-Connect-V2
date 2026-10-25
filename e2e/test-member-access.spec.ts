@@ -39,7 +39,7 @@ test("unverified-member login follows return path and revoked access blocks dire
     return route.fulfill({ json: { user: testMember, message: "Logged in successfully" } });
   });
   await page.goto("/login?returnTo=%2Frequests");
-  await page.getByPlaceholder("you@school.edu").fill(testMember.email);
+  await page.getByPlaceholder("you@example.com").fill(testMember.email);
   await page.getByPlaceholder("Enter your password").fill("synthetic-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/requests$/);

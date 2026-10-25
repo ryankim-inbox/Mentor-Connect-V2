@@ -51,7 +51,7 @@ node ops/bootstrap-classroom.mjs
 
 The bootstrap holds a transaction/advisory lock, rejects a populated target, checks schema assets, and applies migrations 0001–0003. Run once, before deployment. Do not rerun bootstrap on populated targets and do not use `dummy_DB.sql`, `Python.zip`, `Python/create_tables.sql`, or legacy fixtures. Future migrations need a separate operator step and approval.
 
-`ops/seed-classroom.mjs` provides guarded, synthetic base districts/rooms and two randomly passworded accounts through registration; it writes a 0600 credential file. Its default pair share a district. For the full negative live test, prepare two **new synthetic validation accounts in different seeded districts** plus a third unrelated account through the test site's registration UI. Add their IDs to a separate 0600 credential file. Do not change existing real users or paste generated passwords into chat. Signup only checks the `.edu` suffix; it does not verify email ownership. This deployment is test-only, unsuitable for real students or sensitive data.
+`ops/seed-classroom.mjs` provides guarded, synthetic base districts/rooms and two randomly passworded accounts through registration; it writes a 0600 credential file. Its default pair share a district. For the full negative live test, prepare two **new synthetic validation accounts in different seeded districts** plus a third unrelated account through the test site's registration UI. Add their IDs to a separate 0600 credential file. Do not change existing real users or paste generated passwords into chat. Signup validates email syntax without a domain restriction; it does not verify email ownership. This deployment is test-only, unsuitable for real students or sensitive data.
 
 ## Health and free limits
 
