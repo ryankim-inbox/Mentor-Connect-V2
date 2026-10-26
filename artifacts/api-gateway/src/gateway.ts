@@ -80,6 +80,7 @@ export interface GatewayOptions {
   readonly staticDirectory?: string;
   readonly upstreamOrigin?: string;
   readonly publicOrigin?: string;
+  readonly additionalPublicOrigins?: readonly string[];
   readonly allowLoopbackPublicOrigin?: boolean;
   readonly rateLimitNow?: () => number;
   readonly requestBodyLimitBytes?: number;
@@ -95,6 +96,7 @@ interface GatewayConfig {
   readonly staticDirectory?: string;
   readonly upstreamOrigin: URL;
   readonly publicOrigin: string;
+  readonly additionalPublicOrigins: readonly string[];
   readonly limiter: ReturnType<typeof createLimiter>;
   readonly requestBodyLimitBytes: number;
   readonly responseBodyLimitBytes: number;
@@ -177,7 +179,7 @@ export function createGatewayServer(
       return session;
     },
     assertOrigin: (request) =>
-      assertAllowedOrigin(request.headers.origin, config.publicOrigin),
+      assertAllowedOrigin(request.headers.origin, config.publicOrigin, config.additionalPublicOrigins),
     maintenanceMode: config.maintenanceMode,
     logger: config.logger,
   });
@@ -221,10 +223,16 @@ export function resolveGatewayConfig(
       process.env.NODE_ENV === "development" ||
       process.env.NODE_ENV === "test");
   assertValidPublicOrigin(publicOrigin, allowLoopbackPublicOrigin);
+  const additionalPublicOrigins = [...(options.additionalPublicOrigins ??
+    process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS?.split(",") ?? [])];
+  for (const origin of additionalPublicOrigins) {
+    assertValidPublicOrigin(origin, allowLoopbackPublicOrigin);
+  }
 
   return {
     upstreamOrigin,
     publicOrigin,
+    additionalPublicOrigins,
     staticDirectory: options.staticDirectory ?? process.env.GATEWAY_STATIC_DIR,
     limiter: createLimiter(options.rateLimitNow ?? Date.now),
     requestBodyLimitBytes: resolvePositiveInteger(
@@ -264,7 +272,7 @@ async function handleRequest(
   response: ServerResponse,
   config: GatewayConfig,
 ): Promise<void> {
-  setSecurityHeaders(response, config.publicOrigin);
+  setSecurityHeaders(response, config.publicOrigin, config.additionalPublicOrigins);
   const requestId = randomUUID();
   const trace: RequestTrace = {
     family: "unknown",
@@ -550,7 +558,7 @@ function assertRequestOrigin(
   }
 
   try {
-    assertAllowedOrigin(getHeader(request, "origin"), config.publicOrigin);
+    assertAllowedOrigin(getHeader(request, "origin"), config.publicOrigin, config.additionalPublicOrigins);
   } catch {
     throw new GatewayHttpError(403, "forbidden");
   }

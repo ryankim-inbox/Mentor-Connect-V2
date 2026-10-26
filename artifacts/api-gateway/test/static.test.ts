@@ -20,6 +20,7 @@ test("serves the built SPA with safe fallback and security headers", async () =>
   const server = createGatewayServer({
     staticDirectory: root,
     publicOrigin: "https://test.invalid",
+    additionalPublicOrigins: ["https://peerbridge.us"],
     logger: { info() {} },
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -48,6 +49,10 @@ test("serves the built SPA with safe fallback and security headers", async () =>
       assert.match(
         response.headers.get("content-security-policy")!,
         /frame-ancestors 'none'/,
+      );
+      assert.match(
+        response.headers.get("content-security-policy")!,
+        /connect-src 'self' wss:\/\/test\.invalid wss:\/\/peerbridge\.us;/,
       );
       assert.equal(response.headers.get("x-content-type-options"), "nosniff");
       assert.match(await response.text(), /SPA/);

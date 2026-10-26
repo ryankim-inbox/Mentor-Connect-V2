@@ -72,6 +72,7 @@ export async function serveStatic(
 export function setSecurityHeaders(
   response: ServerResponse,
   publicOrigin: string,
+  additionalPublicOrigins: readonly string[] = [],
 ): void {
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("x-frame-options", "DENY");
@@ -82,7 +83,7 @@ export function setSecurityHeaders(
   );
   response.setHeader(
     "content-security-policy",
-    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${publicOrigin.replace(/^http/, "ws")}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'`,
+    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${[publicOrigin, ...additionalPublicOrigins].map((origin) => origin.replace(/^http/, "ws")).join(" ")}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'`,
   );
   if (publicOrigin.startsWith("https:"))
     response.setHeader("strict-transport-security", "max-age=31536000");

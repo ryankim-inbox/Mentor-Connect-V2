@@ -104,12 +104,26 @@ the public profile projection.
   query, user id, email, Cookie, Authorization, request body, SQL, or upstream error detail.
   Unknown requests use `family=unknown`; an incoming `X-Request-Id` is replaced.
 
-`GATEWAY_PUBLIC_ORIGIN` is required at startup. Production accepts only one canonical exact HTTPS
+`GATEWAY_PUBLIC_ORIGIN` is required at startup. Production requires a canonical exact HTTPS
 origin such as `https://classroom.example.com`; replace the example in the gateway artifact settings
 with the deployment's real external origin before release. It must not contain credentials, a path,
 query, fragment, trailing slash, or normalized spelling difference. Development/test may explicitly
 use `http://localhost:<port>`, `http://127.0.0.1:<port>`, or `http://[::1]:<port>` with
 `NODE_ENV=development|test`. The gateway never derives this value from request headers.
+
+To serve another owned domain without replacing the canonical origin, set
+`GATEWAY_ADDITIONAL_PUBLIC_ORIGINS` to a comma-separated list of exact canonical
+origins with no spaces. Omit it when unused; empty entries, wildcards, and invalid
+origins fail startup. HTTP mutations and WebSocket handshakes use the same exact
+allowlist, and CSP includes the corresponding WebSocket URLs. This does not enable
+cross-origin API sharing or change cookie domains, account authority, or database settings.
+
+For `peerbridge.us`, keep `APP_ORIGIN` and `GATEWAY_PUBLIC_ORIGIN` at
+`https://mentor-connect-test.onrender.com` and add only
+`GATEWAY_ADDITIONAL_PUBLIC_ORIGINS=https://peerbridge.us`. The existing demo administrator
+condition and verification-link destination stay unchanged. Keep the Render subdomain
+enabled and redirect `www.peerbridge.us` to the apex in Render. Cookies are host-only,
+so users sign in separately on the new domain using their existing account.
 
 `GATEWAY_UPSTREAM_ORIGIN` must be a credential-free loopback HTTP origin. Limits can be reduced with
 `GATEWAY_MAX_BODY_BYTES`, `GATEWAY_MAX_RESPONSE_BYTES`, `GATEWAY_BODY_TIMEOUT_MS`, and

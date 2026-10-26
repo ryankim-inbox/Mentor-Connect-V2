@@ -7,7 +7,7 @@ import {
 } from "node:http";
 import test from "node:test";
 
-import { createGatewayServer } from "../src/gateway.ts";
+import { createGatewayServer, resolveGatewayConfig } from "../src/gateway.ts";
 import {
   userFixture,
   requestFixture,
@@ -23,6 +23,85 @@ interface UpstreamCall {
 }
 
 const TEST_PUBLIC_ORIGIN = "http://127.0.0.1:14200";
+
+test("custom origin configuration rejects noncanonical or wildcard additions", (t) => {
+  const previous = process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS;
+  t.after(() => {
+    if (previous === undefined) delete process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS;
+    else process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS = previous;
+  });
+  for (const value of [
+    "", "https://peerbridge.us,", " https://peerbridge.us",
+    "http://peerbridge.us", "https://peerbridge.us/", "https://PEERBRIDGE.us",
+    "https://peerbridge.us:443", "https://user@peerbridge.us",
+    "https://peerbridge.us/path", "https://peerbridge.us?query=1",
+    "https://peerbridge.us#fragment", "https://*.peerbridge.us", "*", "null",
+  ]) {
+    process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS = value;
+    assert.throws(() => resolveGatewayConfig({
+      publicOrigin: "https://mentor-connect-test.onrender.com",
+    }), /public origin/, value);
+  }
+});
+
+test("both configured origins can log in and use a session while other origins fail closed", async (t) => {
+  const calls: string[] = [];
+  const upstream = createServer((request, response) => {
+    calls.push(request.url ?? "");
+    assert.equal(request.headers.origin, undefined);
+    response.writeHead(200, {
+      "content-type": "application/json",
+      "set-cookie": "peerbridge_session=synthetic; Path=/; HttpOnly; SameSite=lax; Secure",
+    });
+    response.end(JSON.stringify(request.url === "/api/auth/login"
+      ? { user: userFixture, message: "Logged in" } : userFixture));
+  });
+  const upstreamPort = await listen(upstream);
+  const previous = process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS;
+  process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS = "https://peerbridge.us";
+  const gateway = createGatewayServer({
+    upstreamOrigin: `http://127.0.0.1:${upstreamPort}`,
+    publicOrigin: "https://mentor-connect-test.onrender.com",
+    logger: { info() {} },
+  });
+  if (previous === undefined) delete process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS;
+  else process.env.GATEWAY_ADDITIONAL_PUBLIC_ORIGINS = previous;
+  const port = await listen(gateway);
+  t.after(async () => {
+    gateway.closeAllConnections();
+    upstream.closeAllConnections();
+    await Promise.all([close(gateway), close(upstream)]);
+  });
+  const base = `http://127.0.0.1:${port}`;
+  for (const origin of ["https://mentor-connect-test.onrender.com", "https://peerbridge.us"]) {
+    const response = await fetch(base + "/api/auth/login", {
+      method: "POST", headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify({ email: "student@example.edu", password: "SyntheticPass!" }),
+    });
+    assert.equal(response.status, 200, origin);
+    assert.match(response.headers.get("set-cookie")!, /HttpOnly; SameSite=lax; Secure/);
+    assert.doesNotMatch(response.headers.get("set-cookie")!, /domain=/i);
+    const loginBody = await response.json() as { user: { id: number } };
+    assert.equal(loginBody.user.id, userFixture.id);
+    const me = await fetch(base + "/api/auth/me", {
+      headers: { origin, cookie: "peerbridge_session=synthetic" },
+    });
+    assert.equal(me.status, 200);
+    const sessionBody = await me.json() as { id: number };
+    assert.equal(sessionBody.id, userFixture.id);
+  }
+  const acceptedCalls = calls.length;
+  for (const origin of [undefined, "null", "https://evil.invalid", "https://www.peerbridge.us",
+    "http://peerbridge.us", "https://peerbridge.us/", "https://peerbridge.us.evil.invalid"]) {
+    const response = await rawRequest(port, "/api/auth/login", "POST", {
+      ...(origin ? { origin } : {}), "content-type": "application/json",
+      host: "peerbridge.us", "x-forwarded-host": "peerbridge.us",
+    }, JSON.stringify({ email: "student@example.edu", password: "SyntheticPass!" }));
+    assert.equal(response.status, 403, String(origin));
+  }
+  assert.equal(calls.length, acceptedCalls);
+  assert.equal((await fetch(base + "/api/auth/me")).status, 401);
+});
 
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve, reject) => {

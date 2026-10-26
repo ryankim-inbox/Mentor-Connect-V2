@@ -163,8 +163,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function assertAllowedOrigin(
   origin: string | undefined,
   publicOrigin: string,
+  additionalPublicOrigins: readonly string[] = [],
 ): void {
-  if (origin !== publicOrigin) {
+  if (origin !== publicOrigin &&
+      (origin === undefined || !additionalPublicOrigins.includes(origin))) {
     throw new Error("origin_not_allowed");
   }
 }
@@ -188,7 +190,7 @@ export function assertValidPublicOrigin(
     parsed.protocol === "https:" ||
     (allowLoopbackHttp && parsed.protocol === "http:" && loopback);
 
-  if (publicOrigin !== parsed.origin || !validProtocol) {
+  if (publicOrigin !== parsed.origin || !validProtocol || publicOrigin.includes("*")) {
     throw new Error(
       "GATEWAY_PUBLIC_ORIGIN must be a canonical HTTPS public origin or an explicitly enabled HTTP loopback origin.",
     );

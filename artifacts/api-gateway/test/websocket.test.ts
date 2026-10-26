@@ -622,6 +622,29 @@ test("real gateway refuses hostile origins, malformed headers and missing cookie
   );
 });
 
+test("real gateway permits both exact HTTPS origins for authenticated room and DM sockets", async (t) => {
+  const f = await fixture(t, undefined, {}, {
+    publicOrigin: "https://mentor-connect-test.onrender.com",
+    additionalPublicOrigins: ["https://peerbridge.us"],
+  });
+  for (const Origin of ["https://mentor-connect-test.onrender.com", "https://peerbridge.us"]) {
+    for (const path of ["/ws/chat/rooms/1", "/ws/dms/42"]) {
+      const c = await client(f.port, path, { Origin });
+      assert.match(await c.handshake(), /^HTTP\/1.1 101 /);
+      c.socket.destroy();
+    }
+  }
+  const acceptedCalls = f.authCalls.length;
+  for (const Origin of [undefined, "null", "https://www.peerbridge.us",
+    "https://peerbridge.us.evil.invalid", "http://peerbridge.us", "https://peerbridge.us/"]) {
+    const c = await client(f.port, undefined, { Origin });
+    assert.match(await c.handshake(), /^HTTP\/1.1 403 /);
+  }
+  const anonymous = await client(f.port, undefined, { Origin: "https://peerbridge.us", Cookie: undefined });
+  assert.match(await anonymous.handshake(), /^HTTP\/1.1 403 /);
+  assert.equal(f.authCalls.length, acceptedCalls);
+});
+
 test("real gateway rejects an invalid Python session and preserves upstream non-101 denial", async (t) => {
   const f = await fixture(
     t,
